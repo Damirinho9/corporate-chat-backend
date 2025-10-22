@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Корпоративный чат</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0a0a0a;
+            color: #e4e4e4;
+        }
+
+        /* Экран входа */
+        .login-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+
+        .login-container {
+            background: #1e1e1e;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-container h2 {
+            margin-bottom: 30px;
+            color: #4a9eff;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b0b0b0;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #2a2a2a;
+            color: #e4e4e4;
+            font-size: 14px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            background: #4a9eff;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #3a8eef;
+        }
+
+        .demo-users {
+            margin-top: 20px;
+            padding: 15px;
+            background: #2a2a2a;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .demo-users h4 {
+            color: #4a9eff;
+            margin-bottom: 10px;
+        }
+
+        .demo-users div {
+            margin: 5px 0;
+            color: #b0b0b0;
+        }
+
+        /* Основной интерфейс чата */
+        .chat-app {
+            display: none;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .chat-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Боковая панель */
+        .sidebar {
+            width: 320px;
+            background: #1e1e1e;
+            border-right: 1px solid #2a2a2a;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: #252525;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        .user-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-details h3 {
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .user-role {
+            font-size: 12px;
+            color: #4a9eff;
+        }
+
+        .logout-btn {
+            padding: 8px 16px;
+            background: #333;
+            border: none;
+            border-radius: 4px;
+            color: #e4e4e4;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .logout-btn:hover {
+            background: #444;
+        }
+
+        /* Управление пользователями (только для админов) */
+        .admin-panel {
+            padding: 15px;
+            background: #252525;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        .admin-btn {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #2a4a2a;
+            border: none;
+            border-radius: 4px;
+            color: #6eff6e;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .admin-btn:hover {
+            background: #3a5a3a;
+        }
+
+        /* Список чатов */
+        .chats-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .chat-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #2a2a2a;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .chat-item:hover {
+            background: #252525;
+        }
+
+        .chat-item.active {
+            background: #2a2a2a;
+        }
+
+        .chat-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .chat-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .chat-time {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .chat-preview {
+            font-size: 13px;
+            color: #888;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .unread-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #4a9eff;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* Область чата */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #0a0a0a;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: #1e1e1e;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        .chat-header h3 {
+            font-size: 16px;
+        }
+
+        .chat-type {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message.own {
+            align-items: flex-end;
+        }
+
+        .message-header {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: #1e1e1e;
+            word-wrap: break-word;
+        }
+
+        .message.own .message-bubble {
+            background: #4a9eff;
+            color: white;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        /* Поле ввода */
+        .message-input-container {
+            padding: 20px;
+            background: #1e1e1e;
+            border-top: 1px solid #2a2a2a;
+        }
+
+        .message-input-wrapper {
+            display: flex;
+            gap: 10px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #333;
+            border-radius: 24px;
+            background: #2a2a2a;
+            color: #e4e4e4;
+            font-size: 14px;
+            resize: none;
+            max-height: 120px;
+        }
+
+        .message-input:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
+        .send-btn {
+            padding: 12px 24px;
+            background: #4a9eff;
+            border: none;
+            border-radius: 24px;
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .send-btn:hover {
+            background: #3a8eef;
+        }
+
+        .send-btn:disabled {
+            background: #333;
+            cursor: not-allowed;
+        }
+
+        .no-chat-selected {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #666;
+            font-size: 18px;
+        }
+
+        /* Модальное окно */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #1e1e1e;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            color: #4a9eff;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .user-list-item {
+            padding: 12px;
+            background: #252525;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-list-info {
+            flex: 1;
+        }
+
+        .user-list-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .user-list-role {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .delete-user-btn {
+            padding: 6px 12px;
+            background: #aa3333;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .delete-user-btn:hover {
+            background: #cc4444;
+        }
+
+        .access-denied {
+            padding: 20px;
+            text-align: center;
+            color: #aa3333;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+    </style>
+</head>
+<body>
+    <!-- Экран входа -->
+    <div class="login-screen" id="loginScreen">
+        <div class="login-container">
+            <h2>Корпоративный чат</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Логин</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Пароль</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn">Войти</button>
+            </form>
+            <div class="demo-users">
+                <h4>Демо-пользователи:</h4>
+                <div><strong>Админ:</strong> admin / admin123</div>
+                <div><strong>Руководитель IT:</strong> head_it / pass123</div>
+                <div><strong>Руководитель HR:</strong> head_hr / pass123</div>
+                <div><strong>Сотрудник IT:</strong> dev1 / pass123</div>
+                <div><strong>Сотрудник HR:</strong> hr1 / pass123</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Основной интерфейс чата -->
+    <div class="chat-app" id="chatApp">
+        <div class="chat-container">
+            <!-- Боковая панель -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <div class="user-info">
+                        <div class="user-details">
+                            <h3 id="currentUserName"></h3>
+                            <div class="user-role" id="currentUserRole"></div>
+                        </div>
+                        <button class="logout-btn" onclick="logout()">Выйти</button>
+                    </div>
+                </div>
+
+                <!-- Панель администратора -->
+                <div class="admin-panel" id="adminPanel" style="display: none;">
+                    <button class="admin-btn" onclick="openAddUserModal()">+ Добавить пользователя</button>
+                    <button class="admin-btn" onclick="openManageUsersModal()">Управление пользователями</button>
+                </div>
+
+                <!-- Список чатов -->
+                <div class="chats-list" id="chatsList"></div>
+            </div>
+
+            <!-- Область чата -->
+            <div class="chat-area">
+                <div id="noChatSelected" class="no-chat-selected">
+                    Выберите чат для начала общения
+                </div>
+                <div id="chatContent" style="display: none; flex-direction: column; height: 100%;">
+                    <div class="chat-header">
+                        <h3 id="chatName"></h3>
+                        <div class="chat-type" id="chatType"></div>
+                    </div>
+                    <div class="messages-container" id="messagesContainer"></div>
+                    <div class="message-input-container">
+                        <div id="accessDenied" class="access-denied" style="display: none;">
+                            У вас нет прав для отправки сообщений в этот чат
+                        </div>
+                        <div class="message-input-wrapper" id="messageInputWrapper">
+                            <textarea 
+                                class="message-input" 
+                                id="messageInput" 
+                                placeholder="Введите сообщение..."
+                                rows="1"
+                            ></textarea>
+                            <button class="send-btn" onclick="sendMessage()">Отправить</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно добавления пользователя -->
+    <div class="modal" id="addUserModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Добавить пользователя</h3>
+                <button class="close-modal" onclick="closeModal('addUserModal')">&times;</button>
+            </div>
+            <form id="addUserForm">
+                <div class="form-group">
+                    <label for="newUsername">Логин</label>
+                    <input type="text" id="newUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="newPassword">Пароль</label>
+                    <input type="password" id="newPassword" required>
+                </div>
+                <div class="form-group">
+                    <label for="newName">Имя</label>
+                    <input type="text" id="newName" required>
+                </div>
+                <div class="form-group">
+                    <label for="newRole">Роль</label>
+                    <select id="newRole" required>
+                        <option value="admin">Администратор</option>
+                        <option value="head">Руководитель отдела</option>
+                        <option value="employee">Сотрудник</option>
+                    </select>
+                </div>
+                <div class="form-group" id="departmentGroup">
+                    <label for="newDepartment">Отдел</label>
+                    <select id="newDepartment">
+                        <option value="IT">IT отдел</option>
+                        <option value="HR">HR отдел</option>
+                        <option value="Sales">Отдел продаж</option>
+                        <option value="Marketing">Маркетинг</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn">Добавить</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно управления пользователями -->
+    <div class="modal" id="manageUsersModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Управление пользователями</h3>
+                <button class="close-modal" onclick="closeModal('manageUsersModal')">&times;</button>
+            </div>
+            <div id="usersList"></div>
+        </div>
+    </div>
+
+    <script>
+        // Данные приложения
+        let currentUser = null;
+        let users = [];
+        let chats = [];
+        let messages = [];
+        let currentChat = null;
+
+        // Инициализация демо-данных
+        function initDemoData() {
+            users = [
+                { id: 1, username: 'admin', password: 'admin123', name: 'Главный администратор', role: 'admin', department: null },
+                { id: 2, username: 'head_it', password: 'pass123', name: 'Руководитель IT', role: 'head', department: 'IT' },
+                { id: 3, username: 'head_hr', password: 'pass123', name: 'Руководитель HR', role: 'head', department: 'HR' },
+                { id: 4, username: 'dev1', password: 'pass123', name: 'Разработчик Иван', role: 'employee', department: 'IT' },
+                { id: 5, username: 'dev2', password: 'pass123', name: 'Разработчик Мария', role: 'employee', department: 'IT' },
+                { id: 6, username: 'hr1', password: 'pass123', name: 'HR-менеджер Анна', role: 'employee', department: 'HR' },
+            ];
+
+            chats = [
+                { id: 'management', name: 'Руководство', type: 'group', participants: [1], access: ['admin'] },
+                { id: 'all_heads', name: 'Руководители', type: 'group', participants: [1, 2, 3], access: ['admin', 'head'] },
+                { id: 'it_dept', name: 'IT отдел', type: 'department', department: 'IT', participants: [2, 4, 5], access: ['admin', 'head_IT', 'employee_IT'] },
+                { id: 'hr_dept', name: 'HR отдел', type: 'department', department: 'HR', participants: [3, 6], access: ['admin', 'head_HR', 'employee_HR'] },
+            ];
+
+            messages = [
+                { id: 1, chatId: 'all_heads', userId: 1, text: 'Добрый день, коллеги! Напоминаю о встрече в 15:00', timestamp: Date.now() - 3600000 },
+                { id: 2, chatId: 'it_dept', userId: 2, text: 'Команда, не забудьте про code review до конца дня', timestamp: Date.now() - 1800000 },
+                { id: 3, chatId: 'it_dept', userId: 4, text: 'Понял, сделаю!', timestamp: Date.now() - 1200000 },
+            ];
+
+            // Добавляем личные чаты
+            let chatId = 1000;
+            users.forEach(user1 => {
+                users.forEach(user2 => {
+                    if (user1.id < user2.id && canSendDirectMessage(user1, user2)) {
+                        chats.push({
+                            id: `dm_${user1.id}_${user2.id}`,
+                            name: null,
+                            type: 'direct',
+                            participants: [user1.id, user2.id],
+                            access: [user1.id, user2.id]
+                        });
+                    }
+                });
+            });
+
+            saveToLocalStorage();
+        }
+
+        // Проверка возможности отправки личного сообщения
+        function canSendDirectMessage(user1, user2) {
+            // Админы могут писать всем
+            if (user1.role === 'admin' || user2.role === 'admin') return true;
+            
+            // Руководители могут писать друг другу
+            if (user1.role === 'head' && user2.role === 'head') return true;
+            
+            // Руководитель может писать сотрудникам своего отдела
+            if (user1.role === 'head' && user2.role === 'employee' && user1.department === user2.department) return true;
+            if (user2.role === 'head' && user1.role === 'employee' && user2.department === user1.department) return true;
+            
+            return false;
+        }
+
+        // Проверка прав на отправку сообщения в чат
+        function canSendToChat(user, chat) {
+            // Админы могут писать везде
+            if (user.role === 'admin') return true;
+            
+            // Групповые чаты
+            if (chat.type === 'group') {
+                return chat.participants.includes(user.id);
+            }
+            
+            // Департаментные чаты
+            if (chat.type === 'department') {
+                if (user.role === 'head' && user.department === chat.department) return true;
+                if (user.role === 'employee' && user.department === chat.department) return false; // Сотрудники не могут писать в групповой чат отдела
+                return false;
+            }
+            
+            // Личные чаты
+            if (chat.type === 'direct') {
+                if (!chat.participants.includes(user.id)) return false;
+                const otherUserId = chat.participants.find(id => id !== user.id);
+                const otherUser = users.find(u => u.id === otherUserId);
+                return canSendDirectMessage(user, otherUser);
+            }
+            
+            return false;
+        }
+
+        // Получение списка доступных чатов
+        function getAvailableChats(user) {
+            return chats.filter(chat => {
+                // Админы видят все
+                if (user.role === 'admin') return true;
+                
+                // Групповые чаты
+                if (chat.type === 'group') {
+                    return chat.participants.includes(user.id);
+                }
+                
+                // Департаментные чаты
+                if (chat.type === 'department') {
+                    return user.department === chat.department;
+                }
+                
+                // Личные чаты
+                if (chat.type === 'direct') {
+                    return chat.participants.includes(user.id);
+                }
+                
+                return false;
+            });
+        }
+
+        // Получение имени чата
+        function getChatName(chat, user) {
+            if (chat.name) return chat.name;
+            
+            if (chat.type === 'direct') {
+                const otherUserId = chat.participants.find(id => id !== user.id);
+                const otherUser = users.find(u => u.id === otherUserId);
+                return otherUser ? otherUser.name : 'Неизвестный пользователь';
+            }
+            
+            return 'Чат';
+        }
+
+        // Сохранение в localStorage
+        function saveToLocalStorage() {
+            localStorage.setItem('chatUsers', JSON.stringify(users));
+            localStorage.setItem('chatChats', JSON.stringify(chats));
+            localStorage.setItem('chatMessages', JSON.stringify(messages));
+        }
+
+        // Загрузка из localStorage
+        function loadFromLocalStorage() {
+            const savedUsers = localStorage.getItem('chatUsers');
+            const savedChats = localStorage.getItem('chatChats');
+            const savedMessages = localStorage.getItem('chatMessages');
+            
+            if (savedUsers) users = JSON.parse(savedUsers);
+            if (savedChats) chats = JSON.parse(savedChats);
+            if (savedMessages) messages = JSON.parse(savedMessages);
+            
+            if (users.length === 0) {
+                initDemoData();
+            }
+        }
+
+        // Авторизация
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            const user = users.find(u => u.username === username && u.password === password);
+            
+            if (user) {
+                currentUser = user;
+                showChatApp();
+            } else {
+                alert('Неверный логин или пароль');
+            }
+        });
+
+        // Показать интерфейс чата
+        function showChatApp() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('chatApp').style.display = 'block';
+            
+            document.getElementById('currentUserName').textContent = currentUser.name;
+            document.getElementById('currentUserRole').textContent = getRoleText(currentUser.role, currentUser.department);
+            
+            if (currentUser.role === 'admin') {
+                document.getElementById('adminPanel').style.display = 'block';
+            }
+            
+            renderChatsList();
+        }
+
+        // Получение текста роли
+        function getRoleText(role, department) {
+            if (role === 'admin') return 'Администратор';
+            if (role === 'head') return `Руководитель ${department}`;
+            if (role === 'employee') return `Сотрудник ${department}`;
+            return role;
+        }
+
+        // Отрисовка списка чатов
+        function renderChatsList() {
+            const chatsList = document.getElementById('chatsList');
+            const availableChats = getAvailableChats(currentUser);
+            
+            chatsList.innerHTML = '';
+            
+            availableChats.forEach(chat => {
+                const chatMessages = messages.filter(m => m.chatId === chat.id);
+                const lastMessage = chatMessages[chatMessages.length - 1];
+                
+                const chatItem = document.createElement('div');
+                chatItem.className = 'chat-item';
+                if (currentChat && currentChat.id === chat.id) {
+                    chatItem.classList.add('active');
+                }
+                
+                chatItem.onclick = () => selectChat(chat);
+                
+                const chatName = getChatName(chat, currentUser);
+                
+                chatItem.innerHTML = `
+                    <div class="chat-item-header">
+                        <div class="chat-name">${chatName}</div>
+                        ${lastMessage ? `<div class="chat-time">${formatTime(lastMessage.timestamp)}</div>` : ''}
+                    </div>
+                    ${lastMessage ? `<div class="chat-preview">${truncate(lastMessage.text, 40)}</div>` : '<div class="chat-preview">Нет сообщений</div>'}
+                `;
+                
+                chatsList.appendChild(chatItem);
+            });
+        }
+
+        // Выбор чата
+        function selectChat(chat) {
+            currentChat = chat;
+            document.getElementById('noChatSelected').style.display = 'none';
+            document.getElementById('chatContent').style.display = 'flex';
+            
+            const chatName = getChatName(chat, currentUser);
+            document.getElementById('chatName').textContent = chatName;
+            
+            let chatType = '';
+            if (chat.type === 'group') chatType = 'Групповой чат';
+            if (chat.type === 'department') chatType = 'Чат отдела';
+            if (chat.type === 'direct') chatType = 'Личные сообщения';
+            document.getElementById('chatType').textContent = chatType;
+            
+            renderMessages();
+            renderChatsList();
+            
+            // Проверка прав на отправку
+            const canSend = canSendToChat(currentUser, chat) || currentUser.role === 'admin';
+            document.getElementById('messageInputWrapper').style.display = canSend ? 'flex' : 'none';
+            document.getElementById('accessDenied').style.display = canSend ? 'none' : 'block';
+        }
+
+        // Отрисовка сообщений
+        function renderMessages() {
+            const container = document.getElementById('messagesContainer');
+            const chatMessages = messages.filter(m => m.chatId === currentChat.id);
+            
+            // Админы видят все сообщения во всех чатах
+            const visibleMessages = currentUser.role === 'admin' ? chatMessages : 
+                chatMessages.filter(m => currentUser.role === 'admin' || m.userId === currentUser.id || currentChat.participants.includes(currentUser.id));
+            
+            container.innerHTML = '';
+            
+            visibleMessages.forEach(msg => {
+                const sender = users.find(u => u.id === msg.userId);
+                const isOwn = msg.userId === currentUser.id;
+                
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isOwn ? 'own' : ''}`;
+                
+                messageDiv.innerHTML = `
+                    ${!isOwn ? `<div class="message-header">${sender ? sender.name : 'Неизвестный'}</div>` : ''}
+                    <div class="message-bubble">
+                        ${msg.text}
+                    </div>
+                    <div class="message-time">${formatTime(msg.timestamp)}</div>
+                `;
+                
+                container.appendChild(messageDiv);
+            });
+            
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Отправка сообщения
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            
+            if (!text || !currentChat) return;
+            
+            if (!canSendToChat(currentUser, currentChat) && currentUser.role !== 'admin') {
+                alert('У вас нет прав для отправки сообщений в этот чат');
+                return;
+            }
+            
+            const message = {
+                id: Date.now(),
+                chatId: currentChat.id,
+                userId: currentUser.id,
+                text: text,
+                timestamp: Date.now()
+            };
+            
+            messages.push(message);
+            saveToLocalStorage();
+            
+            input.value = '';
+            renderMessages();
+            renderChatsList();
+        }
+
+        // Enter для отправки
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Модальные окна
+        function openAddUserModal() {
+            document.getElementById('addUserModal').classList.add('active');
+        }
+
+        function openManageUsersModal() {
+            renderUsersList();
+            document.getElementById('manageUsersModal').classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // Добавление пользователя
+        document.getElementById('addUserForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('newUsername').value;
+            const password = document.getElementById('newPassword').value;
+            const name = document.getElementById('newName').value;
+            const role = document.getElementById('newRole').value;
+            const department = role !== 'admin' ? document.getElementById('newDepartment').value : null;
+            
+            if (users.find(u => u.username === username)) {
+                alert('Пользователь с таким логином уже существует');
+                return;
+            }
+            
+            const newUser = {
+                id: Date.now(),
+                username,
+                password,
+                name,
+                role,
+                department
+            };
+            
+            users.push(newUser);
+            
+            // Создаем личные чаты с новым пользователем
+            users.forEach(user => {
+                if (user.id !== newUser.id && canSendDirectMessage(user, newUser)) {
+                    chats.push({
+                        id: `dm_${Math.min(user.id, newUser.id)}_${Math.max(user.id, newUser.id)}`,
+                        name: null,
+                        type: 'direct',
+                        participants: [user.id, newUser.id],
+                        access: [user.id, newUser.id]
+                    });
+                }
+            });
+            
+            // Добавляем в групповые чаты
+            if (role === 'admin') {
+                const mgmtChat = chats.find(c => c.id === 'management');
+                if (mgmtChat && !mgmtChat.participants.includes(newUser.id)) {
+                    mgmtChat.participants.push(newUser.id);
+                }
+                const headsChat = chats.find(c => c.id === 'all_heads');
+                if (headsChat && !headsChat.participants.includes(newUser.id)) {
+                    headsChat.participants.push(newUser.id);
+                }
+            } else if (role === 'head') {
+                const headsChat = chats.find(c => c.id === 'all_heads');
+                if (headsChat && !headsChat.participants.includes(newUser.id)) {
+                    headsChat.participants.push(newUser.id);
+                }
+                
+                // Добавляем в департаментный чат или создаем новый
+                let deptChat = chats.find(c => c.type === 'department' && c.department === department);
+                if (deptChat) {
+                    if (!deptChat.participants.includes(newUser.id)) {
+                        deptChat.participants.push(newUser.id);
+                    }
+                } else {
+                    chats.push({
+                        id: `${department.toLowerCase()}_dept`,
+                        name: `${department} отдел`,
+                        type: 'department',
+                        department: department,
+                        participants: [newUser.id],
+                        access: [`admin`, `head_${department}`, `employee_${department}`]
+                    });
+                }
+            } else if (role === 'employee') {
+                // Добавляем в департаментный чат
+                let deptChat = chats.find(c => c.type === 'department' && c.department === department);
+                if (deptChat && !deptChat.participants.includes(newUser.id)) {
+                    deptChat.participants.push(newUser.id);
+                }
+            }
+            
+            saveToLocalStorage();
+            closeModal('addUserModal');
+            this.reset();
+            renderChatsList();
+            alert('Пользователь добавлен успешно');
+        });
+
+        // Показ/скрытие поля отдела
+        document.getElementById('newRole').addEventListener('change', function() {
+            const deptGroup = document.getElementById('departmentGroup');
+            deptGroup.style.display = this.value === 'admin' ? 'none' : 'block';
+        });
+
+        // Отрисовка списка пользователей для управления
+        function renderUsersList() {
+            const usersList = document.getElementById('usersList');
+            usersList.innerHTML = '';
+            
+            users.forEach(user => {
+                if (user.id === currentUser.id) return; // Не показываем текущего пользователя
+                
+                const userItem = document.createElement('div');
+                userItem.className = 'user-list-item';
+                
+                userItem.innerHTML = `
+                    <div class="user-list-info">
+                        <div class="user-list-name">${user.name} (${user.username})</div>
+                        <div class="user-list-role">${getRoleText(user.role, user.department)}</div>
+                    </div>
+                    <button class="delete-user-btn" onclick="deleteUser(${user.id})">Удалить</button>
+                `;
+                
+                usersList.appendChild(userItem);
+            });
+        }
+
+        // Удаление пользователя
+        function deleteUser(userId) {
+            if (!confirm('Вы уверены, что хотите удалить этого пользователя?')) return;
+            
+            users = users.filter(u => u.id !== userId);
+            
+            // Удаляем из участников чатов
+            chats.forEach(chat => {
+                chat.participants = chat.participants.filter(id => id !== userId);
+            });
+            
+            // Удаляем личные чаты с этим пользователем
+            chats = chats.filter(chat => {
+                if (chat.type === 'direct') {
+                    return !chat.participants.includes(userId);
+                }
+                return true;
+            });
+            
+            // Удаляем сообщения пользователя
+            messages = messages.filter(m => m.userId !== userId);
+            
+            saveToLocalStorage();
+            renderUsersList();
+            renderChatsList();
+            
+            if (currentChat && currentChat.participants.includes(userId)) {
+                currentChat = null;
+                document.getElementById('noChatSelected').style.display = 'flex';
+                document.getElementById('chatContent').style.display = 'none';
+            }
+        }
+
+        // Выход
+        function logout() {
+            currentUser = null;
+            currentChat = null;
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('chatApp').style.display = 'none';
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+        }
+
+        // Вспомогательные функции
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            
+            if (date.toDateString() === now.toDateString()) {
+                return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            }
+            
+            return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        }
+
+        function truncate(str, length) {
+            return str.length > length ? str.substring(0, length) + '...' : str;
+        }
+
+        // Инициализация при загрузке
+        loadFromLocalStorage();
+    </script>
+</body>
+</html>

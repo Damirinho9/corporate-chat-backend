@@ -191,3 +191,13 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 startServer();
 
 module.exports = { app, server, io };
+
+const path = require("path");
+
+// Раздаём фронт из папки public
+app.use(express.static(path.join(__dirname, "public")));
+
+// Главная страница
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
