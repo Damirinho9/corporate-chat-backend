@@ -9,8 +9,8 @@ RUN apk add --no-cache postgresql-client
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install dependencies (используем npm install вместо npm ci)
+RUN npm install --omit=dev && npm cache clean --force
 
 # Copy application code
 COPY . .
