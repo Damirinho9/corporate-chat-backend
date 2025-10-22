@@ -6,15 +6,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "postbuild": "node database/seed.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "db:init": "psql -U postgres -d corporate_chat -f database/schema.sql"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
@@ -29,12 +27,6 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
-  }
-}
-{
-  "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "postbuild": "node database/seed.js"
-  }
+  },
+  "license": "ISC"
 }
