@@ -5,6 +5,9 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
+const fs = require('fs');
+const path = require('path');
+
 const { pool, query } = require('./config/database');
 const { initializeSocket } = require('./socket/socketHandler');
 const apiRoutes = require('./routes/api');
@@ -44,12 +47,12 @@ if (process.env.NODE_ENV === 'development') {
 // ==================== ROUTES ====================
 app.use('/api', apiRoutes);
 
+// Раздаём фронт из папки public
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Главная страница (index.html)
 app.get('/', (req, res) => {
-  res.json({ 
-    message: 'Corporate Chat API', 
-    version: '1.0.0',
-    status: 'running'
-  });
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.use((req, res) => {
@@ -62,9 +65,6 @@ app.use((err, req, res, next) => {
 });
 
 // ==================== DATABASE INIT ====================
-const fs = require('fs');
-const path = require('path');
-
 const initDatabase = async () => {
   try {
     console.log('🔍 Checking database state...');
@@ -113,7 +113,6 @@ const initDatabase = async () => {
         console.log('🌱 Seeding database...');
         const seedModule = require('./database/seed');
         
-        // Если seed это функция, вызываем её
         if (typeof seedModule === 'function') {
           await seedModule();
         }
@@ -191,13 +190,3 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 startServer();
 
 module.exports = { app, server, io };
-
-const path = require("path");
-
-// Раздаём фронт из папки public
-app.use(express.static(path.join(__dirname, "public")));
-
-// Главная страница
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
