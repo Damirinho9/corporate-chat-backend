@@ -1,29 +1,21 @@
+# Stage 1
 FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Install PostgreSQL client for database initialization
-RUN apk add --no-cache postgresql-client
-
-# Copy package files
+# Установка зависимостей
 COPY package*.json ./
-
-# Install dependencies (используем npm install вместо npm ci)
 RUN npm install --omit=dev && npm cache clean --force
 
-# Copy application code
+# Копируем всё приложение, включая базу
 COPY . .
 
-# Create uploads directory
+# Гарантируем, что схема попадёт в образ
+RUN mkdir -p database && ls -la database
+
+# Создаём папку для загрузок
 RUN mkdir -p uploads
 
-# Expose port
-EXPOSE 3000
+EXPOSE 10000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); });"
-
-# Start application
-CMD ["node", "server.js"]
+CMD ["npm", "start"]
