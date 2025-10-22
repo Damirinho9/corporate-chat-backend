@@ -1,0 +1,32 @@
+```yaml
+services:
+  # PostgreSQL Database
+  - type: pserv
+    name: corporate-chat-db
+    env: docker
+    plan: free
+    
+  # Backend Application
+  - type: web
+    name: corporate-chat-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: corporate-chat-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: "*"
+    healthCheckPath: /api/health
+```
