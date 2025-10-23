@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="dark">
+<html lang="ru" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,12 +21,13 @@
             --message-own: #4a9eff;
             --danger: #ff4444;
             --success: #6eff6e;
+            --warning: #ffaa00;
         }
 
         :root[data-theme="light"] {
             --bg-primary: #ffffff;
             --bg-secondary: #f5f5f5;
-            --bg-tertiary: #e0e0e0;
+            --bg-tertiary: #e8e8e8;
             --bg-hover: #f0f0f0;
             --text-primary: #1a1a1a;
             --text-secondary: #666666;
@@ -34,10 +35,11 @@
             --border: #e0e0e0;
             --accent: #2196f3;
             --accent-hover: #1976d2;
-            --message-bubble: #f5f5f5;
+            --message-bubble: #f0f0f0;
             --message-own: #2196f3;
             --danger: #f44336;
             --success: #4caf50;
+            --warning: #ff9800;
         }
 
         * {
@@ -53,7 +55,7 @@
             transition: background 0.3s, color 0.3s;
         }
 
-        /* ==================== ЭКРАН ВХОДА ==================== */
+        /* Login Screen */
         .login-screen {
             display: flex;
             justify-content: center;
@@ -87,11 +89,12 @@
             right: 20px;
             background: var(--bg-secondary);
             border: none;
-            padding: 10px;
+            padding: 12px;
             border-radius: 50%;
             cursor: pointer;
-            font-size: 20px;
+            font-size: 24px;
             transition: transform 0.3s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
 
         .theme-toggle:hover {
@@ -109,8 +112,7 @@
             font-weight: 500;
         }
 
-        .form-group input,
-        .form-group select {
+        .form-group input {
             width: 100%;
             padding: 12px 16px;
             border: 2px solid var(--border);
@@ -121,8 +123,7 @@
             transition: border-color 0.3s;
         }
 
-        .form-group input:focus,
-        .form-group select:focus {
+        .form-group input:focus {
             outline: none;
             border-color: var(--accent);
         }
@@ -137,7 +138,7 @@
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.3s, transform 0.2s;
+            transition: all 0.3s;
         }
 
         .btn:hover {
@@ -179,14 +180,14 @@
         .error-message {
             padding: 12px;
             margin-bottom: 20px;
-            background: rgba(255, 68, 68, 0.1);
+            background: rgba(244, 67, 54, 0.1);
             border-left: 4px solid var(--danger);
             border-radius: 4px;
             color: var(--danger);
             font-size: 14px;
         }
 
-        /* ==================== ОСНОВНОЙ ИНТЕРФЕЙС ==================== */
+        /* Chat App */
         .chat-app {
             display: none;
             height: 100vh;
@@ -197,7 +198,7 @@
             height: 100%;
         }
 
-        /* ==================== БОКОВАЯ ПАНЕЛЬ ==================== */
+        /* Sidebar */
         .sidebar {
             width: 320px;
             background: var(--bg-secondary);
@@ -231,10 +232,11 @@
 
         .header-controls {
             display: flex;
-            gap: 10px;
+            gap: 8px;
         }
 
         .icon-btn {
+            position: relative;
             padding: 8px;
             background: var(--bg-secondary);
             border: none;
@@ -248,7 +250,21 @@
             background: var(--bg-hover);
         }
 
-        /* Админ-панель */
+        .notification-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: var(--danger);
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 5px;
+            border-radius: 10px;
+            min-width: 16px;
+            text-align: center;
+        }
+
+        /* Admin panel */
         .admin-panel {
             padding: 15px;
             background: var(--bg-secondary);
@@ -273,7 +289,7 @@
             opacity: 0.9;
         }
 
-        /* Список чатов */
+        /* Chats list */
         .chats-list {
             flex: 1;
             overflow-y: auto;
@@ -284,6 +300,7 @@
             border-bottom: 1px solid var(--border);
             cursor: pointer;
             transition: background 0.2s;
+            position: relative;
         }
 
         .chat-item:hover {
@@ -327,9 +344,10 @@
             font-size: 11px;
             font-weight: 600;
             color: white;
+            margin-left: 8px;
         }
 
-        /* ==================== ОБЛАСТЬ ЧАТА ==================== */
+        /* Chat area */
         .chat-area {
             flex: 1;
             display: flex;
@@ -361,19 +379,15 @@
             gap: 10px;
         }
 
-        /* Контейнер сообщений */
+        /* Messages */
         .messages-container {
             flex: 1;
             overflow-y: auto;
             padding: 20px;
         }
 
-        .message-group {
-            margin-bottom: 20px;
-        }
-
         .message {
-            margin-bottom: 8px;
+            margin-bottom: 16px;
             display: flex;
             flex-direction: column;
         }
@@ -386,9 +400,6 @@
             font-size: 12px;
             color: var(--text-tertiary);
             margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
 
         .message-bubble {
@@ -397,108 +408,11 @@
             border-radius: 12px;
             background: var(--message-bubble);
             word-wrap: break-word;
-            position: relative;
         }
 
         .message.own .message-bubble {
             background: var(--message-own);
             color: white;
-        }
-
-        /* Reply в сообщении */
-        .message-reply {
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            background: rgba(0, 0, 0, 0.1);
-            border-left: 3px solid var(--accent);
-            border-radius: 4px;
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .message.own .message-reply {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        /* Edited/Deleted метки */
-        .message-status {
-            font-size: 11px;
-            color: var(--text-tertiary);
-            font-style: italic;
-            margin-top: 4px;
-        }
-
-        /* Файлы в сообщениях */
-        .message-attachment {
-            margin-top: 8px;
-            padding: 8px 12px;
-            background: rgba(0, 0, 0, 0.05);
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            cursor: pointer;
-        }
-
-        .message.own .message-attachment {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .attachment-icon {
-            font-size: 24px;
-        }
-
-        .attachment-info {
-            flex: 1;
-        }
-
-        .attachment-name {
-            font-size: 13px;
-            font-weight: 500;
-        }
-
-        .attachment-size {
-            font-size: 11px;
-            color: var(--text-tertiary);
-        }
-
-        /* Изображения */
-        .message-image {
-            margin-top: 8px;
-            max-width: 300px;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-
-        /* Действия с сообщением */
-        .message-actions {
-            position: absolute;
-            top: -30px;
-            right: 0;
-            background: var(--bg-tertiary);
-            border-radius: 8px;
-            padding: 4px;
-            display: none;
-            gap: 4px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .message-bubble:hover .message-actions {
-            display: flex;
-        }
-
-        .message-action-btn {
-            padding: 6px 10px;
-            background: transparent;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.2s;
-        }
-
-        .message-action-btn:hover {
-            background: var(--bg-hover);
         }
 
         .message-time {
@@ -507,125 +421,17 @@
             margin-top: 4px;
         }
 
-        /* Статусы прочтения */
-        .read-status {
-            font-size: 14px;
-            color: var(--accent);
-        }
-
-        /* ==================== ВВОД СООБЩЕНИЯ ==================== */
+        /* Message input */
         .message-input-area {
             padding: 15px 20px;
             background: var(--bg-secondary);
             border-top: 1px solid var(--border);
         }
 
-        /* Reply preview */
-        .reply-preview {
-            display: none;
-            padding: 10px 12px;
-            margin-bottom: 10px;
-            background: var(--bg-tertiary);
-            border-left: 3px solid var(--accent);
-            border-radius: 4px;
-        }
-
-        .reply-preview.active {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .reply-preview-content {
-            flex: 1;
-        }
-
-        .reply-preview-author {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--accent);
-            margin-bottom: 2px;
-        }
-
-        .reply-preview-text {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        .reply-close {
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            font-size: 18px;
-            color: var(--text-tertiary);
-        }
-
-        /* File upload preview */
-        .file-preview {
-            display: none;
-            padding: 10px;
-            margin-bottom: 10px;
-            background: var(--bg-tertiary);
-            border-radius: 8px;
-        }
-
-        .file-preview.active {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .file-preview-icon {
-            font-size: 32px;
-        }
-
-        .file-preview-info {
-            flex: 1;
-        }
-
-        .file-preview-name {
-            font-size: 13px;
-            font-weight: 500;
-        }
-
-        .file-preview-size {
-            font-size: 11px;
-            color: var(--text-tertiary);
-        }
-
-        .file-remove {
-            background: var(--danger);
-            border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            color: white;
-            cursor: pointer;
-            font-size: 12px;
-        }
-
         .message-input-wrapper {
             display: flex;
             gap: 10px;
             align-items: flex-end;
-        }
-
-        .input-actions {
-            display: flex;
-            gap: 5px;
-        }
-
-        .input-action-btn {
-            padding: 10px;
-            background: transparent;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 20px;
-            transition: background 0.2s;
-        }
-
-        .input-action-btn:hover {
-            background: var(--bg-hover);
         }
 
         .message-input {
@@ -667,114 +473,103 @@
             cursor: not-allowed;
         }
 
-        /* ==================== МОДАЛЬНЫЕ ОКНА ==================== */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: var(--bg-secondary);
-            padding: 30px;
-            border-radius: 16px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .modal-header h3 {
-            font-size: 18px;
-        }
-
-        .modal-close {
-            background: transparent;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
             color: var(--text-tertiary);
         }
 
-        .modal-close:hover {
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+        }
+
+        .toast {
+            background: var(--bg-secondary);
             color: var(--text-primary);
-        }
-
-        /* Пользователи */
-        .users-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .user-item {
-            padding: 12px;
-            background: var(--bg-tertiary);
+            padding: 16px 20px;
             border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            margin-bottom: 10px;
+            min-width: 300px;
+            animation: slideIn 0.3s ease-out;
+            border-left: 4px solid var(--accent);
+        }
+
+        .toast.success {
+            border-left-color: var(--success);
+        }
+
+        .toast.error {
+            border-left-color: var(--danger);
+        }
+
+        .toast.warning {
+            border-left-color: var(--warning);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-        }
-
-        .user-item-info h4 {
-            font-size: 14px;
             margin-bottom: 4px;
         }
 
-        .user-item-role {
-            font-size: 12px;
-            color: var(--text-tertiary);
+        .toast-title {
+            font-weight: 600;
+            font-size: 14px;
         }
 
-        .user-item-actions {
-            display: flex;
-            gap: 5px;
-        }
-
-        .user-action-btn {
-            padding: 6px 12px;
-            background: var(--bg-hover);
+        .toast-close {
+            background: none;
             border: none;
-            border-radius: 4px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 18px;
+            color: var(--text-tertiary);
+            padding: 0;
+            margin-left: 10px;
         }
 
-        .user-action-btn.danger {
-            background: var(--danger);
-            color: white;
+        .toast-message {
+            font-size: 13px;
+            color: var(--text-secondary);
         }
 
-        /* ==================== УТИЛИТЫ ==================== */
+        /* Hidden */
         .hidden {
             display: none !important;
         }
 
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: var(--text-tertiary);
-        }
-
-        /* Скроллбары */
+        /* Scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -792,33 +587,18 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--border);
         }
-
-        /* Скрытый input для файлов */
-        #fileInput {
-            display: none;
-        }
-
-        /* Typing indicator */
-        .typing-indicator {
-            display: none;
-            padding: 10px 20px;
-            font-size: 12px;
-            color: var(--text-tertiary);
-            font-style: italic;
-        }
-
-        .typing-indicator.active {
-            display: block;
-        }
     </style>
 </head>
 <body>
-    <!-- Переключатель темы (глобальный) -->
+    <!-- Theme toggle -->
     <button class="theme-toggle" onclick="toggleTheme()" title="Сменить тему">
-        <span id="themeIcon">🌙</span>
+        <span id="themeIcon">☀️</span>
     </button>
 
-    <!-- ==================== ЭКРАН ВХОДА ==================== -->
+    <!-- Toast container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Login Screen -->
     <div class="login-screen" id="loginScreen">
         <div class="login-container">
             <div class="login-header">
@@ -831,11 +611,11 @@
             <form id="loginForm">
                 <div class="form-group">
                     <label>Логин</label>
-                    <input type="text" id="username" placeholder="Введите логин" required>
+                    <input type="text" id="username" placeholder="admin" required>
                 </div>
                 <div class="form-group">
                     <label>Пароль</label>
-                    <input type="password" id="password" placeholder="Введите пароль" required>
+                    <input type="password" id="password" placeholder="admin123" required>
                 </div>
                 <button type="submit" class="btn">Войти</button>
             </form>
@@ -843,25 +623,25 @@
             <div class="demo-users">
                 <h4>📋 Демо-аккаунты (клик для входа):</h4>
                 <div class="demo-user" onclick="quickLogin('admin', 'admin123')">
-                    <strong>admin</strong> / admin123 - Администратор (все права)
+                    <strong>admin</strong> / admin123 - Главный администратор
                 </div>
                 <div class="demo-user" onclick="quickLogin('assistant1', 'pass123')">
-                    <strong>assistant1</strong> / pass123 - Ассистент (пишет всем)
+                    <strong>assistant1</strong> / pass123 - Ассистент Анна
                 </div>
                 <div class="demo-user" onclick="quickLogin('rop_sales', 'pass123')">
-                    <strong>rop_sales</strong> / pass123 - РОП Sales (управляет отделом)
+                    <strong>rop_sales</strong> / pass123 - РОП Sales
                 </div>
                 <div class="demo-user" onclick="quickLogin('operator1', 'pass123')">
-                    <strong>operator1</strong> / pass123 - Оператор Sales (ограниченные права)
+                    <strong>operator1</strong> / pass123 - Оператор Sales
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ==================== ОСНОВНОЙ ИНТЕРФЕЙС ==================== -->
+    <!-- Chat App -->
     <div class="chat-app" id="chatApp">
         <div class="chat-container">
-            <!-- Боковая панель -->
+            <!-- Sidebar -->
             <div class="sidebar">
                 <div class="sidebar-header">
                     <div class="user-info-header">
@@ -870,24 +650,31 @@
                             <div class="user-role" id="userRole">Роль</div>
                         </div>
                         <div class="header-controls">
+                            <button class="icon-btn" onclick="toggleNotifications()" title="Уведомления">
+                                🔔
+                                <span class="notification-badge hidden" id="totalUnreadBadge">0</span>
+                            </button>
                             <button class="icon-btn" onclick="logout()" title="Выйти">🚪</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Админ-панель (только для админов и РОП) -->
+                <!-- Admin panel -->
                 <div class="admin-panel hidden" id="adminPanel">
-                    <button class="admin-btn" onclick="openCreateChatModal()">➕ Создать чат</button>
-                    <button class="admin-btn" onclick="openUsersModal()">👥 Управление пользователями</button>
+                    <button class="admin-btn" onclick="showToast('Функция в разработке', 'info')">➕ Создать чат</button>
+                    <button class="admin-btn" onclick="showToast('Функция в разработке', 'info')">👥 Управление пользователями</button>
                 </div>
 
-                <!-- Список чатов -->
+                <!-- Chats list -->
                 <div class="chats-list" id="chatsList">
-                    <div class="loading">Загрузка чатов...</div>
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        <p>Загрузка чатов...</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Область чата -->
+            <!-- Chat area -->
             <div class="chat-area">
                 <div class="chat-header">
                     <div class="chat-header-info">
@@ -895,8 +682,7 @@
                         <div class="chat-type" id="currentChatType"></div>
                     </div>
                     <div class="chat-header-actions">
-                        <button class="icon-btn" onclick="openChatInfo()" title="Информация о чате">ℹ️</button>
-                        <button class="icon-btn" onclick="searchInChat()" title="Поиск">🔍</button>
+                        <button class="icon-btn" onclick="showToast('Функция в разработке', 'info')" title="Информация">ℹ️</button>
                     </div>
                 </div>
 
@@ -904,42 +690,14 @@
                     <div class="loading">Выберите чат для начала общения</div>
                 </div>
 
-                <div class="typing-indicator" id="typingIndicator">
-                    <span id="typingText">Кто-то печатает...</span>
-                </div>
-
                 <div class="message-input-area">
-                    <!-- Reply preview -->
-                    <div class="reply-preview" id="replyPreview">
-                        <div class="reply-preview-content">
-                            <div class="reply-preview-author" id="replyAuthor"></div>
-                            <div class="reply-preview-text" id="replyText"></div>
-                        </div>
-                        <button class="reply-close" onclick="cancelReply()">✕</button>
-                    </div>
-
-                    <!-- File preview -->
-                    <div class="file-preview" id="filePreview">
-                        <span class="file-preview-icon">📎</span>
-                        <div class="file-preview-info">
-                            <div class="file-preview-name" id="fileName"></div>
-                            <div class="file-preview-size" id="fileSize"></div>
-                        </div>
-                        <button class="file-remove" onclick="removeFile()">Удалить</button>
-                    </div>
-
                     <div class="message-input-wrapper">
-                        <div class="input-actions">
-                            <button class="input-action-btn" onclick="attachFile()" title="Прикрепить файл">📎</button>
-                            <button class="input-action-btn" onclick="attachImage()" title="Прикрепить изображение">🖼️</button>
-                        </div>
                         <textarea 
                             class="message-input" 
                             id="messageInput" 
                             placeholder="Введите сообщение..."
                             rows="1"
                             onkeydown="handleInputKeydown(event)"
-                            oninput="handleTyping()"
                         ></textarea>
                         <button class="send-btn" onclick="sendMessage()" id="sendBtn">➤</button>
                     </div>
@@ -948,125 +706,20 @@
         </div>
     </div>
 
-    <!-- Input для файлов (скрыт) -->
-    <input type="file" id="fileInput" onchange="handleFileSelect(event)">
-    <input type="file" id="imageInput" accept="image/*" onchange="handleFileSelect(event)">
-
-    <!-- ==================== МОДАЛЬНЫЕ ОКНА ==================== -->
-    
-    <!-- Модалка создания чата -->
-    <div class="modal" id="createChatModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Создать новый чат</h3>
-                <button class="modal-close" onclick="closeModal('createChatModal')">✕</button>
-            </div>
-            <form id="createChatForm">
-                <div class="form-group">
-                    <label>Тип чата</label>
-                    <select id="chatType">
-                        <option value="group">Группа</option>
-                        <option value="department">Отдел</option>
-                        <option value="direct">Личный чат</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Название</label>
-                    <input type="text" id="chatName" placeholder="Введите название чата" required>
-                </div>
-                <div class="form-group">
-                    <label>Участники</label>
-                    <div id="participantsList"></div>
-                </div>
-                <button type="submit" class="btn">Создать</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Модалка управления пользователями -->
-    <div class="modal" id="usersModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Управление пользователями</h3>
-                <button class="modal-close" onclick="closeModal('usersModal')">✕</button>
-            </div>
-            <button class="btn" onclick="openCreateUserModal()" style="margin-bottom: 20px;">
-                ➕ Добавить пользователя
-            </button>
-            <div class="users-list" id="usersList">
-                <div class="loading">Загрузка пользователей...</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Модалка создания пользователя -->
-    <div class="modal" id="createUserModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Добавить пользователя</h3>
-                <button class="modal-close" onclick="closeModal('createUserModal')">✕</button>
-            </div>
-            <form id="createUserForm">
-                <div class="form-group">
-                    <label>Логин</label>
-                    <input type="text" id="newUsername" placeholder="username" required>
-                </div>
-                <div class="form-group">
-                    <label>Пароль</label>
-                    <input type="password" id="newPassword" placeholder="********" required>
-                </div>
-                <div class="form-group">
-                    <label>Имя</label>
-                    <input type="text" id="newName" placeholder="Иван Иванов" required>
-                </div>
-                <div class="form-group">
-                    <label>Роль</label>
-                    <select id="newRole">
-                        <option value="admin">Администратор</option>
-                        <option value="assistant">Ассистент</option>
-                        <option value="rop">РОП (Руководитель отдела продаж)</option>
-                        <option value="operator">Оператор</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Отдел</label>
-                    <input type="text" id="newDepartment" placeholder="Sales, Marketing, etc.">
-                </div>
-                <button type="submit" class="btn">Создать пользователя</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Модалка редактирования сообщения -->
-    <div class="modal" id="editMessageModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Редактировать сообщение</h3>
-                <button class="modal-close" onclick="closeModal('editMessageModal')">✕</button>
-            </div>
-            <div class="form-group">
-                <textarea id="editMessageText" rows="4" class="message-input" style="width: 100%;"></textarea>
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn" onclick="saveEditedMessage()">Сохранить</button>
-                <button class="btn" style="background: var(--bg-tertiary); color: var(--text-primary);" onclick="closeModal('editMessageModal')">Отмена</button>
-            </div>
-        </div>
-    </div>
-
     <script>
-        // ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
+        // Global variables
         const API_URL = window.location.origin + '/api';
         let token = '';
         let currentUser = null;
         let socket = null;
         let currentChatId = null;
-        let replyToMessage = null;
-        let selectedFile = null;
-        let editingMessageId = null;
-        let typingTimeout = null;
+        let notificationsEnabled = false;
+        let soundEnabled = true;
 
-        // ==================== ТЕМА ====================
+        // Notification sound
+        const notificationSound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBg==');
+
+        // Theme
         function toggleTheme() {
             const html = document.documentElement;
             const currentTheme = html.getAttribute('data-theme');
@@ -1076,14 +729,52 @@
             localStorage.setItem('theme', newTheme);
         }
 
-        // Загрузка темы из localStorage
+        // Load theme
         window.addEventListener('DOMContentLoaded', () => {
-            const savedTheme = localStorage.getItem('theme') || 'dark';
+            const savedTheme = localStorage.getItem('theme') || 'light';
             document.documentElement.setAttribute('data-theme', savedTheme);
             document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '🌙' : '☀️';
+            
+            // Check for saved session
+            const savedToken = localStorage.getItem('token');
+            const savedUser = localStorage.getItem('user');
+            
+            if (savedToken && savedUser) {
+                token = savedToken;
+                currentUser = JSON.parse(savedUser);
+                showChatApp();
+            }
         });
 
-        // ==================== АВТОРИЗАЦИЯ ====================
+        // Toast notifications
+        function showToast(message, type = 'info', title = '') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const titles = {
+                'success': '✅ Успешно',
+                'error': '❌ Ошибка',
+                'warning': '⚠️ Внимание',
+                'info': 'ℹ️ Информация'
+            };
+            
+            toast.innerHTML = `
+                <div class="toast-header">
+                    <span class="toast-title">${title || titles[type]}</span>
+                    <button class="toast-close" onclick="this.parentElement.parentElement.remove()">✕</button>
+                </div>
+                <div class="toast-message">${message}</div>
+            `;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 5000);
+        }
+
+        // Login
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const username = document.getElementById('username').value;
@@ -1117,6 +808,7 @@
                     localStorage.setItem('user', JSON.stringify(currentUser));
                     
                     showChatApp();
+                    showToast('Вход выполнен успешно!', 'success');
                 } else {
                     showError(data.error || 'Ошибка входа');
                 }
@@ -1138,11 +830,11 @@
             document.getElementById('userName').textContent = currentUser.name;
             document.getElementById('userRole').textContent = getRoleText(currentUser.role);
             
-            // Показать админ-панель если есть права
             if (canManageUsers()) {
                 document.getElementById('adminPanel').classList.remove('hidden');
             }
             
+            requestNotificationPermission();
             connectWebSocket();
             loadChats();
         }
@@ -1151,59 +843,63 @@
             const roles = {
                 'admin': '👑 Администратор',
                 'assistant': '🤝 Ассистент',
-                'rop': '📊 Руководитель отдела продаж',
-                'operator': '💼 Оператор'
+                'rop': '📊 РОП',
+                'operator': '💼 Оператор',
+                'employee': '👤 Сотрудник'
             };
             return roles[role] || role;
         }
 
         function logout() {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            if (socket) socket.disconnect();
-            location.reload();
+            if (confirm('Выйти из системы?')) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                if (socket) socket.disconnect();
+                location.reload();
+            }
         }
 
-        // ==================== ПРАВА ДОСТУПА ====================
         function canManageUsers() {
             return currentUser.role === 'admin' || currentUser.role === 'rop';
         }
 
-        function canEditMessage(message) {
-            return message.user_id === currentUser.id;
+        // Notifications
+        function requestNotificationPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    notificationsEnabled = permission === 'granted';
+                    if (notificationsEnabled) {
+                        showToast('Уведомления включены', 'success');
+                    }
+                });
+            } else if (Notification.permission === 'granted') {
+                notificationsEnabled = true;
+            }
         }
 
-        function canDeleteMessage(message) {
-            return currentUser.role === 'admin' || message.user_id === currentUser.id;
+        function toggleNotifications() {
+            soundEnabled = !soundEnabled;
+            showToast(
+                soundEnabled ? 'Звук уведомлений включен' : 'Звук уведомлений выключен',
+                'info'
+            );
         }
 
-        function canSendMessageTo(recipientId, recipientRole) {
-            const myRole = currentUser.role;
-            
-            // Админ и ассистент пишут всем
-            if (myRole === 'admin' || myRole === 'assistant') return true;
-            
-            // РОП пишет всем
-            if (myRole === 'rop') return true;
-            
-            // Оператор
-            if (myRole === 'operator') {
-                // Может писать всем ассистентам
-                if (recipientRole === 'assistant') return true;
-                
-                // Может писать РОПу своего отдела
-                if (recipientRole === 'rop' && currentUser.department === recipient.department) {
-                    return true;
-                }
-                
-                // Не может писать другим операторам
-                if (recipientRole === 'operator') return false;
+        function showNotification(title, message) {
+            if (notificationsEnabled && document.hidden) {
+                new Notification(title, {
+                    body: message,
+                    icon: '🏢',
+                    badge: '🏢'
+                });
             }
             
-            return false;
+            if (soundEnabled) {
+                notificationSound.play().catch(() => {});
+            }
         }
 
-        // ==================== WEBSOCKET ====================
+        // WebSocket
         function connectWebSocket() {
             socket = io(window.location.origin, {
                 auth: { token }
@@ -1211,53 +907,70 @@
 
             socket.on('connect', () => {
                 console.log('✅ WebSocket connected');
+                showToast('Подключено к серверу', 'success');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('❌ WebSocket disconnected');
+                showToast('Отключено от сервера', 'warning');
             });
 
             socket.on('new_message', (data) => {
                 if (data.chatId === currentChatId) {
                     addMessage(data.message);
                 }
-                // Обновить превью чата
+                
                 updateChatPreview(data.chatId, data.message);
-            });
-
-            socket.on('message_edited', (data) => {
-                if (data.chatId === currentChatId) {
-                    updateMessage(data.messageId, data.newContent);
+                
+                if (data.message.user_id !== currentUser.id) {
+                    updateUnreadCount(data.chatId, 1);
+                    showNotification(
+                        data.message.user_name,
+                        data.message.content
+                    );
                 }
-            });
-
-            socket.on('message_deleted', (data) => {
-                if (data.chatId === currentChatId) {
-                    markMessageDeleted(data.messageId);
-                }
-            });
-
-            socket.on('user_typing', (data) => {
-                if (data.chatId === currentChatId && data.userId !== currentUser.id) {
-                    showTyping(data.userName);
-                }
-            });
-
-            socket.on('user_stop_typing', () => {
-                hideTyping();
             });
         }
 
-        // ==================== ЧАТЫ ====================
+        // Load chats
         async function loadChats() {
             try {
                 const res = await fetch(`${API_URL}/chats`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+
                 const data = await res.json();
                 
-                if (data.chats) {
+                console.log('Chats loaded:', data);
+                
+                if (data.chats && data.chats.length > 0) {
                     renderChats(data.chats);
+                } else {
+                    document.getElementById('chatsList').innerHTML = `
+                        <div class="loading">
+                            <p>Нет доступных чатов</p>
+                            <p style="font-size: 12px; color: var(--text-tertiary); margin-top: 10px;">
+                                Обратитесь к администратору для добавления в чаты
+                            </p>
+                        </div>
+                    `;
                 }
             } catch (err) {
                 console.error('Error loading chats:', err);
+                document.getElementById('chatsList').innerHTML = `
+                    <div class="loading">
+                        <p style="color: var(--danger);">Ошибка загрузки чатов</p>
+                        <p style="font-size: 12px; margin-top: 10px;">${err.message}</p>
+                        <button class="btn" onclick="loadChats()" style="margin-top: 15px; padding: 8px 16px;">
+                            Повторить
+                        </button>
+                    </div>
+                `;
+                showToast('Не удалось загрузить чаты: ' + err.message, 'error');
             }
         }
 
@@ -1265,10 +978,7 @@
             const container = document.getElementById('chatsList');
             container.innerHTML = '';
 
-            if (chats.length === 0) {
-                container.innerHTML = '<div class="loading">Нет доступных чатов</div>';
-                return;
-            }
+            let totalUnread = 0;
 
             chats.forEach(chat => {
                 const chatDiv = document.createElement('div');
@@ -1277,9 +987,11 @@
 
                 const chatName = getChatName(chat);
                 const lastMsg = chat.last_message 
-                    ? (chat.last_message.is_deleted ? '🗑️ Сообщение удалено' : chat.last_message.content)
+                    ? (chat.last_message.is_deleted ? '🗑️ Удалено' : chat.last_message.content)
                     : 'Нет сообщений';
                 const unreadCount = chat.unread_count || 0;
+                
+                totalUnread += unreadCount;
 
                 chatDiv.innerHTML = `
                     <div class="chat-item-header">
@@ -1287,13 +999,15 @@
                         <span class="chat-time">${chat.last_message ? formatTime(chat.last_message.created_at) : ''}</span>
                     </div>
                     <div class="chat-preview">
-                        ${lastMsg.substring(0, 40)}${lastMsg.length > 40 ? '...' : ''}
+                        ${escapeHtml(lastMsg).substring(0, 40)}${lastMsg.length > 40 ? '...' : ''}
                         ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
                     </div>
                 `;
 
                 container.appendChild(chatDiv);
             });
+
+            updateTotalUnreadBadge(totalUnread);
         }
 
         function getChatName(chat) {
@@ -1301,10 +1015,32 @@
             
             if (chat.type === 'direct' && chat.participants) {
                 const other = chat.participants.find(p => p.id !== currentUser.id);
-                return other ? `${other.name} (${getRoleText(other.role)})` : 'Личный чат';
+                return other ? `${other.name}` : 'Личный чат';
             }
             
             return chat.type === 'group' ? '👥 Группа' : '🏢 ' + (chat.department || 'Отдел');
+        }
+
+        function updateTotalUnreadBadge(count) {
+            const badge = document.getElementById('totalUnreadBadge');
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('hidden');
+                document.title = `(${count}) Корпоративный чат`;
+            } else {
+                badge.classList.add('hidden');
+                document.title = 'Корпоративный чат';
+            }
+        }
+
+        function updateUnreadCount(chatId, increment) {
+            const chatItems = document.querySelectorAll('.chat-item');
+            // TODO: Update specific chat unread count
+            loadChats(); // Reload for now
+        }
+
+        function updateChatPreview(chatId, message) {
+            // TODO: Update chat preview without full reload
         }
 
         async function selectChat(chat) {
@@ -1312,7 +1048,6 @@
             document.getElementById('currentChatName').textContent = getChatName(chat);
             document.getElementById('currentChatType').textContent = getTypeText(chat.type);
             
-            // Update active state
             document.querySelectorAll('.chat-item').forEach(item => {
                 item.classList.remove('active');
             });
@@ -1330,11 +1065,6 @@
             return types[type] || type;
         }
 
-        function updateChatPreview(chatId, message) {
-            // TODO: Обновить превью последнего сообщения в списке чатов
-        }
-
-        // ==================== СООБЩЕНИЯ ====================
         async function loadMessages(chatId) {
             try {
                 const res = await fetch(`${API_URL}/chats/${chatId}/messages`, {
@@ -1353,6 +1083,7 @@
                 }
             } catch (err) {
                 console.error('Error loading messages:', err);
+                showToast('Ошибка загрузки сообщений', 'error');
             }
         }
 
@@ -1362,99 +1093,40 @@
 
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isOwn ? 'own' : ''}`;
-            messageDiv.dataset.messageId = msg.id;
 
-            let content = '';
-
-            // Reply к сообщению
-            if (msg.reply_to) {
-                content += `
-                    <div class="message-reply">
-                        ↩️ <strong>${msg.reply_to.user_name}:</strong> ${msg.reply_to.content.substring(0, 50)}...
-                    </div>
-                `;
-            }
-
-            // Основной контент
-            const messageText = msg.is_deleted 
-                ? '🗑️ <em>Сообщение удалено</em>' 
-                : escapeHtml(msg.content);
-
-            content += `
-                ${!isOwn ? `<div class="message-header">
-                    ${msg.user_name}
-                </div>` : ''}
+            messageDiv.innerHTML = `
+                ${!isOwn ? `<div class="message-header">${msg.user_name}</div>` : ''}
                 <div class="message-bubble">
-                    ${!msg.is_deleted && (canEditMessage(msg) || canDeleteMessage(msg)) ? `
-                        <div class="message-actions">
-                            ${canEditMessage(msg) ? '<button class="message-action-btn" onclick="startReply('+msg.id+', \''+escapeQuotes(msg.user_name)+'\', \''+escapeQuotes(msg.content)+'\')">↩️</button>' : ''}
-                            ${canEditMessage(msg) ? '<button class="message-action-btn" onclick="editMessage('+msg.id+', \''+escapeQuotes(msg.content)+'\')">✏️</button>' : ''}
-                            ${canDeleteMessage(msg) ? '<button class="message-action-btn" onclick="deleteMessage('+msg.id+')">🗑️</button>' : ''}
-                            <button class="message-action-btn" onclick="forwardMessage('+msg.id+')">➡️</button>
-                        </div>
-                    ` : ''}
-                    
-                    ${messageText}
-                    
-                    ${msg.is_edited && !msg.is_deleted ? '<div class="message-status">редактировано</div>' : ''}
-                    
-                    ${msg.attachment ? renderAttachment(msg.attachment) : ''}
+                    ${escapeHtml(msg.content)}
                 </div>
-                <div class="message-time">
-                    ${formatTime(msg.created_at)}
-                    ${isOwn && msg.read_status ? '<span class="read-status">✓✓</span>' : ''}
-                </div>
+                <div class="message-time">${formatTime(msg.created_at)}</div>
             `;
 
-            messageDiv.innerHTML = content;
             container.appendChild(messageDiv);
             container.scrollTop = container.scrollHeight;
-        }
-
-        function renderAttachment(attachment) {
-            if (attachment.type === 'image') {
-                return `<img src="${attachment.url}" alt="${attachment.name}" class="message-image" onclick="openImage('${attachment.url}')">`;
-            } else {
-                return `
-                    <div class="message-attachment" onclick="downloadFile('${attachment.url}', '${attachment.name}')">
-                        <span class="attachment-icon">📎</span>
-                        <div class="attachment-info">
-                            <div class="attachment-name">${attachment.name}</div>
-                            <div class="attachment-size">${formatFileSize(attachment.size)}</div>
-                        </div>
-                    </div>
-                `;
-            }
         }
 
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             const content = input.value.trim();
 
-            if (!content && !selectedFile) return;
-            if (!currentChatId) return;
+            if (!content || !currentChatId) return;
 
             try {
-                const formData = new FormData();
-                if (content) formData.append('content', content);
-                if (selectedFile) formData.append('file', selectedFile);
-                if (replyToMessage) formData.append('reply_to', replyToMessage.id);
-
                 await fetch(`${API_URL}/chats/${currentChatId}/messages`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
                     },
-                    body: formData
+                    body: JSON.stringify({ content })
                 });
 
                 input.value = '';
-                cancelReply();
-                removeFile();
                 input.style.height = 'auto';
             } catch (err) {
                 console.error('Error sending message:', err);
-                alert('Ошибка отправки сообщения');
+                showToast('Ошибка отправки сообщения', 'error');
             }
         }
 
@@ -1465,284 +1137,13 @@
             }
         }
 
-        function handleTyping() {
-            if (!currentChatId) return;
-
-            socket.emit('typing', { chatId: currentChatId });
-
-            clearTimeout(typingTimeout);
-            typingTimeout = setTimeout(() => {
-                socket.emit('stop_typing', { chatId: currentChatId });
-            }, 1000);
-        }
-
-        function showTyping(userName) {
-            const indicator = document.getElementById('typingIndicator');
-            document.getElementById('typingText').textContent = `${userName} печатает...`;
-            indicator.classList.add('active');
-        }
-
-        function hideTyping() {
-            document.getElementById('typingIndicator').classList.remove('active');
-        }
-
-        // ==================== REPLY ====================
-        function startReply(messageId, userName, content) {
-            replyToMessage = { id: messageId, userName, content };
-            
-            document.getElementById('replyAuthor').textContent = userName;
-            document.getElementById('replyText').textContent = content.substring(0, 100);
-            document.getElementById('replyPreview').classList.add('active');
-            
-            document.getElementById('messageInput').focus();
-        }
-
-        function cancelReply() {
-            replyToMessage = null;
-            document.getElementById('replyPreview').classList.remove('active');
-        }
-
-        // ==================== РЕДАКТИРОВАНИЕ ====================
-        function editMessage(messageId, content) {
-            editingMessageId = messageId;
-            document.getElementById('editMessageText').value = content;
-            document.getElementById('editMessageModal').classList.add('active');
-        }
-
-        async function saveEditedMessage() {
-            const newContent = document.getElementById('editMessageText').value.trim();
-            if (!newContent) return;
-
-            try {
-                await fetch(`${API_URL}/chats/${currentChatId}/messages/${editingMessageId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ content: newContent })
-                });
-
-                closeModal('editMessageModal');
-                editingMessageId = null;
-            } catch (err) {
-                console.error('Error editing message:', err);
-                alert('Ошибка редактирования сообщения');
-            }
-        }
-
-        function updateMessage(messageId, newContent) {
-            const messageEl = document.querySelector(`[data-message-id="${messageId}"] .message-bubble`);
-            if (messageEl) {
-                // Обновить текст, сохранив actions
-                const actionsEl = messageEl.querySelector('.message-actions');
-                messageEl.innerHTML = escapeHtml(newContent);
-                if (actionsEl) messageEl.insertBefore(actionsEl, messageEl.firstChild);
-                
-                // Добавить метку "редактировано"
-                const statusDiv = document.createElement('div');
-                statusDiv.className = 'message-status';
-                statusDiv.textContent = 'редактировано';
-                messageEl.appendChild(statusDiv);
-            }
-        }
-
-        // ==================== УДАЛЕНИЕ ====================
-        async function deleteMessage(messageId) {
-            if (!confirm('Удалить сообщение?')) return;
-
-            try {
-                await fetch(`${API_URL}/chats/${currentChatId}/messages/${messageId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-            } catch (err) {
-                console.error('Error deleting message:', err);
-                alert('Ошибка удаления сообщения');
-            }
-        }
-
-        function markMessageDeleted(messageId) {
-            const messageEl = document.querySelector(`[data-message-id="${messageId}"] .message-bubble`);
-            if (messageEl) {
-                messageEl.innerHTML = '🗑️ <em>Сообщение удалено</em>';
-            }
-        }
-
-        // ==================== ФАЙЛЫ ====================
-        function attachFile() {
-            document.getElementById('fileInput').click();
-        }
-
-        function attachImage() {
-            document.getElementById('imageInput').click();
-        }
-
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            selectedFile = file;
-            
-            document.getElementById('fileName').textContent = file.name;
-            document.getElementById('fileSize').textContent = formatFileSize(file.size);
-            document.getElementById('filePreview').classList.add('active');
-        }
-
-        function removeFile() {
-            selectedFile = null;
-            document.getElementById('fileInput').value = '';
-            document.getElementById('imageInput').value = '';
-            document.getElementById('filePreview').classList.remove('active');
-        }
-
-        function downloadFile(url, name) {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = name;
-            a.click();
-        }
-
-        function openImage(url) {
-            window.open(url, '_blank');
-        }
-
-        // ==================== ПЕРЕСЫЛКА ====================
-        function forwardMessage(messageId) {
-            // TODO: Открыть модалку выбора чата для пересылки
-            alert('Функция пересылки будет реализована');
-        }
-
-        // ==================== ПОИСК ====================
-        function searchInChat() {
-            // TODO: Реализовать поиск по сообщениям
-            const query = prompt('Введите текст для поиска:');
-            if (query) {
-                console.log('Searching for:', query);
-                alert('Поиск будет реализован');
-            }
-        }
-
-        // ==================== МОДАЛЬНЫЕ ОКНА ====================
-        function openCreateChatModal() {
-            document.getElementById('createChatModal').classList.add('active');
-            loadUsersForChat();
-        }
-
-        function openUsersModal() {
-            document.getElementById('usersModal').classList.add('active');
-            loadAllUsers();
-        }
-
-        function openCreateUserModal() {
-            closeModal('usersModal');
-            document.getElementById('createUserModal').classList.add('active');
-        }
-
-        function openChatInfo() {
-            alert('Информация о чате будет добавлена');
-        }
-
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('active');
-        }
-
-        // ==================== УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ====================
-        async function loadAllUsers() {
-            if (currentUser.role !== 'admin') return;
-
-            try {
-                const res = await fetch(`${API_URL}/admin/users`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                const data = await res.json();
-                renderUsers(data.users || []);
-            } catch (err) {
-                console.error('Error loading users:', err);
-            }
-        }
-
-        function renderUsers(users) {
-            const container = document.getElementById('usersList');
-            container.innerHTML = '';
-
-            users.forEach(user => {
-                const userDiv = document.createElement('div');
-                userDiv.className = 'user-item';
-
-                userDiv.innerHTML = `
-                    <div class="user-item-info">
-                        <h4>${user.name}</h4>
-                        <div class="user-item-role">${getRoleText(user.role)} ${user.department ? '• ' + user.department : ''}</div>
-                    </div>
-                    <div class="user-item-actions">
-                        <button class="user-action-btn" onclick="editUser(${user.id})">✏️</button>
-                        <button class="user-action-btn danger" onclick="deleteUser(${user.id})">🗑️</button>
-                    </div>
-                `;
-
-                container.appendChild(userDiv);
-            });
-        }
-
-        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const userData = {
-                username: document.getElementById('newUsername').value,
-                password: document.getElementById('newPassword').value,
-                name: document.getElementById('newName').value,
-                role: document.getElementById('newRole').value,
-                department: document.getElementById('newDepartment').value
-            };
-
-            try {
-                await fetch(`${API_URL}/admin/users`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(userData)
-                });
-
-                closeModal('createUserModal');
-                openUsersModal();
-                alert('Пользователь создан!');
-            } catch (err) {
-                console.error('Error creating user:', err);
-                alert('Ошибка создания пользователя');
-            }
-        });
-
-        function editUser(userId) {
-            alert('Редактирование пользователя будет реализовано');
-        }
-
-        async function deleteUser(userId) {
-            if (!confirm('Удалить пользователя?')) return;
-
-            try {
-                await fetch(`${API_URL}/admin/users/${userId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                loadAllUsers();
-            } catch (err) {
-                console.error('Error deleting user:', err);
-                alert('Ошибка удаления пользователя');
-            }
-        }
-
-        // ==================== УТИЛИТЫ ====================
+        // Utilities
         function formatTime(timestamp) {
             const date = new Date(timestamp);
             const now = new Date();
             const diff = now - date;
             
-            if (diff < 86400000) { // Меньше суток
+            if (diff < 86400000) {
                 return date.toLocaleTimeString('ru-RU', { 
                     hour: '2-digit', 
                     minute: '2-digit' 
@@ -1755,40 +1156,11 @@
             }
         }
 
-        function formatFileSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / 1048576).toFixed(1) + ' MB';
-        }
-
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
-
-        function escapeQuotes(text) {
-            return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
-        }
-
-        // Автовход если есть токен
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedToken = localStorage.getItem('token');
-            const savedUser = localStorage.getItem('user');
-            
-            if (savedToken && savedUser) {
-                token = savedToken;
-                currentUser = JSON.parse(savedUser);
-                showChatApp();
-            }
-        });
-
-        // Закрытие модалок по клику вне их
-        window.addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal')) {
-                e.target.classList.remove('active');
-            }
-        });
     </script>
 </body>
 </html>
