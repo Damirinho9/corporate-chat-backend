@@ -17,6 +17,10 @@ const server = http.createServer(app);
 const io = initializeSocket(server);
 
 // ==================== MIDDLEWARE ====================
+
+// Trust proxy для Render (ВАЖНО!)
+app.set('trust proxy', 1);
+
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
@@ -33,7 +37,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  message: { error: 'Too many requests' }
+  message: { error: 'Too many requests' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use('/api/', limiter);
 
@@ -47,10 +53,10 @@ if (process.env.NODE_ENV === 'development') {
 // ==================== ROUTES ====================
 app.use('/api', apiRoutes);
 
-// Раздаём фронт из папки public
+// Раздача статики
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Главная страница (index.html)
+// Главная страница
 app.get('/', (req, res) => {
   const indexPath = path.join(__dirname, 'public', 'index.html');
   if (fs.existsSync(indexPath)) {
@@ -83,7 +89,7 @@ const initDatabase = async () => {
   try {
     console.log('🔍 Checking database state...');
     
-    // ИСПРАВЛЕНО: Проверяем существование таблицы правильным способом
+    // Проверка существования таблицы users
     const tableCheck = await query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -97,32 +103,28 @@ const initDatabase = async () => {
     if (!tableExists) {
       console.log('📦 Initializing database schema...');
 
-      // Читаем schema.sql
       const schemaPath = path.join(__dirname, 'database/schema.sql');
       
       if (!fs.existsSync(schemaPath)) {
         console.error('❌ schema.sql not found at:', schemaPath);
-        console.log('📂 Current directory:', __dirname);
-        console.log('📂 Files in database/:', fs.existsSync(path.join(__dirname, 'database')) ? fs.readdirSync(path.join(__dirname, 'database')) : 'directory not found');
         return;
       }
 
       const schemaSQL = fs.readFileSync(schemaPath, 'utf8');
       
       console.log('📝 Executing schema.sql...');
-      
-      // Выполняем весь SQL файл сразу (PostgreSQL поддерживает множественные команды)
       await query(schemaSQL);
-
       console.log('✅ Database schema created!');
 
-      // Запускаем seed
+      // Запуск seed
       const seedPath = path.join(__dirname, 'database/seed.js');
       if (fs.existsSync(seedPath)) {
         console.log('🌱 Seeding database...');
         
         try {
-          // Запускаем seed как отдельный процесс для избежания кэширования require
+          // Очистить кэш require для seed.js
+          delete require.cache[require.resolve(seedPath)];
+          
           const seedModule = require(seedPath);
           
           if (typeof seedModule === 'function') {
@@ -130,25 +132,20 @@ const initDatabase = async () => {
           } else {
             console.log('⚠️ Seed module is not a function');
           }
-          
-          console.log('✅ Database seeded successfully!');
         } catch (seedError) {
           console.error('⚠️ Seed error:', seedError.message);
-          // Не падаем, продолжаем работу
+          // Продолжаем работу даже если seed не удался
         }
-      } else {
-        console.log('⚠️ seed.js not found, skipping seed');
       }
     } else {
       console.log('ℹ️ Database already initialized.');
     }
   } catch (error) {
     console.error('⚠️ Database init error:', error.message);
-    console.error(error);
     
-    // Если это ошибка "relation does not exist", пробуем создать схему
+    // Retry если ошибка "relation does not exist"
     if (error.code === '42P01') {
-      console.log('🔄 Attempting to create schema anyway...');
+      console.log('🔄 Attempting to create schema...');
       try {
         const schemaPath = path.join(__dirname, 'database/schema.sql');
         if (fs.existsSync(schemaPath)) {
@@ -156,13 +153,12 @@ const initDatabase = async () => {
           await query(schemaSQL);
           console.log('✅ Schema created on retry!');
           
-          // Пробуем seed
           const seedPath = path.join(__dirname, 'database/seed.js');
           if (fs.existsSync(seedPath)) {
+            delete require.cache[require.resolve(seedPath)];
             const seedModule = require(seedPath);
             if (typeof seedModule === 'function') {
               await seedModule();
-              console.log('✅ Database seeded!');
             }
           }
         }
@@ -182,14 +178,14 @@ const startServer = async () => {
     console.log('🔌 Connecting to database...');
     
     // Проверка подключения
-    const connectionTest = await pool.query('SELECT NOW()');
+    await pool.query('SELECT NOW()');
     console.log('✅ Database connected successfully');
     console.log('✅ Database connection established');
 
-    // Инициализируем БД
+    // Инициализация БД
     await initDatabase();
 
-    // Запускаем сервер
+    // Запуск сервера
     server.listen(PORT, HOST, () => {
       console.log('');
       console.log('╔════════════════════════════════════════════╗');
@@ -198,7 +194,10 @@ const startServer = async () => {
       console.log('');
       console.log(`🚀 Server running on ${HOST}:${PORT}`);
       console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🌐 Health: http://localhost:${PORT}/api/health`);
+      console.log(`🌐 HTTPS: https://corporate-chat-backend.onrender.com`);
+      console.log(`🏥 Health: /api/health`);
+      console.log('');
+      console.log('✅ Ready to accept connections!');
       console.log('');
     });
   } catch (error) {
@@ -210,7 +209,7 @@ const startServer = async () => {
 
 // Graceful shutdown
 const shutdown = async (signal) => {
-  console.log(`\n${signal} received. Shutting down gracefully...`);
+  console.log(`\n⚠️ ${signal} received. Shutting down gracefully...`);
   
   server.close(async () => {
     console.log('✅ HTTP server closed');
@@ -225,26 +224,28 @@ const shutdown = async (signal) => {
     }
   });
 
+  // Форсированный выход через 10 секунд
   setTimeout(() => {
-    console.error('⚠️ Forcing shutdown');
+    console.error('⚠️ Forcing shutdown after timeout');
     process.exit(1);
   }, 10000);
 };
 
+// Обработчики сигналов
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Обработка необработанных ошибок
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('🔴 Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  console.error('🔴 Uncaught Exception:', error);
   process.exit(1);
 });
 
-// Start the server
+// Старт сервера
 startServer();
 
 module.exports = { app, server, io };
