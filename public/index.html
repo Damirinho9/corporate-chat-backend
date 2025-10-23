@@ -1549,13 +1549,168 @@
 
         // ==================== ADMIN FUNCTIONS ====================
         function createNewChat() {
-            showToast('Функция создания чатов будет добавлена', 'info');
-            // TODO: Implement create chat modal
+            const chatName = prompt('Введите название чата:');
+            if (!chatName) return;
+            
+            const chatType = prompt('Тип чата:\n1 - Групповой (group)\n2 - Отдел (department)\n3 - Личный (direct)');
+            const types = { '1': 'group', '2': 'department', '3': 'direct' };
+            const type = types[chatType] || 'group';
+            
+            let department = null;
+            if (type === 'department') {
+                department = prompt('Название отдела (Sales, Marketing, IT):');
+            }
+            
+            fetch(`${API_URL}/chats`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name: chatName, type, department })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.chat) {
+                    showToast('Чат создан успешно!', 'success');
+                    loadChats();
+                } else {
+                    showToast(data.error || 'Ошибка создания чата', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка: ' + err.message, 'error');
+            });
         }
 
         function manageUsers() {
-            showToast('Функция управления пользователями будет добавлена', 'info');
-            // TODO: Implement user management modal
+            if (!confirm('Открыть панель управления пользователями?\n\n(Функционал будет расширен в следующей версии)')) {
+                return;
+            }
+            
+            fetch(`${API_URL}/users`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.users) {
+                    let userList = 'ПОЛЬЗОВАТЕЛИ СИСТЕМЫ:\n\n';
+                    data.users.forEach(u => {
+                        userList += `${u.id}. ${u.name} (@${u.username}) - ${u.role}\n`;
+                        userList += `   Отдел: ${u.department || 'нет'} | Активен: ${u.is_active ? 'да' : 'нет'}\n\n`;
+                    });
+                    
+                    alert(userList);
+                    
+                    const action = prompt('Действие:\n1 - Создать пользователя\n2 - Изменить роль\n3 - Деактивировать\n0 - Отмена');
+                    
+                    if (action === '1') {
+                        createUser();
+                    } else if (action === '2') {
+                        changeUserRole();
+                    } else if (action === '3') {
+                        deactivateUser();
+                    }
+                } else {
+                    showToast('Ошибка загрузки пользователей', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка: ' + err.message, 'error');
+            });
+        }
+        
+        function createUser() {
+            const username = prompt('Логин нового пользователя:');
+            if (!username) return;
+            
+            const name = prompt('Полное имя:');
+            if (!name) return;
+            
+            const password = prompt('Пароль:', 'pass123');
+            if (!password) return;
+            
+            const role = prompt('Роль (admin/assistant/rop/operator/employee):', 'employee');
+            const department = prompt('Отдел (Sales/Marketing/IT) или оставьте пустым:');
+            
+            fetch(`${API_URL}/auth/register`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    username, 
+                    password, 
+                    name, 
+                    role,
+                    department: department || null
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.user) {
+                    showToast(`Пользователь ${username} создан!`, 'success');
+                } else {
+                    showToast(data.error || 'Ошибка создания', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка: ' + err.message, 'error');
+            });
+        }
+        
+        function changeUserRole() {
+            const userId = prompt('ID пользователя:');
+            if (!userId) return;
+            
+            const newRole = prompt('Новая роль (admin/assistant/rop/operator/employee):');
+            if (!newRole) return;
+            
+            fetch(`${API_URL}/users/${userId}/role`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ role: newRole })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Роль изменена успешно!', 'success');
+                } else {
+                    showToast(data.error || 'Ошибка', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка: ' + err.message, 'error');
+            });
+        }
+        
+        function deactivateUser() {
+            const userId = prompt('ID пользователя для деактивации:');
+            if (!userId) return;
+            
+            if (!confirm('Точно деактивировать пользователя #' + userId + '?')) {
+                return;
+            }
+            
+            fetch(`${API_URL}/users/${userId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Пользователь деактивирован', 'success');
+                } else {
+                    showToast(data.error || 'Ошибка', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка: ' + err.message, 'error');
+            });
         }
 
         // ==================== UTILITIES ====================
