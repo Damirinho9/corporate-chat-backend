@@ -52,7 +52,21 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Главная страница (index.html)
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.json({ 
+      message: 'Corporate Chat API', 
+      version: '1.0.0',
+      status: 'running',
+      endpoints: {
+        health: '/api/health',
+        auth: '/api/auth/login',
+        chats: '/api/chats'
+      }
+    });
+  }
 });
 
 app.use((req, res) => {
@@ -69,8 +83,8 @@ const initDatabase = async () => {
   try {
     console.log('🔍 Checking database state...');
     
-    // Проверяем наличие таблицы users
-    const result = await query(`
+    // ИСПРАВЛЕНО: Проверяем существование таблицы правильным способом
+    const tableCheck = await query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
         WHERE table_schema = 'public' 
@@ -78,46 +92,52 @@ const initDatabase = async () => {
       );
     `);
 
-    const tableExists = result.rows[0].exists;
+    const tableExists = tableCheck.rows[0].exists;
 
     if (!tableExists) {
       console.log('📦 Initializing database schema...');
 
-      // Читаем и выполняем schema.sql
+      // Читаем schema.sql
       const schemaPath = path.join(__dirname, 'database/schema.sql');
       
       if (!fs.existsSync(schemaPath)) {
-        console.error('❌ schema.sql not found!');
+        console.error('❌ schema.sql not found at:', schemaPath);
+        console.log('📂 Current directory:', __dirname);
+        console.log('📂 Files in database/:', fs.existsSync(path.join(__dirname, 'database')) ? fs.readdirSync(path.join(__dirname, 'database')) : 'directory not found');
         return;
       }
 
       const schemaSQL = fs.readFileSync(schemaPath, 'utf8');
       
-      // Выполняем SQL построчно, игнорируя комментарии
-      const statements = schemaSQL
-        .split(';')
-        .map(s => s.trim())
-        .filter(s => s && !s.startsWith('--'));
-
-      for (const statement of statements) {
-        if (statement) {
-          await query(statement);
-        }
-      }
+      console.log('📝 Executing schema.sql...');
+      
+      // Выполняем весь SQL файл сразу (PostgreSQL поддерживает множественные команды)
+      await query(schemaSQL);
 
       console.log('✅ Database schema created!');
 
-      // Запускаем seed только если есть файл
+      // Запускаем seed
       const seedPath = path.join(__dirname, 'database/seed.js');
       if (fs.existsSync(seedPath)) {
         console.log('🌱 Seeding database...');
-        const seedModule = require('./database/seed');
         
-        if (typeof seedModule === 'function') {
-          await seedModule();
+        try {
+          // Запускаем seed как отдельный процесс для избежания кэширования require
+          const seedModule = require(seedPath);
+          
+          if (typeof seedModule === 'function') {
+            await seedModule();
+          } else {
+            console.log('⚠️ Seed module is not a function');
+          }
+          
+          console.log('✅ Database seeded successfully!');
+        } catch (seedError) {
+          console.error('⚠️ Seed error:', seedError.message);
+          // Не падаем, продолжаем работу
         }
-        
-        console.log('✅ Database seeded!');
+      } else {
+        console.log('⚠️ seed.js not found, skipping seed');
       }
     } else {
       console.log('ℹ️ Database already initialized.');
@@ -125,18 +145,45 @@ const initDatabase = async () => {
   } catch (error) {
     console.error('⚠️ Database init error:', error.message);
     console.error(error);
-    // Не падаем, даём серверу запуститься
+    
+    // Если это ошибка "relation does not exist", пробуем создать схему
+    if (error.code === '42P01') {
+      console.log('🔄 Attempting to create schema anyway...');
+      try {
+        const schemaPath = path.join(__dirname, 'database/schema.sql');
+        if (fs.existsSync(schemaPath)) {
+          const schemaSQL = fs.readFileSync(schemaPath, 'utf8');
+          await query(schemaSQL);
+          console.log('✅ Schema created on retry!');
+          
+          // Пробуем seed
+          const seedPath = path.join(__dirname, 'database/seed.js');
+          if (fs.existsSync(seedPath)) {
+            const seedModule = require(seedPath);
+            if (typeof seedModule === 'function') {
+              await seedModule();
+              console.log('✅ Database seeded!');
+            }
+          }
+        }
+      } catch (retryError) {
+        console.error('❌ Retry failed:', retryError.message);
+      }
+    }
   }
 };
 
 // ==================== SERVER STARTUP ====================
 const PORT = process.env.PORT || 3000;
-const HOST = '0.0.0.0'; // Важно для Docker/Render
+const HOST = '0.0.0.0';
 
 const startServer = async () => {
   try {
     console.log('🔌 Connecting to database...');
-    await pool.query('SELECT NOW()');
+    
+    // Проверка подключения
+    const connectionTest = await pool.query('SELECT NOW()');
+    console.log('✅ Database connected successfully');
     console.log('✅ Database connection established');
 
     // Инициализируем БД
@@ -156,6 +203,7 @@ const startServer = async () => {
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
+    console.error('Stack trace:', error.stack);
     process.exit(1);
   }
 };
@@ -185,6 +233,16 @@ const shutdown = async (signal) => {
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Обработка необработанных ошибок
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
 
 // Start the server
 startServer();
