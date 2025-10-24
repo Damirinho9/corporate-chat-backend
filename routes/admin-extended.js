@@ -1,17 +1,17 @@
 // ========================================================
-// РАСШИРЕННЫЕ ADMIN ROUTES - Добавить в routes/api.js
+// РАСШИРЕННЫЕ ADMIN ROUTES
 // ========================================================
 
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const { query } = require('../config/database');
-const { auth } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth'); // FIXED!
 
 // ==================== USER PROFILE MANAGEMENT ====================
 
 // Get user profile (admin only)
-router.get('/users/:userId', auth, async (req, res) => {
+router.get('/users/:userId', authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied' });
@@ -35,7 +35,7 @@ router.get('/users/:userId', auth, async (req, res) => {
 });
 
 // Update user profile (admin only)
-router.put('/users/:userId', auth, async (req, res) => {
+router.put('/users/:userId', authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied' });
@@ -64,7 +64,7 @@ router.put('/users/:userId', auth, async (req, res) => {
 });
 
 // Change user password (admin only)
-router.put('/users/:userId/password', auth, async (req, res) => {
+router.put('/users/:userId/password', authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied' });
@@ -97,7 +97,7 @@ router.put('/users/:userId/password', auth, async (req, res) => {
 // ==================== DEPARTMENT MANAGEMENT ====================
 
 // Get all departments
-router.get('/departments', auth, async (req, res) => {
+router.get('/departments', authenticateToken, async (req, res) => {
     try {
         const result = await query(`
             SELECT DISTINCT department 
@@ -115,7 +115,7 @@ router.get('/departments', auth, async (req, res) => {
 });
 
 // Create new department (admin only)
-router.post('/departments', auth, async (req, res) => {
+router.post('/departments', authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied' });
@@ -148,7 +148,7 @@ router.post('/departments', auth, async (req, res) => {
 });
 
 // Move user to another department (admin only)
-router.put('/users/:userId/department', auth, async (req, res) => {
+router.put('/users/:userId/department', authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied' });
@@ -175,7 +175,7 @@ router.put('/users/:userId/department', auth, async (req, res) => {
 // ==================== CHAT MANAGEMENT ====================
 
 // Archive chat (admin only)
-router.put('/chats/:chatId/archive', auth, async (req, res) => {
+router.put('/chats/:chatId/archive', authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied' });
@@ -204,7 +204,7 @@ router.put('/chats/:chatId/archive', auth, async (req, res) => {
 });
 
 // Unarchive chat (admin only)
-router.put('/chats/:chatId/unarchive', auth, async (req, res) => {
+router.put('/chats/:chatId/unarchive', authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied' });
@@ -230,7 +230,7 @@ router.put('/chats/:chatId/unarchive', auth, async (req, res) => {
 // ==================== MESSAGE MANAGEMENT ====================
 
 // Pin message (admin or chat owner)
-router.post('/chats/:chatId/messages/:messageId/pin', auth, async (req, res) => {
+router.post('/chats/:chatId/messages/:messageId/pin', authenticateToken, async (req, res) => {
     try {
         const { chatId, messageId } = req.params;
 
@@ -272,7 +272,7 @@ router.post('/chats/:chatId/messages/:messageId/pin', auth, async (req, res) => 
 });
 
 // Unpin message
-router.delete('/chats/:chatId/messages/:messageId/pin', auth, async (req, res) => {
+router.delete('/chats/:chatId/messages/:messageId/pin', authenticateToken, async (req, res) => {
     try {
         const { chatId, messageId } = req.params;
 
@@ -305,7 +305,7 @@ router.delete('/chats/:chatId/messages/:messageId/pin', auth, async (req, res) =
 });
 
 // Get pinned messages for chat
-router.get('/chats/:chatId/pinned', auth, async (req, res) => {
+router.get('/chats/:chatId/pinned', authenticateToken, async (req, res) => {
     try {
         const { chatId } = req.params;
 
@@ -350,7 +350,7 @@ async function logAdminAction(userId, action, details) {
 }
 
 // Get admin logs (admin only)
-router.get('/admin/logs', auth, async (req, res) => {
+router.get('/admin/logs', authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied' });

@@ -5,13 +5,13 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const { query } = require('../config/database'); // ADDED!
-const { auth } = require('../middleware/auth'); // FIXED: removed isAdmin
+const { query } = require('../config/database');
+const { authenticateToken } = require('../middleware/auth'); // FIXED!
 
 // ==================== USER MANAGEMENT ====================
 
 // Get all users (admin/rop only)
-router.get('/users', auth, async (req, res) => {
+router.get('/users', authenticateToken, async (req, res) => {
     try {
         // Check permissions
         if (req.user.role !== 'admin' && req.user.role !== 'rop') {
@@ -32,7 +32,7 @@ router.get('/users', auth, async (req, res) => {
 });
 
 // Create user (admin only)
-router.post('/auth/register', auth, async (req, res) => {
+router.post('/auth/register', authenticateToken, async (req, res) => {
     try {
         // Check admin
         if (req.user.role !== 'admin') {
@@ -77,7 +77,7 @@ router.post('/auth/register', auth, async (req, res) => {
 });
 
 // Update user role (admin only)
-router.put('/users/:userId/role', auth, async (req, res) => {
+router.put('/users/:userId/role', authenticateToken, async (req, res) => {
     try {
         // Check admin
         if (req.user.role !== 'admin') {
@@ -106,7 +106,7 @@ router.put('/users/:userId/role', auth, async (req, res) => {
 });
 
 // Deactivate user (admin only)
-router.delete('/users/:userId', auth, async (req, res) => {
+router.delete('/users/:userId', authenticateToken, async (req, res) => {
     try {
         // Check admin
         if (req.user.role !== 'admin') {
@@ -135,7 +135,7 @@ router.delete('/users/:userId', auth, async (req, res) => {
 // ==================== CHAT MANAGEMENT ====================
 
 // Create chat (admin/rop only)
-router.post('/chats', auth, async (req, res) => {
+router.post('/chats', authenticateToken, async (req, res) => {
     try {
         // Check permissions
         if (req.user.role !== 'admin' && req.user.role !== 'rop') {
@@ -173,7 +173,7 @@ router.post('/chats', auth, async (req, res) => {
 });
 
 // Add participant to chat (admin/rop only)
-router.post('/chats/:chatId/participants', auth, async (req, res) => {
+router.post('/chats/:chatId/participants', authenticateToken, async (req, res) => {
     try {
         // Check permissions
         if (req.user.role !== 'admin' && req.user.role !== 'rop') {
@@ -207,7 +207,7 @@ router.post('/chats/:chatId/participants', auth, async (req, res) => {
 });
 
 // Remove participant from chat (admin/rop only)
-router.delete('/chats/:chatId/participants/:userId', auth, async (req, res) => {
+router.delete('/chats/:chatId/participants/:userId', authenticateToken, async (req, res) => {
     try {
         // Check permissions
         if (req.user.role !== 'admin' && req.user.role !== 'rop') {
