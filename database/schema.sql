@@ -1,4 +1,6 @@
--- Corporate Chat Database Schema
+-- ================================================
+-- ОБНОВЛЁННАЯ СХЕМА БД С НОВЫМИ РОЛЯМИ
+-- ================================================
 
 -- Drop tables if exists (for clean setup)
 DROP TABLE IF EXISTS messages CASCADE;
@@ -9,7 +11,7 @@ DROP TYPE IF EXISTS user_role CASCADE;
 DROP TYPE IF EXISTS chat_type CASCADE;
 
 -- Create ENUM types
-CREATE TYPE user_role AS ENUM ('admin', 'head', 'employee');
+CREATE TYPE user_role AS ENUM ('admin', 'assistant', 'rop', 'operator', 'employee');
 CREATE TYPE chat_type AS ENUM ('direct', 'group', 'department');
 
 -- Users table
@@ -27,8 +29,8 @@ CREATE TABLE users (
     
     -- Indexes for performance
     CONSTRAINT check_department CHECK (
-        (role = 'admin' AND department IS NULL) OR
-        (role IN ('head', 'employee') AND department IS NOT NULL)
+        (role IN ('admin', 'assistant') AND department IS NULL) OR
+        (role IN ('rop', 'operator', 'employee') AND department IS NOT NULL)
     )
 );
 
@@ -39,6 +41,7 @@ CREATE TABLE chats (
     type chat_type NOT NULL,
     department VARCHAR(50),
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    is_archived BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
@@ -68,11 +71,21 @@ CREATE TABLE messages (
     content TEXT NOT NULL,
     is_edited BOOLEAN DEFAULT false,
     is_deleted BOOLEAN DEFAULT false,
+    is_pinned BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     -- For encrypted messages (future)
     is_encrypted BOOLEAN DEFAULT false
+);
+
+-- Admin logs table
+CREATE TABLE admin_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    action VARCHAR(100) NOT NULL,
+    details JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indexes for performance optimization
@@ -83,6 +96,7 @@ CREATE INDEX idx_users_active ON users(is_active);
 
 CREATE INDEX idx_chats_type ON chats(type);
 CREATE INDEX idx_chats_department ON chats(department);
+CREATE INDEX idx_chats_archived ON chats(is_archived);
 
 CREATE INDEX idx_chat_participants_chat ON chat_participants(chat_id);
 CREATE INDEX idx_chat_participants_user ON chat_participants(user_id);
@@ -92,6 +106,10 @@ CREATE INDEX idx_messages_chat ON messages(chat_id);
 CREATE INDEX idx_messages_user ON messages(user_id);
 CREATE INDEX idx_messages_created ON messages(created_at DESC);
 CREATE INDEX idx_messages_composite ON messages(chat_id, created_at DESC);
+CREATE INDEX idx_messages_pinned ON messages(is_pinned);
+
+CREATE INDEX idx_admin_logs_user ON admin_logs(user_id);
+CREATE INDEX idx_admin_logs_created ON admin_logs(created_at DESC);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -112,43 +130,9 @@ CREATE TRIGGER update_chats_updated_at BEFORE UPDATE ON chats
 CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON messages
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Insert demo users (passwords will be hashed by application)
--- Password for all: 'pass123' (will be hashed)
-INSERT INTO users (username, password_hash, name, role, department) VALUES
-    ('admin', '$2b$12$placeholder_will_be_replaced_by_app', 'Главный администратор', 'admin', NULL),
-    ('head_it', '$2b$12$placeholder_will_be_replaced_by_app', 'Руководитель IT', 'head', 'IT'),
-    ('head_hr', '$2b$12$placeholder_will_be_replaced_by_app', 'Руководитель HR', 'head', 'HR'),
-    ('dev1', '$2b$12$placeholder_will_be_replaced_by_app', 'Разработчик Иван', 'employee', 'IT'),
-    ('dev2', '$2b$12$placeholder_will_be_replaced_by_app', 'Разработчик Мария', 'employee', 'IT'),
-    ('hr1', '$2b$12$placeholder_will_be_replaced_by_app', 'HR-менеджер Анна', 'employee', 'HR');
-
--- Insert chats
-INSERT INTO chats (name, type, department, created_by) VALUES
-    ('Руководство', 'group', NULL, 1),
-    ('Руководители', 'group', NULL, 1),
-    ('IT отдел', 'department', 'IT', 2),
-    ('HR отдел', 'department', 'HR', 3);
-
--- Add participants to chats
--- Management chat (only admins)
-INSERT INTO chat_participants (chat_id, user_id) VALUES (1, 1);
-
--- All heads chat (admins + heads)
-INSERT INTO chat_participants (chat_id, user_id) VALUES 
-    (2, 1), (2, 2), (2, 3);
-
--- IT department chat
-INSERT INTO chat_participants (chat_id, user_id) VALUES 
-    (3, 2), (3, 4), (3, 5);
-
--- HR department chat
-INSERT INTO chat_participants (chat_id, user_id) VALUES 
-    (4, 3), (4, 6);
-
--- Create direct message chats based on permissions
--- Admins can message everyone, heads can message each other and their employees
-
--- Function to check if direct message is allowed
+-- ================================================
+-- ФУНКЦИЯ ПРОВЕРКИ ПРАВ НА ЛИЧНЫЕ СООБЩЕНИЯ
+-- ================================================
 CREATE OR REPLACE FUNCTION can_send_direct_message(
     sender_id INTEGER,
     receiver_id INTEGER
@@ -165,24 +149,39 @@ BEGIN
     SELECT role, department INTO receiver_role, receiver_dept
     FROM users WHERE id = receiver_id;
     
-    -- Admins can message everyone
+    -- ===== АДМИНИСТРАТОРЫ =====
+    -- Админы могут писать всем
     IF sender_role = 'admin' OR receiver_role = 'admin' THEN
         RETURN TRUE;
     END IF;
     
-    -- Heads can message each other
-    IF sender_role = 'head' AND receiver_role = 'head' THEN
+    -- ===== АССИСТЕНТЫ =====
+    -- Ассистенты могут писать всем
+    IF sender_role = 'assistant' OR receiver_role = 'assistant' THEN
         RETURN TRUE;
     END IF;
     
-    -- Heads can message their department employees
-    IF sender_role = 'head' AND receiver_role = 'employee' 
+    -- ===== РОПы =====
+    -- РОПы могут писать всем
+    IF sender_role = 'rop' OR receiver_role = 'rop' THEN
+        RETURN TRUE;
+    END IF;
+    
+    -- ===== ОПЕРАТОРЫ =====
+    -- Операторы НЕ могут писать друг другу
+    IF sender_role = 'operator' AND receiver_role = 'operator' THEN
+        RETURN FALSE;
+    END IF;
+    
+    -- Операторы могут писать своему РОПу
+    IF sender_role = 'operator' AND receiver_role = 'rop' 
        AND sender_dept = receiver_dept THEN
         RETURN TRUE;
     END IF;
     
-    IF receiver_role = 'head' AND sender_role = 'employee' 
-       AND receiver_dept = sender_dept THEN
+    -- РОП может писать своим операторам
+    IF sender_role = 'rop' AND receiver_role = 'operator' 
+       AND sender_dept = receiver_dept THEN
         RETURN TRUE;
     END IF;
     
@@ -206,11 +205,12 @@ SELECT
 FROM users u
 JOIN chat_participants cp ON u.id = cp.user_id
 JOIN chats c ON cp.chat_id = c.id
-WHERE u.is_active = true;
+WHERE u.is_active = true AND c.is_archived = false;
 
 -- Comments for documentation
 COMMENT ON TABLE users IS 'Stores all user information including credentials and roles';
 COMMENT ON TABLE chats IS 'Stores chat rooms and channels';
 COMMENT ON TABLE chat_participants IS 'Many-to-many relationship between users and chats';
 COMMENT ON TABLE messages IS 'Stores all messages with support for editing and deletion';
+COMMENT ON TABLE admin_logs IS 'Logs all admin actions for audit trail';
 COMMENT ON FUNCTION can_send_direct_message IS 'Checks if a user can send direct messages to another user based on hierarchy';
