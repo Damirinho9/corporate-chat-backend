@@ -1227,6 +1227,7 @@
         });
 
         function quickLogin(username, password) {
+            console.log('🔵 quickLogin called:', username);
             document.getElementById('username').value = username;
             document.getElementById('password').value = password;
             login(username, password);
@@ -1234,16 +1235,23 @@
 
         // Setup quick login click handlers
         document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.demo-user[data-username]').forEach(btn => {
+            console.log('🟢 DOM loaded, setting up quick login buttons');
+            const buttons = document.querySelectorAll('.demo-user[data-username]');
+            console.log('🟢 Found buttons:', buttons.length);
+            buttons.forEach(btn => {
                 btn.addEventListener('click', () => {
+                    console.log('🟡 Button clicked!');
                     const username = btn.getAttribute('data-username');
                     const password = btn.getAttribute('data-password');
+                    console.log('🟡 Calling quickLogin with:', username);
                     quickLogin(username, password);
                 });
             });
         });
 
         async function login(username, password) {
+            console.log('🔴 login() called with:', username);
+            console.log('🔴 API_URL:', API_URL);
             const loginBtn = document.getElementById('loginBtn');
             const errorDiv = document.getElementById('loginError');
             
@@ -1252,6 +1260,7 @@
                 loginBtn.textContent = 'Вход...';
                 errorDiv.classList.add('hidden');
                 
+                console.log('🔴 Sending request to:', `${API_URL}/auth/login`);
                 const res = await fetch(`${API_URL}/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1259,6 +1268,7 @@
                 });
 
                 const data = await res.json();
+                console.log('🟢 Response:', res.status, data);
                 
                 if (data.token) {
                     token = data.token;
