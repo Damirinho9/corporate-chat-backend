@@ -1,10 +1,12 @@
 // ================================================
-// ADMIN ROUTES - Добавить в routes/api.js
+// ADMIN ROUTES - BASIC
 // ================================================
 
 const express = require('express');
 const router = express.Router();
-const { auth, isAdmin } = require('../middleware/auth');
+const bcrypt = require('bcrypt');
+const { query } = require('../config/database'); // ADDED!
+const { auth } = require('../middleware/auth'); // FIXED: removed isAdmin
 
 // ==================== USER MANAGEMENT ====================
 
@@ -55,7 +57,6 @@ router.post('/auth/register', auth, async (req, res) => {
         }
 
         // Hash password
-        const bcrypt = require('bcrypt');
         const password_hash = await bcrypt.hash(password, 10);
 
         // Insert user

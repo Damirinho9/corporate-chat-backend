@@ -1,12 +1,17 @@
 const express = require('express');
 const router = express.Router();
+const { query } = require('../config/database'); // ADDED!
 const authController = require('../controllers/authController');
 const userController = require('../controllers/userController');
 const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
 const { authenticateToken, requireAdmin, requireHead } = require('../middleware/auth');
 const { canAccessChat, canSendToChat, canCreateDirectMessage, canViewAllMessages } = require('../middleware/permissions');
-const { body, param, query, validationResult } = require('express-validator');
+const { body, param, query: queryValidator, validationResult } = require('express-validator');
+
+// ADMIN ROUTES - IMPORT
+const adminBasic = require('./admin-basic');
+const adminExtended = require('./admin-extended');
 
 // Validation middleware
 const validate = (req, res, next) => {
@@ -16,6 +21,10 @@ const validate = (req, res, next) => {
     }
     next();
 };
+
+// ==================== ADMIN ROUTES ====================
+router.use('/', adminBasic);
+router.use('/', adminExtended);
 
 // ==================== AUTH ROUTES ====================
 router.post('/auth/register',
@@ -122,8 +131,8 @@ router.post('/users/:userId/reset-password',
 router.get('/chats',
     authenticateToken,
     [
-        query('limit').optional().isInt({ min: 1, max: 100 }),
-        query('offset').optional().isInt({ min: 0 })
+        queryValidator('limit').optional().isInt({ min: 1, max: 100 }),
+        queryValidator('offset').optional().isInt({ min: 0 })
     ],
     validate,
     chatController.getUserChats
@@ -199,9 +208,9 @@ router.get('/chats/:chatId/messages',
     authenticateToken,
     [
         param('chatId').isInt(),
-        query('limit').optional().isInt({ min: 1, max: 100 }),
-        query('offset').optional().isInt({ min: 0 }),
-        query('before').optional().isISO8601()
+        queryValidator('limit').optional().isInt({ min: 1, max: 100 }),
+        queryValidator('offset').optional().isInt({ min: 0 }),
+        queryValidator('before').optional().isISO8601()
     ],
     validate,
     canAccessChat,
@@ -241,8 +250,8 @@ router.get('/chats/:chatId/messages/search',
     authenticateToken,
     [
         param('chatId').isInt(),
-        query('query').trim().isLength({ min: 2 }),
-        query('limit').optional().isInt({ min: 1, max: 50 })
+        queryValidator('query').trim().isLength({ min: 2 }),
+        queryValidator('limit').optional().isInt({ min: 1, max: 50 })
     ],
     validate,
     canAccessChat,
@@ -254,8 +263,8 @@ router.get('/messages/all',
     requireAdmin,
     canViewAllMessages,
     [
-        query('limit').optional().isInt({ min: 1, max: 200 }),
-        query('offset').optional().isInt({ min: 0 })
+        queryValidator('limit').optional().isInt({ min: 1, max: 200 }),
+        queryValidator('offset').optional().isInt({ min: 0 })
     ],
     validate,
     messageController.getAllMessages

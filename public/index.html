@@ -1033,16 +1033,16 @@
 
             <div class="demo-users">
                 <h4>📋 Демо-аккаунты (клик для входа):</h4>
-                <div class="demo-user" onclick="quickLogin('admin', 'admin123')">
+                <div class="demo-user" data-username="admin" data-password="admin123" style="cursor: pointer;">
                     <strong>admin</strong> / admin123 - Главный администратор
                 </div>
-                <div class="demo-user" onclick="quickLogin('assistant1', 'pass123')">
+                <div class="demo-user" data-username="assistant1" data-password="pass123" style="cursor: pointer;">
                     <strong>assistant1</strong> / pass123 - Ассистент Анна
                 </div>
-                <div class="demo-user" onclick="quickLogin('rop_sales', 'pass123')">
+                <div class="demo-user" data-username="rop_sales" data-password="pass123" style="cursor: pointer;">
                     <strong>rop_sales</strong> / pass123 - РОП Sales
                 </div>
-                <div class="demo-user" onclick="quickLogin('operator1', 'pass123')">
+                <div class="demo-user" data-username="operator1" data-password="pass123" style="cursor: pointer;">
                     <strong>operator1</strong> / pass123 - Оператор Sales
                 </div>
             </div>
@@ -1231,6 +1231,17 @@
             document.getElementById('password').value = password;
             login(username, password);
         }
+
+        // Setup quick login click handlers
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.demo-user[data-username]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const username = btn.getAttribute('data-username');
+                    const password = btn.getAttribute('data-password');
+                    quickLogin(username, password);
+                });
+            });
+        });
 
         async function login(username, password) {
             const loginBtn = document.getElementById('loginBtn');
