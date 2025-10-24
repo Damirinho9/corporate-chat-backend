@@ -1,2319 +1,267 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="light">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Корпоративный чат</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <title>Корпоративный чат - Вход</title>
     <style>
-        :root[data-theme="dark"] {
-            --bg-primary: #0a0a0a;
-            --bg-secondary: #1e1e1e;
-            --bg-tertiary: #2a2a2a;
-            --bg-hover: #252525;
-            --text-primary: #e4e4e4;
-            --text-secondary: #b0b0b0;
-            --text-tertiary: #888;
-            --border: #2a2a2a;
-            --accent: #4a9eff;
-            --accent-hover: #3a8eef;
-            --message-bubble: #1e1e1e;
-            --message-own: #4a9eff;
-            --danger: #ff4444;
-            --success: #6eff6e;
-            --warning: #ffaa00;
-        }
-
-        :root[data-theme="light"] {
-            --bg-primary: #ffffff;
-            --bg-secondary: #f5f5f5;
-            --bg-tertiary: #e8e8e8;
-            --bg-hover: #f0f0f0;
-            --text-primary: #1a1a1a;
-            --text-secondary: #666666;
-            --text-tertiary: #999999;
-            --border: #e0e0e0;
-            --accent: #2196f3;
-            --accent-hover: #1976d2;
-            --message-bubble: #f0f0f0;
-            --message-own: #2196f3;
-            --danger: #f44336;
-            --success: #4caf50;
-            --warning: #ff9800;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            transition: background 0.3s, color 0.3s;
-            overflow: hidden;
-        }
-
-        /* Login Screen */
-        .login-screen {
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-
         .login-container {
-            background: var(--bg-secondary);
+            background: white;
             padding: 40px;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            width: 100%;
-            max-width: 450px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 400px;
+            max-width: 90%;
         }
-
-        .login-header {
+        h1 {
             text-align: center;
+            color: #667eea;
             margin-bottom: 30px;
+            font-size: 28px;
         }
-
-        .login-header h2 {
-            color: var(--accent);
-            margin-bottom: 10px;
-            font-size: 24px;
-        }
-
-        .theme-toggle {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: var(--bg-secondary);
-            border: none;
-            padding: 12px;
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 24px;
-            transition: transform 0.3s;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            z-index: 1000;
-        }
-
-        .theme-toggle:hover {
-            transform: scale(1.1);
-        }
-
         .form-group {
             margin-bottom: 20px;
         }
-
-        .form-group label {
+        label {
             display: block;
             margin-bottom: 8px;
-            color: var(--text-secondary);
+            color: #333;
             font-weight: 500;
         }
-
-        .form-group input {
+        input {
             width: 100%;
-            padding: 12px 16px;
-            border: 2px solid var(--border);
+            padding: 12px;
+            border: 2px solid #e0e0e0;
             border-radius: 8px;
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            font-size: 14px;
+            font-size: 16px;
             transition: border-color 0.3s;
         }
-
-        .form-group input:focus {
+        input:focus {
             outline: none;
-            border-color: var(--accent);
+            border-color: #667eea;
         }
-
-        .btn {
+        button {
             width: 100%;
             padding: 14px;
+            background: #667eea;
+            color: white;
             border: none;
             border-radius: 8px;
-            background: var(--accent);
-            color: white;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: background 0.3s;
         }
-
-        .btn:hover:not(:disabled) {
-            background: var(--accent-hover);
-            transform: translateY(-2px);
+        button:hover {
+            background: #5568d3;
         }
-
-        .btn:disabled {
-            opacity: 0.5;
+        button:disabled {
+            background: #ccc;
             cursor: not-allowed;
         }
-
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
         .demo-users {
-            margin-top: 25px;
-            padding: 20px;
-            background: var(--bg-tertiary);
-            border-radius: 8px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
         }
-
         .demo-users h4 {
-            color: var(--accent);
+            color: #666;
             margin-bottom: 15px;
             font-size: 14px;
         }
-
         .demo-user {
-            padding: 10px 12px;
-            margin: 5px 0;
-            background: var(--bg-secondary);
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: background 0.2s;
-        }
-
-        .demo-user:hover {
-            background: var(--bg-hover);
-        }
-
-        .demo-user strong {
-            color: var(--accent);
-        }
-
-        .error-message {
             padding: 12px;
-            margin-bottom: 20px;
-            background: rgba(244, 67, 54, 0.1);
-            border-left: 4px solid var(--danger);
-            border-radius: 4px;
-            color: var(--danger);
-            font-size: 14px;
-        }
-
-        /* Chat App */
-        .chat-app {
-            display: none;
-            height: 100vh;
-        }
-
-        .chat-container {
-            display: flex;
-            height: 100%;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 320px;
-            background: var(--bg-secondary);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-        }
-
-        .sidebar-header {
-            padding: 20px;
-            background: var(--bg-tertiary);
-            border-bottom: 1px solid var(--border);
-        }
-
-        .user-info-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .user-details h3 {
-            font-size: 16px;
-            margin-bottom: 4px;
-        }
-
-        .user-role {
-            font-size: 12px;
-            color: var(--accent);
-        }
-
-        .header-controls {
-            display: flex;
-            gap: 8px;
-        }
-
-        .icon-btn {
-            position: relative;
-            padding: 8px;
-            background: var(--bg-secondary);
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 18px;
-            transition: background 0.2s;
-        }
-
-        .icon-btn:hover {
-            background: var(--bg-hover);
-        }
-
-        .icon-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .notification-badge {
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            background: var(--danger);
-            color: white;
-            font-size: 10px;
-            font-weight: bold;
-            padding: 2px 5px;
-            border-radius: 10px;
-            min-width: 16px;
-            text-align: center;
-        }
-
-        /* Admin panel */
-        .admin-panel {
-            padding: 15px;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border);
-        }
-
-        .admin-btn {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 8px;
-            background: var(--success);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            transition: opacity 0.2s;
-        }
-
-        .admin-btn:hover {
-            opacity: 0.9;
-        }
-
-        /* Chats list */
-        .chats-list {
-            flex: 1;
-            overflow-y: auto;
-        }
-
-        .chat-item {
-            padding: 15px 20px;
-            border-bottom: 1px solid var(--border);
-            cursor: pointer;
-            transition: background 0.2s;
-            position: relative;
-        }
-
-        .chat-item:hover {
-            background: var(--bg-hover);
-        }
-
-        .chat-item.active {
-            background: var(--bg-tertiary);
-        }
-
-        .chat-item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-
-        .chat-name {
-            font-weight: 600;
-            font-size: 14px;
-        }
-
-        .chat-time {
-            font-size: 11px;
-            color: var(--text-tertiary);
-        }
-
-        .chat-preview {
-            font-size: 13px;
-            color: var(--text-tertiary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .unread-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            background: var(--accent);
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: 600;
-            color: white;
-            margin-left: 8px;
-        }
-
-        /* Chat area */
-        .chat-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: var(--bg-primary);
-        }
-
-        .chat-header {
-            padding: 20px;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .chat-header-info h3 {
-            font-size: 18px;
-            margin-bottom: 4px;
-        }
-
-        .chat-type {
-            font-size: 12px;
-            color: var(--text-tertiary);
-        }
-
-        .chat-header-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        /* Messages */
-        .messages-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-        }
-
-        .message {
-            margin-bottom: 16px;
-            display: flex;
-            flex-direction: column;
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .message.own {
-            align-items: flex-end;
-        }
-
-        .message-header {
-            font-size: 12px;
-            color: var(--text-tertiary);
-            margin-bottom: 4px;
-        }
-
-        .message-bubble {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 12px;
-            background: var(--message-bubble);
-            word-wrap: break-word;
-        }
-
-        .message.own .message-bubble {
-            background: var(--message-own);
-            color: white;
-        }
-
-        .message-bubble img {
-            max-width: 100%;
+            background: #f5f5f5;
             border-radius: 8px;
-            margin-bottom: 8px;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .message-bubble img:hover {
-            transform: scale(1.02);
-        }
-
-        .message-bubble a {
-            color: inherit;
-            text-decoration: none;
-        }
-
-        .message.own .message-bubble a {
-            color: white;
-        }
-
-        .file-attachment {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: rgba(0,0,0,0.1);
-            border-radius: 6px;
-            margin-bottom: 8px;
-        }
-
-        .message-time {
-            font-size: 11px;
-            color: var(--text-tertiary);
-            margin-top: 4px;
-        }
-
-        /* Message input */
-        .message-input-area {
-            background: var(--bg-secondary);
-            border-top: 1px solid var(--border);
-        }
-
-        .attachment-preview {
-            padding: 10px 15px;
-            background: var(--bg-tertiary);
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .preview-content {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .preview-content img {
-            max-width: 60px;
-            max-height: 60px;
-            border-radius: 4px;
-            object-fit: cover;
-        }
-
-        #previewFileName {
-            font-size: 13px;
-            color: var(--text-primary);
-        }
-
-        .attachment-preview button {
-            background: var(--danger);
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 500;
-        }
-
-        .attachment-preview button:hover {
-            opacity: 0.8;
-        }
-
-        .message-input-wrapper {
-            padding: 15px 20px;
-            display: flex;
-            gap: 10px;
-            align-items: flex-end;
-        }
-
-        .input-actions {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .input-actions .icon-btn {
-            padding: 10px;
-            font-size: 20px;
-        }
-
-        .message-input {
-            flex: 1;
-            padding: 12px 16px;
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            font-size: 14px;
-            resize: none;
-            max-height: 150px;
-            font-family: inherit;
-            line-height: 1.5;
-        }
-
-        .message-input:focus {
-            outline: none;
-            border-color: var(--accent);
-        }
-
-        .send-btn {
-            padding: 12px 20px;
-            background: var(--accent);
-            border: none;
-            border-radius: 12px;
-            color: white;
-            cursor: pointer;
-            font-size: 18px;
-            font-weight: 600;
-            transition: background 0.2s;
-            min-width: 56px;
-        }
-
-        .send-btn:hover:not(:disabled) {
-            background: var(--accent-hover);
-        }
-
-        .send-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Loading */
-        .loading {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--text-tertiary);
-        }
-
-        .loading-spinner {
-            display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 4px solid var(--border);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Toast notifications */
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 10000;
-        }
-
-        .toast {
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            padding: 16px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             margin-bottom: 10px;
-            min-width: 300px;
-            max-width: 400px;
-            animation: slideIn 0.3s ease-out;
-            border-left: 4px solid var(--accent);
-        }
-
-        .toast.success {
-            border-left-color: var(--success);
-        }
-
-        .toast.error {
-            border-left-color: var(--danger);
-        }
-
-        .toast.warning {
-            border-left-color: var(--warning);
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        .toast-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
-        }
-
-        .toast-title {
-            font-weight: 600;
-            font-size: 14px;
-        }
-
-        .toast-close {
-            background: none;
-            border: none;
             cursor: pointer;
-            font-size: 18px;
-            color: var(--text-tertiary);
-            padding: 0;
-            margin-left: 10px;
+            transition: background 0.3s;
         }
-
-        .toast-message {
-            font-size: 13px;
-            color: var(--text-secondary);
+        .demo-user:hover {
+            background: #667eea;
+            color: white;
         }
-
-        /* Hidden */
-        .hidden {
-            display: none !important;
+        .demo-user strong {
+            color: #667eea;
         }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
+        .demo-user:hover strong {
+            color: white;
         }
-
-        ::-webkit-scrollbar-track {
-            background: var(--bg-secondary);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--bg-tertiary);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--border);
-        }
-
-        /* Mobile responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 100%;
-                position: absolute;
-                z-index: 100;
-                transform: translateX(-100%);
-                transition: transform 0.3s;
-            }
-
-            .sidebar.mobile-open {
-                transform: translateX(0);
-            }
-
-            .chat-area {
-                width: 100%;
-            }
-        }
-            /* ==================== MODAL STYLES ==================== */
-        .modal {
+        #loading {
             display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 10000;
-            backdrop-filter: blur(4px);
-            animation: fadeIn 0.2s ease;
+            text-align: center;
+            padding: 20px;
         }
-
-        .modal.active {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal-content {
-            background: var(--bg-secondary);
-            border-radius: 12px;
-            padding: 0;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-            animation: slideUp 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes slideUp {
-            from { 
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to { 
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .modal-header {
-            padding: 20px 24px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--bg-tertiary);
-            border-radius: 12px 12px 0 0;
-        }
-
-        .modal-header h3 {
-            color: var(--text-primary);
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .close-modal {
-            background: none;
-            border: none;
-            font-size: 28px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            padding: 0;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 6px;
-            transition: all 0.2s;
-        }
-
-        .close-modal:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-
-        .modal-body {
-            padding: 24px;
-        }
-
-        .modal-footer {
-            padding: 16px 24px;
-            border-top: 1px solid var(--border);
-            display: flex;
-            gap: 12px;
-            justify-content: flex-end;
-        }
-
-        /* Form styles in modals */
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: var(--text-secondary);
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            font-size: 14px;
-            transition: border-color 0.2s;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: var(--accent);
-        }
-
-        .form-group textarea {
-            resize: vertical;
-            min-height: 80px;
-        }
-
-        /* User list in modal */
-        .users-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .user-item {
-            padding: 12px 16px;
-            background: var(--bg-primary);
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: background 0.2s;
-        }
-
-        .user-item:hover {
-            background: var(--bg-hover);
-        }
-
-        .user-info {
-            flex: 1;
-        }
-
-        .user-name {
-            font-weight: 500;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-        }
-
-        .user-meta {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .user-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .btn-icon {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 6px;
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            cursor: pointer;
-            font-size: 12px;
-            transition: all 0.2s;
-        }
-
-        .btn-icon:hover {
-            background: var(--accent);
-            color: white;
-        }
-
-        .btn-icon.danger:hover {
-            background: var(--danger);
-        }
-
-        /* Department badge */
-        .dept-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            background: var(--accent);
-            color: white;
-            margin-left: 8px;
-        }
-
-        /* Role badge */
-        .role-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            margin-left: 8px;
-        }
-
-        .role-badge.admin {
-            background: #ff4444;
-            color: white;
-        }
-
-        .role-badge.rop {
-            background: #ff9800;
-            color: white;
-        }
-
-        .role-badge.assistant {
-            background: #4caf50;
-            color: white;
-        }
-
-        .role-badge.operator,
-        .role-badge.employee {
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-        }
-
-        /* Admin logs table */
-        .logs-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .logs-table th,
-        .logs-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .logs-table th {
-            background: var(--bg-tertiary);
-            font-weight: 600;
-            color: var(--text-secondary);
-            font-size: 12px;
-            text-transform: uppercase;
-        }
-
-        .logs-table td {
-            color: var(--text-primary);
-            font-size: 14px;
-        }
-
-        .logs-table tr:hover {
-            background: var(--bg-hover);
-        }
-
-        .action-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            background: var(--accent);
-            color: white;
-        }
-
     </style>
 </head>
 <body>
-    <!-- Theme toggle -->
-    <button class="theme-toggle" onclick="toggleTheme()" title="Сменить тему">
-        <span id="themeIcon">☀️</span>
-    </button>
-
-    <!-- Toast container -->
-    <div class="toast-container" id="toastContainer"></div>
-
-    <!-- Login Screen -->
-    <div class="login-screen" id="loginScreen">
-        <div class="login-container">
-            <div class="login-header">
-                <h2>🏢 Корпоративный чат</h2>
-                <p style="color: var(--text-secondary);">Вход в систему</p>
+    <div class="login-container">
+        <h1>💬 Корпоративный чат</h1>
+        
+        <div id="error" class="error"></div>
+        
+        <div id="loginForm">
+            <div class="form-group">
+                <label>Логин</label>
+                <input type="text" id="username" value="admin" autocomplete="username">
             </div>
-
-            <div id="loginError" class="error-message hidden"></div>
-
-            <form id="loginForm">
-                <div class="form-group">
-                    <label>Логин</label>
-                    <input type="text" id="username" placeholder="admin" required autocomplete="username">
-                </div>
-                <div class="form-group">
-                    <label>Пароль</label>
-                    <input type="password" id="password" placeholder="admin123" required autocomplete="current-password">
-                </div>
-                <button type="submit" class="btn" id="loginBtn">Войти</button>
-            </form>
-
+            
+            <div class="form-group">
+                <label>Пароль</label>
+                <input type="password" id="password" value="admin123" autocomplete="current-password">
+            </div>
+            
+            <button id="loginBtn">Войти</button>
+            
             <div class="demo-users">
                 <h4>📋 Демо-аккаунты (клик для входа):</h4>
-                <div class="demo-user" data-username="admin" data-password="admin123" style="cursor: pointer;">
+                <div class="demo-user" data-user="admin" data-pass="admin123">
                     <strong>admin</strong> / admin123 - Главный администратор
-                </div>
-                <div class="demo-user" data-username="assistant1" data-password="pass123" style="cursor: pointer;">
-                    <strong>assistant1</strong> / pass123 - Ассистент Анна
-                </div>
-                <div class="demo-user" data-username="rop_sales" data-password="pass123" style="cursor: pointer;">
-                    <strong>rop_sales</strong> / pass123 - РОП Sales
-                </div>
-                <div class="demo-user" data-username="operator1" data-password="pass123" style="cursor: pointer;">
-                    <strong>operator1</strong> / pass123 - Оператор Sales
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Chat App -->
-    <div class="chat-app" id="chatApp">
-        <div class="chat-container">
-            <!-- Sidebar -->
-            <div class="sidebar" id="sidebar">
-                <div class="sidebar-header">
-                    <div class="user-info-header">
-                        <div class="user-details">
-                            <h3 id="userName">Пользователь</h3>
-                            <div class="user-role" id="userRole">Роль</div>
-                        </div>
-                        <div class="header-controls">
-                            <button class="icon-btn" onclick="toggleNotifications()" title="Уведомления">
-                                🔔
-                                <span class="notification-badge hidden" id="totalUnreadBadge">0</span>
-                            </button>
-                            <button class="icon-btn" onclick="logout()" title="Выйти">🚪</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Admin panel -->
-                <div class="admin-panel hidden" id="adminPanel">
-                    <button class="admin-btn" onclick="createNewChat()">➕ Создать чат</button>
-                    <button class="admin-btn" onclick="manageUsers()">👥 Управление пользователями</button>
-                </div>
-
-                <!-- Chats list -->
-                <div class="chats-list" id="chatsList">
-                    <div class="loading">
-                        <div class="loading-spinner"></div>
-                        <p style="margin-top: 15px;">Загрузка чатов...</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Chat area -->
-            <div class="chat-area">
-                <div class="chat-header">
-                    <div class="chat-header-info">
-                        <h3 id="currentChatName">Выберите чат</h3>
-                        <div class="chat-type" id="currentChatType"></div>
-                    </div>
-                    <div class="chat-header-actions">
-                        <button class="icon-btn" onclick="refreshMessages()" title="Обновить" id="refreshBtn">
-                            🔄
-                        </button>
-                    </div>
-                </div>
-
-                <div class="messages-container" id="messagesContainer">
-                    <div class="loading">
-                        <p>Выберите чат для начала общения</p>
-                    </div>
-                </div>
-
-                <div class="message-input-area">
-                    <!-- Attachment preview -->
-                    <div class="attachment-preview hidden" id="attachmentPreview">
-                        <div class="preview-content">
-                            <img id="previewImage" style="display:none;" alt="Preview">
-                            <span id="previewFileName"></span>
-                        </div>
-                        <button onclick="clearAttachment()">✕ Удалить</button>
-                    </div>
-
-                    <!-- Message input -->
-                    <div class="message-input-wrapper">
-                        <div class="input-actions">
-                            <button class="icon-btn" onclick="attachImage()" title="Прикрепить изображение">
-                                📷
-                            </button>
-                            <button class="icon-btn" onclick="attachFile()" title="Прикрепить файл">
-                                📎
-                            </button>
-                        </div>
-                        <textarea 
-                            class="message-input" 
-                            id="messageInput" 
-                            placeholder="Введите сообщение..."
-                            rows="1"
-                            onkeydown="handleInputKeydown(event)"
-                            oninput="autoResize(this)"
-                        ></textarea>
-                        <button class="send-btn" onclick="sendMessage()" id="sendBtn">➤</button>
-                    </div>
-
-                    <!-- Hidden file inputs -->
-                    <input type="file" id="imageInput" accept="image/*" style="display:none" onchange="handleImageSelect(event)">
-                    <input type="file" id="fileInput" style="display:none" onchange="handleFileSelect(event)">
-                </div>
-            </div>
+        
+        <div id="loading">
+            <p>⏳ Загрузка...</p>
         </div>
     </div>
 
     <script>
-        // ==================== CONFIGURATION ====================
-        const API_URL = window.location.origin + '/api';
-        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+        console.log('🟢 Script loaded');
         
-        // ==================== GLOBAL STATE ====================
-        let token = '';
-        let currentUser = null;
-        let socket = null;
-        let currentChatId = null;
-        let attachedFile = null;
-        let notificationsEnabled = false;
-        let soundEnabled = true;
-        let chatsData = [];
-
-        // ==================== NOTIFICATION SOUND ====================
-        const notificationSound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBg==');
-
-        // ==================== THEME ====================
-        function toggleTheme() {
-            const html = document.documentElement;
-            const currentTheme = html.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            html.setAttribute('data-theme', newTheme);
-            document.getElementById('themeIcon').textContent = newTheme === 'dark' ? '🌙' : '☀️';
-            localStorage.setItem('theme', newTheme);
-        }
-
-        // Load theme
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-            document.getElementById('themeIcon').textContent = savedTheme === 'dark' ? '🌙' : '☀️';
+        const API_URL = window.location.origin + '/api';
+        console.log('🔗 API_URL:', API_URL);
+        
+        // Login function
+        async function doLogin() {
+            console.log('🚀 doLogin called');
             
-            // Check for saved session
-            const savedToken = localStorage.getItem('token');
-            const savedUser = localStorage.getItem('user');
-            
-            if (savedToken && savedUser) {
-                token = savedToken;
-                currentUser = JSON.parse(savedUser);
-                showChatApp();
-            }
-        });
-
-        // ==================== TOAST NOTIFICATIONS ====================
-        function showToast(message, type = 'info', title = '') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            
-            const titles = {
-                'success': '✅ Успешно',
-                'error': '❌ Ошибка',
-                'warning': '⚠️ Внимание',
-                'info': 'ℹ️ Информация'
-            };
-            
-            toast.innerHTML = `
-                <div class="toast-header">
-                    <span class="toast-title">${title || titles[type]}</span>
-                    <button class="toast-close" onclick="this.parentElement.parentElement.remove()">✕</button>
-                </div>
-                <div class="toast-message">${escapeHtml(message)}</div>
-            `;
-            
-            container.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.style.animation = 'slideIn 0.3s ease-out reverse';
-                setTimeout(() => toast.remove(), 300);
-            }, 5000);
-        }
-
-        // ==================== LOGIN ====================
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
-            await login(username, password);
-        });
-
-        function quickLogin(username, password) {
-            console.log('🔵 quickLogin called:', username);
-            document.getElementById('username').value = username;
-            document.getElementById('password').value = password;
-            login(username, password);
-        }
-
-        // Setup quick login click handlers
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('🟢 DOM loaded, setting up quick login buttons');
-            const buttons = document.querySelectorAll('.demo-user[data-username]');
-            console.log('🟢 Found buttons:', buttons.length);
-            buttons.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    console.log('🟡 Button clicked!');
-                    const username = btn.getAttribute('data-username');
-                    const password = btn.getAttribute('data-password');
-                    console.log('🟡 Calling quickLogin with:', username);
-                    quickLogin(username, password);
-                });
-            });
-        });
-
-        async function login(username, password) {
-            console.log('🔴 login() called with:', username);
-            console.log('🔴 API_URL:', API_URL);
             const loginBtn = document.getElementById('loginBtn');
-            const errorDiv = document.getElementById('loginError');
+            const errorDiv = document.getElementById('error');
+            
+            console.log('👤 Username:', username);
+            
+            if (!username || !password) {
+                errorDiv.textContent = 'Введите логин и пароль';
+                errorDiv.style.display = 'block';
+                return;
+            }
             
             try {
                 loginBtn.disabled = true;
                 loginBtn.textContent = 'Вход...';
-                errorDiv.classList.add('hidden');
+                errorDiv.style.display = 'none';
                 
-                console.log('🔴 Sending request to:', `${API_URL}/auth/login`);
-                const res = await fetch(`${API_URL}/auth/login`, {
+                console.log('📡 Sending request...');
+                
+                const response = await fetch(`${API_URL}/auth/login`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({ username, password })
                 });
-
-                const data = await res.json();
-                console.log('🟢 Response:', res.status, data);
+                
+                console.log('📬 Response status:', response.status);
+                
+                const data = await response.json();
+                console.log('📦 Response data:', data);
                 
                 if (data.token) {
-                    token = data.token;
-                    currentUser = data.user;
+                    console.log('✅ Login successful!');
                     
-                    localStorage.setItem('token', token);
-                    localStorage.setItem('user', JSON.stringify(currentUser));
+                    // Save to localStorage
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
                     
-                    showChatApp();
-                    showToast('Добро пожаловать, ' + currentUser.name + '!', 'success');
+                    // Redirect to chat
+                    document.getElementById('loginForm').style.display = 'none';
+                    document.getElementById('loading').style.display = 'block';
+                    
+                    // Reload page to load full chat interface
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 500);
+                    
                 } else {
                     errorDiv.textContent = data.error || 'Неверный логин или пароль';
-                    errorDiv.classList.remove('hidden');
+                    errorDiv.style.display = 'block';
                 }
+                
             } catch (err) {
-                errorDiv.textContent = 'Не удалось подключиться к серверу. Проверьте соединение.';
-                errorDiv.classList.remove('hidden');
-                console.error('Login error:', err);
+                console.error('❌ Error:', err);
+                errorDiv.textContent = 'Ошибка подключения к серверу: ' + err.message;
+                errorDiv.style.display = 'block';
             } finally {
                 loginBtn.disabled = false;
                 loginBtn.textContent = 'Войти';
             }
         }
-
-        function logout() {
-            if (confirm('Выйти из системы?')) {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                if (socket) socket.disconnect();
-                location.reload();
-            }
-        }
-
-        function showChatApp() {
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('chatApp').style.display = 'block';
+        
+        // Setup event listeners
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('🟢 DOM loaded');
             
-            document.getElementById('userName').textContent = currentUser.name;
-            document.getElementById('userRole').textContent = getRoleText(currentUser.role);
+            // Login button
+            const loginBtn = document.getElementById('loginBtn');
+            console.log('🔘 Login button:', loginBtn);
             
-            if (canManageUsers()) {
-                document.getElementById('adminPanel').classList.remove('hidden');
-            }
-            
-            requestNotificationPermission();
-            connectWebSocket();
-            loadChats();
-        }
-
-        function getRoleText(role) {
-            const roles = {
-                'admin': '👑 Администратор',
-                'assistant': '🤝 Ассистент',
-                'rop': '📊 РОП',
-                'operator': '💼 Оператор',
-                'employee': '👤 Сотрудник'
-            };
-            return roles[role] || role;
-        }
-
-        function canManageUsers() {
-            return currentUser.role === 'admin' || currentUser.role === 'rop';
-        }
-
-        // ==================== NOTIFICATIONS ====================
-        function requestNotificationPermission() {
-            if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission().then(permission => {
-                    notificationsEnabled = permission === 'granted';
-                    if (notificationsEnabled) {
-                        showToast('Уведомления включены', 'success');
-                    }
+            if (loginBtn) {
+                loginBtn.addEventListener('click', (e) => {
+                    console.log('🟡 Login button clicked!');
+                    e.preventDefault();
+                    doLogin();
                 });
-            } else if (Notification.permission === 'granted') {
-                notificationsEnabled = true;
-            }
-        }
-
-        function toggleNotifications() {
-            soundEnabled = !soundEnabled;
-            localStorage.setItem('soundEnabled', soundEnabled);
-            showToast(
-                soundEnabled ? 'Звук уведомлений включен' : 'Звук уведомлений выключен',
-                'info'
-            );
-        }
-
-        function showNotification(title, message) {
-            if (notificationsEnabled && document.hidden) {
-                try {
-                    new Notification(title, {
-                        body: message,
-                        icon: '💬',
-                        badge: '💬'
-                    });
-                } catch (err) {
-                    console.error('Notification error:', err);
-                }
             }
             
-            if (soundEnabled) {
-                notificationSound.play().catch(() => {});
-            }
-        }
-
-        // ==================== WEBSOCKET ====================
-        function connectWebSocket() {
-            socket = io(window.location.origin, {
-                auth: { token }
-            });
-
-            socket.on('connect', () => {
-                console.log('✅ WebSocket connected');
-                showToast('Подключено к серверу', 'success');
-            });
-
-            socket.on('disconnect', () => {
-                console.log('❌ WebSocket disconnected');
-                showToast('Отключено от сервера', 'warning');
-            });
-
-            socket.on('connect_error', (error) => {
-                console.error('WebSocket connection error:', error);
-                showToast('Ошибка подключения', 'error');
-            });
-
-            socket.on('new_message', (data) => {
-                console.log('New message received:', data);
-                
-                if (data.chatId === currentChatId) {
-                    addMessage(data.message);
-                }
-                
-                updateChatPreview(data.chatId, data.message);
-                
-                if (data.message.user_id !== currentUser.id) {
-                    updateUnreadCount(data.chatId, 1);
-                    showNotification(
-                        data.message.user_name,
-                        data.message.file_url ? '📎 Файл' : data.message.content
-                    );
+            // Enter key
+            document.getElementById('password').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    console.log('⏎ Enter pressed');
+                    doLogin();
                 }
             });
-        }
-
-        // ==================== CHATS ====================
-        async function loadChats() {
-            try {
-                const res = await fetch(`${API_URL}/chats`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-                }
-
-                const data = await res.json();
-                
-                console.log('Chats loaded:', data);
-                
-                if (data.chats && data.chats.length > 0) {
-                    chatsData = data.chats;
-                    renderChats(data.chats);
-                } else {
-                    document.getElementById('chatsList').innerHTML = `
-                        <div class="loading">
-                            <p>📭 Нет доступных чатов</p>
-                            <p style="font-size: 12px; color: var(--text-tertiary); margin-top: 10px;">
-                                Обратитесь к администратору для добавления в чаты
-                            </p>
-                        </div>
-                    `;
-                }
-            } catch (err) {
-                console.error('Error loading chats:', err);
-                document.getElementById('chatsList').innerHTML = `
-                    <div class="loading">
-                        <p style="color: var(--danger);">❌ Ошибка загрузки чатов</p>
-                        <p style="font-size: 12px; margin-top: 10px;">${escapeHtml(err.message)}</p>
-                        <button class="btn" onclick="loadChats()" style="margin-top: 15px; padding: 8px 16px; width: auto;">
-                            🔄 Повторить
-                        </button>
-                    </div>
-                `;
-                showToast('Не удалось загрузить чаты: ' + err.message, 'error');
-            }
-        }
-
-        function renderChats(chats) {
-            const container = document.getElementById('chatsList');
-            container.innerHTML = '';
-
-            let totalUnread = 0;
-
-            chats.forEach(chat => {
-                const chatDiv = document.createElement('div');
-                chatDiv.className = 'chat-item';
-                chatDiv.onclick = () => selectChat(chat);
-                chatDiv.dataset.chatId = chat.id;
-
-                const chatName = getChatName(chat);
-                const lastMsg = chat.last_message 
-                    ? (chat.last_message.is_deleted ? '🗑️ Удалено' : (chat.last_message.file_url ? '📎 Файл' : chat.last_message.content))
-                    : 'Нет сообщений';
-                const unreadCount = chat.unread_count || 0;
-                
-                totalUnread += unreadCount;
-
-                chatDiv.innerHTML = `
-                    <div class="chat-item-header">
-                        <span class="chat-name">${escapeHtml(chatName)}</span>
-                        <span class="chat-time">${chat.last_message ? formatTime(chat.last_message.created_at) : ''}</span>
-                    </div>
-                    <div class="chat-preview">
-                        ${escapeHtml(lastMsg).substring(0, 40)}${lastMsg.length > 40 ? '...' : ''}
-                        ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
-                    </div>
-                `;
-
-                container.appendChild(chatDiv);
-            });
-
-            updateTotalUnreadBadge(totalUnread);
-        }
-
-        function getChatName(chat) {
-            if (chat.name) return chat.name;
             
-            if (chat.type === 'direct' && chat.participants) {
-                const other = chat.participants.find(p => p.id !== currentUser.id);
-                return other ? `💬 ${other.name}` : 'Личный чат';
-            }
+            // Demo users
+            const demoUsers = document.querySelectorAll('.demo-user');
+            console.log('👥 Demo users found:', demoUsers.length);
             
-            return chat.type === 'group' ? '👥 Группа' : '🏢 ' + (chat.department || 'Отдел');
-        }
-
-        function updateTotalUnreadBadge(count) {
-            const badge = document.getElementById('totalUnreadBadge');
-            if (count > 0) {
-                badge.textContent = count > 99 ? '99+' : count;
-                badge.classList.remove('hidden');
-                document.title = `(${count}) Корпоративный чат`;
-            } else {
-                badge.classList.add('hidden');
-                document.title = 'Корпоративный чат';
-            }
-        }
-
-        function updateUnreadCount(chatId, increment) {
-            // Reload chats to update unread counts
-            loadChats();
-        }
-
-        function updateChatPreview(chatId, message) {
-            const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
-            if (chatItem) {
-                const preview = chatItem.querySelector('.chat-preview');
-                const timeSpan = chatItem.querySelector('.chat-time');
-                
-                const content = message.file_url ? '📎 Файл' : message.content;
-                preview.innerHTML = `${escapeHtml(content).substring(0, 40)}${content.length > 40 ? '...' : ''}`;
-                timeSpan.textContent = formatTime(message.created_at);
-                
-                // Move to top
-                chatItem.parentElement.prepend(chatItem);
-            }
-        }
-
-        async function selectChat(chat) {
-            currentChatId = chat.id;
-            document.getElementById('currentChatName').textContent = getChatName(chat);
-            document.getElementById('currentChatType').textContent = getTypeText(chat.type);
-            
-            document.querySelectorAll('.chat-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            
-            const selectedItem = document.querySelector(`.chat-item[data-chat-id="${chat.id}"]`);
-            if (selectedItem) {
-                selectedItem.classList.add('active');
-            }
-
-            await loadMessages(chat.id);
-        }
-
-        function getTypeText(type) {
-            const types = {
-                'direct': '💬 Личная переписка',
-                'group': '👥 Групповой чат',
-                'department': '🏢 Чат отдела'
-            };
-            return types[type] || type;
-        }
-
-        // ==================== MESSAGES ====================
-        async function loadMessages(chatId) {
-            try {
-                const container = document.getElementById('messagesContainer');
-                container.innerHTML = '<div class="loading"><div class="loading-spinner"></div></div>';
-
-                const res = await fetch(`${API_URL}/chats/${chatId}/messages`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                const data = await res.json();
-                
-                container.innerHTML = '';
-
-                if (data.messages && data.messages.length > 0) {
-                    data.messages.forEach(msg => addMessage(msg, false));
-                    container.scrollTop = container.scrollHeight;
-                } else {
-                    container.innerHTML = '<div class="loading"><p>📝 Пока нет сообщений. Начните общение!</p></div>';
-                }
-
-                // Mark as read
-                await markChatAsRead(chatId);
-            } catch (err) {
-                console.error('Error loading messages:', err);
-                showToast('Ошибка загрузки сообщений', 'error');
-                document.getElementById('messagesContainer').innerHTML = `
-                    <div class="loading">
-                        <p style="color: var(--danger);">Ошибка загрузки сообщений</p>
-                    </div>
-                `;
-            }
-        }
-
-        async function markChatAsRead(chatId) {
-            try {
-                await fetch(`${API_URL}/chats/${chatId}/read`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                loadChats(); // Refresh to update unread counts
-            } catch (err) {
-                console.error('Error marking as read:', err);
-            }
-        }
-
-        function addMessage(msg, shouldScroll = true) {
-            const container = document.getElementById('messagesContainer');
-            
-            // Remove loading message
-            const loadingDiv = container.querySelector('.loading');
-            if (loadingDiv) loadingDiv.remove();
-            
-            // Check if message already exists
-            if (container.querySelector(`[data-message-id="${msg.id}"]`)) {
-                return;
-            }
-
-            const isOwn = msg.user_id === currentUser.id;
-
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isOwn ? 'own' : ''}`;
-            messageDiv.dataset.messageId = msg.id;
-
-            let contentHTML = '';
-            
-            // File attachment
-            if (msg.file_url) {
-                const fullUrl = msg.file_url.startsWith('http') 
-                    ? msg.file_url 
-                    : `${window.location.origin}${msg.file_url}`;
+            demoUsers.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    console.log('🟡 Demo user clicked!');
+                    const user = btn.getAttribute('data-user');
+                    const pass = btn.getAttribute('data-pass');
                     
-                const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(msg.file_url);
-                
-                if (isImage) {
-                    contentHTML += `
-                        <a href="${fullUrl}" target="_blank">
-                            <img src="${fullUrl}" 
-                                 alt="Image"
-                                 onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22><text x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22>❌</text></svg>';">
-                        </a>
-                    `;
-                } else {
-                    const fileName = msg.file_url.split('/').pop();
-                    const fileExt = fileName.split('.').pop().toUpperCase();
-                    contentHTML += `
-                        <a href="${fullUrl}" download class="file-attachment">
-                            <span style="font-size: 20px;">📎</span>
-                            <div>
-                                <div style="font-weight: 500;">${escapeHtml(fileName)}</div>
-                                <div style="font-size: 11px; opacity: 0.7;">${fileExt}</div>
-                            </div>
-                        </a>
-                    `;
-                }
-            }
+                    document.getElementById('username').value = user;
+                    document.getElementById('password').value = pass;
+                    
+                    doLogin();
+                });
+            });
             
-            // Text content
-            if (msg.content && !msg.is_deleted) {
-                contentHTML += `<div>${escapeHtml(msg.content)}</div>`;
-            } else if (msg.is_deleted) {
-                contentHTML += `<div style="opacity: 0.5; font-style: italic;">🗑️ Сообщение удалено</div>`;
-            }
-
-            messageDiv.innerHTML = `
-                ${!isOwn ? `<div class="message-header">${escapeHtml(msg.user_name)}</div>` : ''}
-                <div class="message-bubble">
-                    ${contentHTML}
-                </div>
-                <div class="message-time">${formatTime(msg.created_at)}</div>
-            `;
-
-            container.appendChild(messageDiv);
-            
-            if (shouldScroll) {
-                container.scrollTop = container.scrollHeight;
-            }
-        }
-
-        async function refreshMessages() {
-            if (!currentChatId) return;
-            
-            const refreshBtn = document.getElementById('refreshBtn');
-            refreshBtn.disabled = true;
-            refreshBtn.textContent = '⏳';
-            
-            await loadMessages(currentChatId);
-            
-            setTimeout(() => {
-                refreshBtn.disabled = false;
-                refreshBtn.textContent = '🔄';
-            }, 1000);
-        }
-
-        // ==================== FILE UPLOAD ====================
-        function attachImage() {
-            document.getElementById('imageInput').click();
-        }
-
-        function attachFile() {
-            document.getElementById('fileInput').click();
-        }
-
-        function handleImageSelect(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            if (file.size > MAX_FILE_SIZE) {
-                showToast('Файл слишком большой (макс. 10MB)', 'error');
-                return;
-            }
-            
-            attachedFile = file;
-            
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const preview = document.getElementById('attachmentPreview');
-                const img = document.getElementById('previewImage');
-                const fileName = document.getElementById('previewFileName');
-                
-                img.src = e.target.result;
-                img.style.display = 'block';
-                fileName.style.display = 'none';
-                preview.classList.remove('hidden');
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            if (file.size > MAX_FILE_SIZE) {
-                showToast('Файл слишком большой (макс. 10MB)', 'error');
-                return;
-            }
-            
-            attachedFile = file;
-            
-            const preview = document.getElementById('attachmentPreview');
-            const img = document.getElementById('previewImage');
-            const fileName = document.getElementById('previewFileName');
-            
-            img.style.display = 'none';
-            fileName.textContent = `📎 ${file.name} (${formatFileSize(file.size)})`;
-            fileName.style.display = 'block';
-            preview.classList.remove('hidden');
-        }
-
-        function clearAttachment() {
-            attachedFile = null;
-            document.getElementById('imageInput').value = '';
-            document.getElementById('fileInput').value = '';
-            document.getElementById('attachmentPreview').classList.add('hidden');
-        }
-
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-        }
-
-        // ==================== SEND MESSAGE ====================
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const content = input.value.trim();
-
-            if (!content && !attachedFile) return;
-            if (!currentChatId) {
-                showToast('Выберите чат', 'warning');
-                return;
-            }
-
-            const sendBtn = document.getElementById('sendBtn');
-            
-            try {
-                sendBtn.disabled = true;
-                sendBtn.textContent = '⏳';
-
-                if (attachedFile) {
-                    // Send with file
-                    const formData = new FormData();
-                    formData.append('file', attachedFile);
-                    if (content) {
-                        formData.append('content', content);
-                    }
-
-                    const res = await fetch(`${API_URL}/chats/${currentChatId}/messages/upload`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: formData
-                    });
-
-                    if (!res.ok) {
-                        const error = await res.json();
-                        throw new Error(error.error || 'Ошибка загрузки файла');
-                    }
-
-                    clearAttachment();
-                    showToast('Файл отправлен', 'success');
-                } else {
-                    // Send text only
-                    const res = await fetch(`${API_URL}/chats/${currentChatId}/messages`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ content })
-                    });
-
-                    if (!res.ok) {
-                        const error = await res.json();
-                        throw new Error(error.error || 'Ошибка отправки');
-                    }
-                }
-
-                input.value = '';
-                input.style.height = 'auto';
-            } catch (err) {
-                console.error('Error sending message:', err);
-                showToast('Ошибка отправки: ' + err.message, 'error');
-            } finally {
-                sendBtn.disabled = false;
-                sendBtn.textContent = '➤';
-            }
-        }
-
-        function handleInputKeydown(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        }
-
-        function autoResize(textarea) {
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
-        }
-
-        // ==================== ADMIN FUNCTIONS ====================
-        // ==================== MODAL FUNCTIONS ====================
-        function openModal(modalId) {
-            const modal = document.getElementById(modalId);
-            if (modal) {
-                modal.classList.add('active');
-            }
-        }
-
-        function closeModal(modalId) {
-            const modal = document.getElementById(modalId);
-            if (modal) {
-                modal.classList.remove('active');
-            }
-        }
-
-        // Close modal on outside click
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal')) {
-                e.target.classList.remove('active');
-            }
+            console.log('✅ Event listeners setup complete');
         });
-
-        // Close modal on Escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                document.querySelectorAll('.modal.active').forEach(modal => {
-                    modal.classList.remove('active');
-                });
-            }
-        });
-
-        // ==================== USER MANAGEMENT WITH MODALS ====================
-        function createNewUser() {
-            openModal('addUserModal');
-        }
-
-        function submitAddUser(e) {
-            e.preventDefault();
-            
-            const username = document.getElementById('newUsername').value;
-            const password = document.getElementById('newPassword').value;
-            const name = document.getElementById('newName').value;
-            const role = document.getElementById('newRole').value;
-            const department = document.getElementById('newDepartment').value || null;
-
-            fetch(`${API_URL}/auth/register`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, password, name, role, department })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.user) {
-                    showToast(`Пользователь ${username} создан!`, 'success');
-                    closeModal('addUserModal');
-                    document.getElementById('addUserForm').reset();
-                    // Reload users if modal is open
-                    if (document.getElementById('manageUsersModal').classList.contains('active')) {
-                        loadUsersList();
-                    }
-                } else {
-                    showToast(data.error || 'Ошибка создания', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка: ' + err.message, 'error');
-            });
-        }
-
-        function manageUsers() {
-            loadUsersList();
-            openModal('manageUsersModal');
-        }
-
-        function loadUsersList() {
-            const container = document.getElementById('usersListContainer');
-            container.innerHTML = '<p style="color: var(--text-secondary);">Загрузка...</p>';
-
-            fetch(`${API_URL}/users`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.users && data.users.length > 0) {
-                    container.innerHTML = '';
-                    data.users.forEach(user => {
-                        const userItem = document.createElement('div');
-                        userItem.className = 'user-item';
-                        userItem.innerHTML = `
-                            <div class="user-info">
-                                <div class="user-name">
-                                    ${user.name}
-                                    <span class="role-badge ${user.role}">${user.role.toUpperCase()}</span>
-                                    ${user.department ? `<span class="dept-badge">${user.department}</span>` : ''}
-                                </div>
-                                <div class="user-meta">
-                                    @${user.username} • ID: ${user.id} • 
-                                    ${user.is_active ? '✅ Активен' : '❌ Деактивирован'}
-                                </div>
-                            </div>
-                            <div class="user-actions">
-                                <button class="btn-icon" onclick="editUser(${user.id})" title="Редактировать">✏️</button>
-                                <button class="btn-icon" onclick="changeUserPassword(${user.id}, '${user.name}')" title="Сменить пароль">🔑</button>
-                                <button class="btn-icon danger" onclick="deactivateUser(${user.id}, '${user.name}')" title="Деактивировать">🗑️</button>
-                            </div>
-                        `;
-                        container.appendChild(userItem);
-                    });
-                } else {
-                    container.innerHTML = '<p style="color: var(--text-secondary);">Нет пользователей</p>';
-                }
-            })
-            .catch(err => {
-                container.innerHTML = `<p style="color: var(--danger);">Ошибка: ${err.message}</p>`;
-            });
-        }
-
-        function editUser(userId) {
-            // Load user data
-            fetch(`${API_URL}/users/${userId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.user) {
-                    const user = data.user;
-                    document.getElementById('editUserId').value = user.id;
-                    document.getElementById('editUsername').value = user.username;
-                    document.getElementById('editName').value = user.name;
-                    document.getElementById('editRole').value = user.role;
-                    
-                    // Load departments
-                    loadDepartmentsSelect('editDepartment', user.department);
-                    
-                    openModal('editUserModal');
-                } else {
-                    showToast('Пользователь не найден', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка загрузки: ' + err.message, 'error');
-            });
-        }
-
-        function submitEditUser(e) {
-            e.preventDefault();
-            
-            const userId = document.getElementById('editUserId').value;
-            const username = document.getElementById('editUsername').value;
-            const name = document.getElementById('editName').value;
-            const role = document.getElementById('editRole').value;
-            const department = document.getElementById('editDepartment').value || null;
-
-            fetch(`${API_URL}/users/${userId}`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, name, role, department })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    showToast('Пользователь обновлен!', 'success');
-                    closeModal('editUserModal');
-                    loadUsersList();
-                } else {
-                    showToast(data.error || 'Ошибка обновления', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка: ' + err.message, 'error');
-            });
-        }
-
-        function changeUserPassword(userId, userName) {
-            document.getElementById('passwordUserId').value = userId;
-            document.getElementById('passwordUserName').textContent = userName;
-            document.getElementById('newPasswordInput').value = '';
-            document.getElementById('confirmPasswordInput').value = '';
-            openModal('changePasswordModal');
-        }
-
-        function submitChangePassword(e) {
-            e.preventDefault();
-            
-            const userId = document.getElementById('passwordUserId').value;
-            const newPassword = document.getElementById('newPasswordInput').value;
-            const confirmPassword = document.getElementById('confirmPasswordInput').value;
-
-            if (newPassword !== confirmPassword) {
-                showToast('Пароли не совпадают!', 'error');
-                return;
-            }
-
-            fetch(`${API_URL}/users/${userId}/password`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ newPassword })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    showToast('Пароль изменен успешно!', 'success');
-                    closeModal('changePasswordModal');
-                } else {
-                    showToast(data.error || 'Ошибка смены пароля', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка: ' + err.message, 'error');
-            });
-        }
-
-        function deactivateUser(userId, userName) {
-            if (!confirm(`Деактивировать пользователя ${userName}?`)) {
-                return;
-            }
-
-            fetch(`${API_URL}/users/${userId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    showToast('Пользователь деактивирован', 'success');
-                    loadUsersList();
-                } else {
-                    showToast(data.error || 'Ошибка', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка: ' + err.message, 'error');
-            });
-        }
-
-        // ==================== DEPARTMENT MANAGEMENT ====================
-        function loadDepartmentsSelect(selectId, selectedDept = null) {
-            fetch(`${API_URL}/departments`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(res => res.json())
-            .then(data => {
-                const select = document.getElementById(selectId);
-                if (select) {
-                    select.innerHTML = '<option value="">Без отдела</option>';
-                    if (data.departments) {
-                        data.departments.forEach(dept => {
-                            const option = document.createElement('option');
-                            option.value = dept;
-                            option.textContent = dept;
-                            if (dept === selectedDept) {
-                                option.selected = true;
-                            }
-                            select.appendChild(option);
-                        });
-                    }
-                }
-            })
-            .catch(err => {
-                console.error('Load departments error:', err);
-            });
-        }
-
-        function createDepartment() {
-            openModal('createDepartmentModal');
-        }
-
-        function submitCreateDepartment(e) {
-            e.preventDefault();
-            
-            const name = document.getElementById('departmentName').value;
-
-            fetch(`${API_URL}/departments`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ name })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    showToast(`Отдел "${name}" создан!`, 'success');
-                    closeModal('createDepartmentModal');
-                    document.getElementById('departmentName').value = '';
-                } else {
-                    showToast(data.error || 'Ошибка создания', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка: ' + err.message, 'error');
-            });
-        }
-
-        // ==================== CHAT MANAGEMENT WITH MODALS ====================
-        function createNewChat() {
-            loadDepartmentsSelect('chatDepartment');
-            openModal('createChatModal');
-        }
-
-        function toggleChatDepartment() {
-            const type = document.getElementById('chatType').value;
-            const deptGroup = document.getElementById('chatDepartmentGroup');
-            deptGroup.style.display = type === 'department' ? 'block' : 'none';
-        }
-
-        function submitCreateChat(e) {
-            e.preventDefault();
-            
-            const name = document.getElementById('chatName').value;
-            const type = document.getElementById('chatType').value;
-            const department = type === 'department' ? document.getElementById('chatDepartment').value : null;
-
-            fetch(`${API_URL}/chats`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ name, type, department })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.chat) {
-                    showToast('Чат создан успешно!', 'success');
-                    closeModal('createChatModal');
-                    document.getElementById('createChatForm').reset();
-                    loadChats();
-                } else {
-                    showToast(data.error || 'Ошибка создания чата', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка: ' + err.message, 'error');
-            });
-        }
-
-        function archiveCurrentChat() {
-            if (!currentChat) {
-                showToast('Выберите чат', 'warning');
-                return;
-            }
-
-            document.getElementById('archiveChatId').value = currentChat.id;
-            document.getElementById('archiveChatName').textContent = currentChat.name;
-            openModal('archiveChatModal');
-        }
-
-        function confirmArchiveChat() {
-            const chatId = document.getElementById('archiveChatId').value;
-
-            fetch(`${API_URL}/chats/${chatId}/archive`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    showToast('Чат архивирован', 'success');
-                    closeModal('archiveChatModal');
-                    loadChats();
-                    currentChat = null;
-                    document.getElementById('messagesContainer').innerHTML = '';
-                } else {
-                    showToast(data.error || 'Ошибка', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка: ' + err.message, 'error');
-            });
-        }
-
-        // ==================== ADMIN LOGS ====================
-        function viewAdminLogs() {
-            loadAdminLogs();
-            openModal('adminLogsModal');
-        }
-
-        function loadAdminLogs() {
-            const container = document.getElementById('logsContainer');
-            container.innerHTML = '<p style="color: var(--text-secondary);">Загрузка логов...</p>';
-
-            fetch(`${API_URL}/admin/logs?limit=100`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.logs && data.logs.length > 0) {
-                    let html = '<table class="logs-table"><thead><tr>';
-                    html += '<th>Дата</th><th>Пользователь</th><th>Действие</th><th>Детали</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    data.logs.forEach(log => {
-                        const date = new Date(log.created_at).toLocaleString('ru-RU');
-                        const details = log.details ? JSON.stringify(JSON.parse(log.details), null, 2) : '';
-                        html += `<tr>
-                            <td>${date}</td>
-                            <td>${log.user_name} (@${log.username})</td>
-                            <td><span class="action-badge">${log.action}</span></td>
-                            <td style="font-family: monospace; font-size: 11px;">${details.substring(0, 50)}...</td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<p style="color: var(--text-secondary);">Логов пока нет</p>';
-                }
-            })
-            .catch(err => {
-                container.innerHTML = `<p style="color: var(--danger);">Ошибка: ${err.message}</p>`;
-            });
-        }
-
-        // ==================== PIN MESSAGES ====================
-        function pinMessage(messageId) {
-            if (!currentChat) return;
-
-            fetch(`${API_URL}/chats/${currentChat.id}/messages/${messageId}/pin`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    showToast('Сообщение закреплено', 'success');
-                    loadMessages(currentChat.id);
-                } else {
-                    showToast(data.error || 'Ошибка', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка: ' + err.message, 'error');
-            });
-        }
-
-        function unpinMessage(messageId) {
-            if (!currentChat) return;
-
-            fetch(`${API_URL}/chats/${currentChat.id}/messages/${messageId}/pin`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    showToast('Сообщение откреплено', 'success');
-                    loadMessages(currentChat.id);
-                } else {
-                    showToast(data.error || 'Ошибка', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка: ' + err.message, 'error');
-            });
-        }
-
-
-        // ==================== WEBSOCKET
+        
+        console.log('🏁 Script end');
+    </script>
+</body>
+</html>
