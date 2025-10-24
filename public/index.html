@@ -719,6 +719,285 @@
                 width: 100%;
             }
         }
+            /* ==================== MODAL STYLES ==================== */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 0;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { 
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-tertiary);
+            border-radius: 12px 12px 0 0;
+        }
+
+        .modal-header h3 {
+            color: var(--text-primary);
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 28px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .close-modal:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        /* Form styles in modals */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        /* User list in modal */
+        .users-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .user-item {
+            padding: 12px 16px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        .user-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .user-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-icon {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-icon.danger:hover {
+            background: var(--danger);
+        }
+
+        /* Department badge */
+        .dept-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--accent);
+            color: white;
+            margin-left: 8px;
+        }
+
+        /* Role badge */
+        .role-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .role-badge.admin {
+            background: #ff4444;
+            color: white;
+        }
+
+        .role-badge.rop {
+            background: #ff9800;
+            color: white;
+        }
+
+        .role-badge.assistant {
+            background: #4caf50;
+            color: white;
+        }
+
+        .role-badge.operator,
+        .role-badge.employee {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        /* Admin logs table */
+        .logs-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .logs-table th,
+        .logs-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logs-table th {
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .logs-table td {
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .logs-table tr:hover {
+            background: var(--bg-hover);
+        }
+
+        .action-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--accent);
+            color: white;
+        }
+
     </style>
 </head>
 <body>
@@ -1548,31 +1827,343 @@
         }
 
         // ==================== ADMIN FUNCTIONS ====================
-        function createNewChat() {
-            const chatName = prompt('Введите название чата:');
-            if (!chatName) return;
-            
-            const chatType = prompt('Тип чата:\n1 - Групповой (group)\n2 - Отдел (department)\n3 - Личный (direct)');
-            const types = { '1': 'group', '2': 'department', '3': 'direct' };
-            const type = types[chatType] || 'group';
-            
-            let department = null;
-            if (type === 'department') {
-                department = prompt('Название отдела (Sales, Marketing, IT):');
+        // ==================== MODAL FUNCTIONS ====================
+        function openModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('active');
             }
+        }
+
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.remove('active');
+            }
+        }
+
+        // Close modal on outside click
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) {
+                e.target.classList.remove('active');
+            }
+        });
+
+        // Close modal on Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal.active').forEach(modal => {
+                    modal.classList.remove('active');
+                });
+            }
+        });
+
+        // ==================== USER MANAGEMENT WITH MODALS ====================
+        function createNewUser() {
+            openModal('addUserModal');
+        }
+
+        function submitAddUser(e) {
+            e.preventDefault();
             
+            const username = document.getElementById('newUsername').value;
+            const password = document.getElementById('newPassword').value;
+            const name = document.getElementById('newName').value;
+            const role = document.getElementById('newRole').value;
+            const department = document.getElementById('newDepartment').value || null;
+
+            fetch(`${API_URL}/auth/register`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password, name, role, department })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.user) {
+                    showToast(`Пользователь ${username} создан!`, 'success');
+                    closeModal('addUserModal');
+                    document.getElementById('addUserForm').reset();
+                    // Reload users if modal is open
+                    if (document.getElementById('manageUsersModal').classList.contains('active')) {
+                        loadUsersList();
+                    }
+                } else {
+                    showToast(data.error || 'Ошибка создания', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка: ' + err.message, 'error');
+            });
+        }
+
+        function manageUsers() {
+            loadUsersList();
+            openModal('manageUsersModal');
+        }
+
+        function loadUsersList() {
+            const container = document.getElementById('usersListContainer');
+            container.innerHTML = '<p style="color: var(--text-secondary);">Загрузка...</p>';
+
+            fetch(`${API_URL}/users`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.users && data.users.length > 0) {
+                    container.innerHTML = '';
+                    data.users.forEach(user => {
+                        const userItem = document.createElement('div');
+                        userItem.className = 'user-item';
+                        userItem.innerHTML = `
+                            <div class="user-info">
+                                <div class="user-name">
+                                    ${user.name}
+                                    <span class="role-badge ${user.role}">${user.role.toUpperCase()}</span>
+                                    ${user.department ? `<span class="dept-badge">${user.department}</span>` : ''}
+                                </div>
+                                <div class="user-meta">
+                                    @${user.username} • ID: ${user.id} • 
+                                    ${user.is_active ? '✅ Активен' : '❌ Деактивирован'}
+                                </div>
+                            </div>
+                            <div class="user-actions">
+                                <button class="btn-icon" onclick="editUser(${user.id})" title="Редактировать">✏️</button>
+                                <button class="btn-icon" onclick="changeUserPassword(${user.id}, '${user.name}')" title="Сменить пароль">🔑</button>
+                                <button class="btn-icon danger" onclick="deactivateUser(${user.id}, '${user.name}')" title="Деактивировать">🗑️</button>
+                            </div>
+                        `;
+                        container.appendChild(userItem);
+                    });
+                } else {
+                    container.innerHTML = '<p style="color: var(--text-secondary);">Нет пользователей</p>';
+                }
+            })
+            .catch(err => {
+                container.innerHTML = `<p style="color: var(--danger);">Ошибка: ${err.message}</p>`;
+            });
+        }
+
+        function editUser(userId) {
+            // Load user data
+            fetch(`${API_URL}/users/${userId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.user) {
+                    const user = data.user;
+                    document.getElementById('editUserId').value = user.id;
+                    document.getElementById('editUsername').value = user.username;
+                    document.getElementById('editName').value = user.name;
+                    document.getElementById('editRole').value = user.role;
+                    
+                    // Load departments
+                    loadDepartmentsSelect('editDepartment', user.department);
+                    
+                    openModal('editUserModal');
+                } else {
+                    showToast('Пользователь не найден', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка загрузки: ' + err.message, 'error');
+            });
+        }
+
+        function submitEditUser(e) {
+            e.preventDefault();
+            
+            const userId = document.getElementById('editUserId').value;
+            const username = document.getElementById('editUsername').value;
+            const name = document.getElementById('editName').value;
+            const role = document.getElementById('editRole').value;
+            const department = document.getElementById('editDepartment').value || null;
+
+            fetch(`${API_URL}/users/${userId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, name, role, department })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Пользователь обновлен!', 'success');
+                    closeModal('editUserModal');
+                    loadUsersList();
+                } else {
+                    showToast(data.error || 'Ошибка обновления', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка: ' + err.message, 'error');
+            });
+        }
+
+        function changeUserPassword(userId, userName) {
+            document.getElementById('passwordUserId').value = userId;
+            document.getElementById('passwordUserName').textContent = userName;
+            document.getElementById('newPasswordInput').value = '';
+            document.getElementById('confirmPasswordInput').value = '';
+            openModal('changePasswordModal');
+        }
+
+        function submitChangePassword(e) {
+            e.preventDefault();
+            
+            const userId = document.getElementById('passwordUserId').value;
+            const newPassword = document.getElementById('newPasswordInput').value;
+            const confirmPassword = document.getElementById('confirmPasswordInput').value;
+
+            if (newPassword !== confirmPassword) {
+                showToast('Пароли не совпадают!', 'error');
+                return;
+            }
+
+            fetch(`${API_URL}/users/${userId}/password`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ newPassword })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Пароль изменен успешно!', 'success');
+                    closeModal('changePasswordModal');
+                } else {
+                    showToast(data.error || 'Ошибка смены пароля', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка: ' + err.message, 'error');
+            });
+        }
+
+        function deactivateUser(userId, userName) {
+            if (!confirm(`Деактивировать пользователя ${userName}?`)) {
+                return;
+            }
+
+            fetch(`${API_URL}/users/${userId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Пользователь деактивирован', 'success');
+                    loadUsersList();
+                } else {
+                    showToast(data.error || 'Ошибка', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка: ' + err.message, 'error');
+            });
+        }
+
+        // ==================== DEPARTMENT MANAGEMENT ====================
+        function loadDepartmentsSelect(selectId, selectedDept = null) {
+            fetch(`${API_URL}/departments`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    select.innerHTML = '<option value="">Без отдела</option>';
+                    if (data.departments) {
+                        data.departments.forEach(dept => {
+                            const option = document.createElement('option');
+                            option.value = dept;
+                            option.textContent = dept;
+                            if (dept === selectedDept) {
+                                option.selected = true;
+                            }
+                            select.appendChild(option);
+                        });
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Load departments error:', err);
+            });
+        }
+
+        function createDepartment() {
+            openModal('createDepartmentModal');
+        }
+
+        function submitCreateDepartment(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('departmentName').value;
+
+            fetch(`${API_URL}/departments`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(`Отдел "${name}" создан!`, 'success');
+                    closeModal('createDepartmentModal');
+                    document.getElementById('departmentName').value = '';
+                } else {
+                    showToast(data.error || 'Ошибка создания', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка: ' + err.message, 'error');
+            });
+        }
+
+        // ==================== CHAT MANAGEMENT WITH MODALS ====================
+        function createNewChat() {
+            loadDepartmentsSelect('chatDepartment');
+            openModal('createChatModal');
+        }
+
+        function toggleChatDepartment() {
+            const type = document.getElementById('chatType').value;
+            const deptGroup = document.getElementById('chatDepartmentGroup');
+            deptGroup.style.display = type === 'department' ? 'block' : 'none';
+        }
+
+        function submitCreateChat(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('chatName').value;
+            const type = document.getElementById('chatType').value;
+            const department = type === 'department' ? document.getElementById('chatDepartment').value : null;
+
             fetch(`${API_URL}/chats`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ name: chatName, type, department })
+                body: JSON.stringify({ name, type, department })
             })
             .then(res => res.json())
             .then(data => {
                 if (data.chat) {
                     showToast('Чат создан успешно!', 'success');
+                    closeModal('createChatModal');
+                    document.getElementById('createChatForm').reset();
                     loadChats();
                 } else {
                     showToast(data.error || 'Ошибка создания чата', 'error');
@@ -1583,102 +2174,32 @@
             });
         }
 
-        function manageUsers() {
-            if (!confirm('Открыть панель управления пользователями?\n\n(Функционал будет расширен в следующей версии)')) {
+        function archiveCurrentChat() {
+            if (!currentChat) {
+                showToast('Выберите чат', 'warning');
                 return;
             }
-            
-            fetch(`${API_URL}/users`, {
+
+            document.getElementById('archiveChatId').value = currentChat.id;
+            document.getElementById('archiveChatName').textContent = currentChat.name;
+            openModal('archiveChatModal');
+        }
+
+        function confirmArchiveChat() {
+            const chatId = document.getElementById('archiveChatId').value;
+
+            fetch(`${API_URL}/chats/${chatId}/archive`, {
+                method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             .then(res => res.json())
             .then(data => {
-                if (data.users) {
-                    let userList = 'ПОЛЬЗОВАТЕЛИ СИСТЕМЫ:\n\n';
-                    data.users.forEach(u => {
-                        userList += `${u.id}. ${u.name} (@${u.username}) - ${u.role}\n`;
-                        userList += `   Отдел: ${u.department || 'нет'} | Активен: ${u.is_active ? 'да' : 'нет'}\n\n`;
-                    });
-                    
-                    alert(userList);
-                    
-                    const action = prompt('Действие:\n1 - Создать пользователя\n2 - Изменить роль\n3 - Деактивировать\n0 - Отмена');
-                    
-                    if (action === '1') {
-                        createUser();
-                    } else if (action === '2') {
-                        changeUserRole();
-                    } else if (action === '3') {
-                        deactivateUser();
-                    }
-                } else {
-                    showToast('Ошибка загрузки пользователей', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка: ' + err.message, 'error');
-            });
-        }
-        
-        function createUser() {
-            const username = prompt('Логин нового пользователя:');
-            if (!username) return;
-            
-            const name = prompt('Полное имя:');
-            if (!name) return;
-            
-            const password = prompt('Пароль:', 'pass123');
-            if (!password) return;
-            
-            const role = prompt('Роль (admin/assistant/rop/operator/employee):', 'employee');
-            const department = prompt('Отдел (Sales/Marketing/IT) или оставьте пустым:');
-            
-            fetch(`${API_URL}/auth/register`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ 
-                    username, 
-                    password, 
-                    name, 
-                    role,
-                    department: department || null
-                })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.user) {
-                    showToast(`Пользователь ${username} создан!`, 'success');
-                } else {
-                    showToast(data.error || 'Ошибка создания', 'error');
-                }
-            })
-            .catch(err => {
-                showToast('Ошибка: ' + err.message, 'error');
-            });
-        }
-        
-        function changeUserRole() {
-            const userId = prompt('ID пользователя:');
-            if (!userId) return;
-            
-            const newRole = prompt('Новая роль (admin/assistant/rop/operator/employee):');
-            if (!newRole) return;
-            
-            fetch(`${API_URL}/users/${userId}/role`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ role: newRole })
-            })
-            .then(res => res.json())
-            .then(data => {
                 if (data.success) {
-                    showToast('Роль изменена успешно!', 'success');
+                    showToast('Чат архивирован', 'success');
+                    closeModal('archiveChatModal');
+                    loadChats();
+                    currentChat = null;
+                    document.getElementById('messagesContainer').innerHTML = '';
                 } else {
                     showToast(data.error || 'Ошибка', 'error');
                 }
@@ -1687,23 +2208,83 @@
                 showToast('Ошибка: ' + err.message, 'error');
             });
         }
-        
-        function deactivateUser() {
-            const userId = prompt('ID пользователя для деактивации:');
-            if (!userId) return;
-            
-            if (!confirm('Точно деактивировать пользователя #' + userId + '?')) {
-                return;
-            }
-            
-            fetch(`${API_URL}/users/${userId}`, {
+
+        // ==================== ADMIN LOGS ====================
+        function viewAdminLogs() {
+            loadAdminLogs();
+            openModal('adminLogsModal');
+        }
+
+        function loadAdminLogs() {
+            const container = document.getElementById('logsContainer');
+            container.innerHTML = '<p style="color: var(--text-secondary);">Загрузка логов...</p>';
+
+            fetch(`${API_URL}/admin/logs?limit=100`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.logs && data.logs.length > 0) {
+                    let html = '<table class="logs-table"><thead><tr>';
+                    html += '<th>Дата</th><th>Пользователь</th><th>Действие</th><th>Детали</th>';
+                    html += '</tr></thead><tbody>';
+                    
+                    data.logs.forEach(log => {
+                        const date = new Date(log.created_at).toLocaleString('ru-RU');
+                        const details = log.details ? JSON.stringify(JSON.parse(log.details), null, 2) : '';
+                        html += `<tr>
+                            <td>${date}</td>
+                            <td>${log.user_name} (@${log.username})</td>
+                            <td><span class="action-badge">${log.action}</span></td>
+                            <td style="font-family: monospace; font-size: 11px;">${details.substring(0, 50)}...</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<p style="color: var(--text-secondary);">Логов пока нет</p>';
+                }
+            })
+            .catch(err => {
+                container.innerHTML = `<p style="color: var(--danger);">Ошибка: ${err.message}</p>`;
+            });
+        }
+
+        // ==================== PIN MESSAGES ====================
+        function pinMessage(messageId) {
+            if (!currentChat) return;
+
+            fetch(`${API_URL}/chats/${currentChat.id}/messages/${messageId}/pin`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Сообщение закреплено', 'success');
+                    loadMessages(currentChat.id);
+                } else {
+                    showToast(data.error || 'Ошибка', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Ошибка: ' + err.message, 'error');
+            });
+        }
+
+        function unpinMessage(messageId) {
+            if (!currentChat) return;
+
+            fetch(`${API_URL}/chats/${currentChat.id}/messages/${messageId}/pin`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    showToast('Пользователь деактивирован', 'success');
+                    showToast('Сообщение откреплено', 'success');
+                    loadMessages(currentChat.id);
                 } else {
                     showToast(data.error || 'Ошибка', 'error');
                 }
@@ -1713,43 +2294,5 @@
             });
         }
 
-        // ==================== UTILITIES ====================
-        function formatTime(timestamp) {
-            const date = new Date(timestamp);
-            const now = new Date();
-            const diff = now - date;
-            
-            if (diff < 86400000) {
-                return date.toLocaleTimeString('ru-RU', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                });
-            } else if (diff < 604800000) {
-                const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-                return days[date.getDay()];
-            } else {
-                return date.toLocaleDateString('ru-RU', {
-                    day: '2-digit',
-                    month: '2-digit'
-                });
-            }
-        }
 
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // ==================== ERROR HANDLING ====================
-        window.addEventListener('unhandledrejection', event => {
-            console.error('Unhandled promise rejection:', event.reason);
-            showToast('Произошла ошибка: ' + event.reason, 'error');
-        });
-
-        // ==================== INIT ====================
-        console.log('🚀 Corporate Chat App initialized');
-    </script>
-</body>
-</html>
+        // ==================== WEBSOCKET
