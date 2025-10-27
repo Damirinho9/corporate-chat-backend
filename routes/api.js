@@ -1,3 +1,38 @@
+// ДОБАВЬТЕ ЭТИ ИМПОРТЫ В НАЧАЛО ФАЙЛА:
+const { uploadSingle, uploadMultiple, validateFile } = require('../middleware/fileUpload');
+const fileController = require('../controllers/fileController');
+
+// ДОБАВЬТЕ ЭТИ МАРШРУТЫ В СЕКЦИЮ FILE ROUTES:
+// ==================== FILE ROUTES ====================
+router.post('/chats/:chatId/upload',
+    authenticateToken,
+    canAccessChat,
+    canSendToChat,
+    uploadSingle,
+    validateFile,
+    fileController.uploadFileToMessage
+);
+
+router.post('/chats/:chatId/upload-multiple',
+    authenticateToken,
+    canAccessChat,
+    canSendToChat,
+    uploadMultiple,
+    validateFile,
+    fileController.uploadMultipleFiles
+);
+
+router.delete('/messages/:messageId/file',
+    authenticateToken,
+    fileController.deleteFileFromMessage
+);
+
+router.get('/files/stats',
+    authenticateToken,
+    requireAdmin,
+    fileController.getFileStats
+);
+
 const express = require('express');
 const router = express.Router();
 const { query } = require('../config/database'); // ADDED!

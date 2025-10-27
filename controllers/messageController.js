@@ -6,7 +6,7 @@ const getMessages = async (req, res) => {
         const { chatId } = req.params;
         const { limit = 50, offset = 0, before } = req.query;
 
-        // Build query with optional "before" timestamp for infinite scroll
+        // ИЗМЕНЕНО: добавлен LEFT JOIN на files
         let queryText = `
             SELECT 
                 m.id,
@@ -15,12 +15,22 @@ const getMessages = async (req, res) => {
                 m.is_deleted,
                 m.created_at,
                 m.updated_at,
+                m.file_id,
                 u.id as user_id,
                 u.username,
                 u.name as user_name,
-                u.role as user_role
+                u.role as user_role,
+                f.id as file_id_check,
+                f.original_filename as file_name,
+                f.mime_type as file_mime_type,
+                f.size_bytes as file_size,
+                f.file_type as file_type,
+                f.thumbnail_path,
+                f.width as file_width,
+                f.height as file_height
             FROM messages m
             JOIN users u ON m.user_id = u.id
+            LEFT JOIN files f ON m.file_id = f.id
             WHERE m.chat_id = $1
         `;
 
@@ -38,10 +48,39 @@ const getMessages = async (req, res) => {
 
         const result = await query(queryText, params);
 
-        // Return in chronological order (oldest first)
-        const messages = result.rows.reverse();
+        // ИЗМЕНЕНО: добавлена информация о файле
+        const messages = result.rows.reverse().map(msg => {
+            const message = {
+                id: msg.id,
+                content: msg.content,
+                is_edited: msg.is_edited,
+                is_deleted: msg.is_deleted,
+                created_at: msg.created_at,
+                updated_at: msg.updated_at,
+                user_id: msg.user_id,
+                username: msg.username,
+                user_name: msg.user_name,
+                user_role: msg.user_role
+            };
 
-        // Get total count for pagination
+            // ДОБАВЛЕНО: файл если есть
+            if (msg.file_id_check) {
+                message.file = {
+                    id: msg.file_id_check,
+                    filename: msg.file_name,
+                    mimeType: msg.file_mime_type,
+                    size: msg.file_size,
+                    type: msg.file_type,
+                    url: `/api/files/${msg.file_id_check}`,
+                    thumbnailUrl: msg.thumbnail_path ? `/api/files/${msg.file_id_check}/thumbnail` : null,
+                    width: msg.file_width,
+                    height: msg.file_height
+                };
+            }
+
+            return message;
+        });
+
         const countResult = await query(
             'SELECT COUNT(*) as total FROM messages WHERE chat_id = $1',
             [chatId]
@@ -69,44 +108,88 @@ const getMessages = async (req, res) => {
 const sendMessage = async (req, res) => {
     try {
         const { chatId } = req.params;
-        const { content } = req.body;
+        const { content, fileId } = req.body;  // ДОБАВЛЕНО: fileId
         const userId = req.user.id;
 
-        if (!content || content.trim().length === 0) {
+        // ИЗМЕНЕНО: content ИЛИ fileId должны быть
+        if ((!content || content.trim().length === 0) && !fileId) {
             return res.status(400).json({ 
-                error: 'Message content is required',
+                error: 'Message content or file is required',
                 code: 'EMPTY_MESSAGE'
             });
         }
 
-        if (content.length > 5000) {
+        if (content && content.length > 5000) {
             return res.status(400).json({ 
                 error: 'Message is too long (max 5000 characters)',
                 code: 'MESSAGE_TOO_LONG'
             });
         }
 
-        // Insert message
+        // ДОБАВЛЕНО: проверка файла
+        if (fileId) {
+            const fileCheck = await query(
+                'SELECT id FROM files WHERE id = $1 AND uploaded_by = $2',
+                [fileId, userId]
+            );
+            if (fileCheck.rows.length === 0) {
+                return res.status(404).json({ 
+                    error: 'File not found or access denied',
+                    code: 'FILE_NOT_FOUND'
+                });
+            }
+        }
+
+        // ИЗМЕНЕНО: добавлен file_id
         const result = await query(
-            `INSERT INTO messages (chat_id, user_id, content)
-             VALUES ($1, $2, $3)
-             RETURNING id, content, created_at, is_edited, is_deleted`,
-            [chatId, userId, content.trim()]
+            `INSERT INTO messages (chat_id, user_id, content, file_id)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id, content, file_id, created_at, is_edited, is_deleted`,
+            [chatId, userId, content ? content.trim() : null, fileId || null]
         );
 
         const message = result.rows[0];
 
-        // Update chat timestamp
         await query(
             'UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id = $1',
             [chatId]
         );
 
-        // Get user info
         const userInfo = await query(
             'SELECT username, name, role FROM users WHERE id = $1',
             [userId]
         );
+
+        // ДОБАВЛЕНО: получение информации о файле
+        let fileInfo = null;
+        if (message.file_id) {
+            const fileResult = await query(
+                `SELECT id, original_filename, mime_type, size_bytes, 
+                        file_type, thumbnail_path, width, height
+                 FROM files WHERE id = $1`,
+                [message.file_id]
+            );
+
+            if (fileResult.rows.length > 0) {
+                const file = fileResult.rows[0];
+                fileInfo = {
+                    id: file.id,
+                    filename: file.original_filename,
+                    mimeType: file.mime_type,
+                    size: file.size_bytes,
+                    type: file.file_type,
+                    url: `/api/files/${file.id}`,
+                    thumbnailUrl: file.thumbnail_path ? `/api/files/${file.id}/thumbnail` : null,
+                    width: file.width,
+                    height: file.height
+                };
+
+                await query(
+                    'UPDATE files SET message_id = $1 WHERE id = $2',
+                    [message.id, file.id]
+                );
+            }
+        }
 
         res.status(201).json({
             message: {
@@ -114,7 +197,8 @@ const sendMessage = async (req, res) => {
                 user_id: userId,
                 username: userInfo.rows[0].username,
                 user_name: userInfo.rows[0].name,
-                user_role: userInfo.rows[0].role
+                user_role: userInfo.rows[0].role,
+                file: fileInfo  // ДОБАВЛЕНО
             }
         });
     } catch (error) {

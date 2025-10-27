@@ -86,13 +86,14 @@ const initializeSocket = (server) => {
             console.error('Error joining chat rooms:', error);
         }
 
-        // Handle new message
+        // ==================== UPDATED: Handle new message with file support ====================
         socket.on('send_message', async (data) => {
             try {
-                const { chatId, content } = data;
+                const { chatId, content, fileId } = data;
 
-                if (!content || content.trim().length === 0) {
-                    socket.emit('error', { message: 'Message content is required' });
+                // At least content OR fileId must be provided
+                if ((!content || content.trim().length === 0) && !fileId) {
+                    socket.emit('error', { message: 'Message content or file is required' });
                     return;
                 }
 
@@ -104,20 +105,68 @@ const initializeSocket = (server) => {
                     return;
                 }
 
+                // If fileId provided, verify it exists and belongs to user
+                if (fileId) {
+                    const fileCheck = await query(
+                        'SELECT id FROM files WHERE id = $1 AND uploaded_by = $2',
+                        [fileId, userId]
+                    );
+
+                    if (fileCheck.rows.length === 0) {
+                        socket.emit('error', { message: 'File not found or access denied' });
+                        return;
+                    }
+                }
+
                 // Insert message to database
                 const result = await query(
-                    `INSERT INTO messages (chat_id, user_id, content)
-                     VALUES ($1, $2, $3)
-                     RETURNING id, content, created_at, is_edited`,
-                    [chatId, userId, content.trim()]
+                    `INSERT INTO messages (chat_id, user_id, content, file_id)
+                     VALUES ($1, $2, $3, $4)
+                     RETURNING id, content, file_id, created_at, is_edited`,
+                    [chatId, userId, content ? content.trim() : null, fileId || null]
                 );
 
+                const messageData = result.rows[0];
+
+                // Get file info if attached
+                let fileInfo = null;
+                if (messageData.file_id) {
+                    const fileResult = await query(
+                        `SELECT id, original_filename, mime_type, size_bytes, 
+                                file_type, thumbnail_path, width, height
+                         FROM files WHERE id = $1`,
+                        [messageData.file_id]
+                    );
+
+                    if (fileResult.rows.length > 0) {
+                        const file = fileResult.rows[0];
+                        fileInfo = {
+                            id: file.id,
+                            filename: file.original_filename,
+                            mimeType: file.mime_type,
+                            size: file.size_bytes,
+                            type: file.file_type,
+                            url: `/api/files/${file.id}`,
+                            thumbnailUrl: file.thumbnail_path ? `/api/files/${file.id}/thumbnail` : null,
+                            width: file.width,
+                            height: file.height
+                        };
+
+                        // Update file's message_id
+                        await query(
+                            'UPDATE files SET message_id = $1 WHERE id = $2',
+                            [messageData.id, file.id]
+                        );
+                    }
+                }
+
                 const message = {
-                    ...result.rows[0],
+                    ...messageData,
                     user_id: userId,
                     username: socket.user.username,
                     user_name: socket.user.name,
-                    user_role: socket.user.role
+                    user_role: socket.user.role,
+                    file: fileInfo
                 };
 
                 // Update chat timestamp
