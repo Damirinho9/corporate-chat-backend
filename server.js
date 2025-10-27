@@ -15,7 +15,32 @@ const apiRoutes = require('./routes/api');
 const app = express();
 const server = http.createServer(app);
 const io = initializeSocket(server);
+// ДОБАВЬТЕ ЭТИ ИМПОРТЫ В НАЧАЛО ФАЙЛА:
+const { Logger, accessLogger, errorLogger } = require('./utils/logger');
+const { scheduleBackups } = require('./scripts/backup');
 
+const logger = new Logger('server');
+
+// ДОБАВЬТЕ ПОСЛЕ ДРУГИХ MIDDLEWARE:
+// Access logging
+app.use(accessLogger);
+
+// ДОБАВЬТЕ ПЕРЕД ФИНАЛЬНЫМ ERROR HANDLER:
+// Error logging
+app.use(errorLogger);
+
+// ДОБАВЬТЕ В ФУНКЦИЮ startServer() ПОСЛЕ ЗАПУСКА СЕРВЕРА:
+// Start automatic backups
+scheduleBackups();
+
+// Log startup
+logger.info('Server started', {
+    port: PORT,
+    env: process.env.NODE_ENV
+});
+
+// ДОБАВЬТЕ ДЛЯ СТАТИЧЕСКИХ ФАЙЛОВ:
+app.use('/uploads', express.static('uploads'));
 // ==================== MIDDLEWARE ====================
 
 // Trust proxy для Render (ВАЖНО!)
