@@ -1,7 +1,7 @@
 // ДОБАВЬТЕ ЭТИ ИМПОРТЫ В НАЧАЛО ФАЙЛА:
 const { uploadSingle, uploadMultiple, validateFile } = require('../middleware/fileUpload');
 const fileController = require('../controllers/fileController');
-
+const fileRoutes = require('./files');
 // ДОБАВЬТЕ ЭТИ МАРШРУТЫ В СЕКЦИЮ FILE ROUTES:
 // ==================== FILE ROUTES ====================
 router.post('/chats/:chatId/upload',
@@ -319,5 +319,5 @@ router.get('/health', (req, res) => {
         uptime: process.uptime()
     });
 });
-
+router.use('/files', fileRoutes);
 module.exports = router;

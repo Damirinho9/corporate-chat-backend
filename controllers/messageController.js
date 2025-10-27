@@ -1,36 +1,98 @@
-const { query } = require('../config/database');
+const { query, transaction } = require('../config/database');
 
-// Get messages from chat with pagination
+// Get messages for chat
 const getMessages = async (req, res) => {
     try {
         const { chatId } = req.params;
-        const { limit = 50, offset = 0, before } = req.query;
+        const userId = req.user.id;
+        const { limit = 100, before, after } = req.query;
 
-        // ИЗМЕНЕНО: добавлен LEFT JOIN на files
+        // Check access
+        const accessCheck = await query(
+            'SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
+            [chatId, userId]
+        );
+
+        if (accessCheck.rows.length === 0 && req.user.role !== 'admin') {
+            return res.status(403).json({ 
+                error: 'Access denied to this chat',
+                code: 'CHAT_ACCESS_DENIED'
+            });
+        }
+
         let queryText = `
             SELECT 
                 m.id,
                 m.content,
-                m.is_edited,
-                m.is_deleted,
                 m.created_at,
                 m.updated_at,
-                m.file_id,
-                u.id as user_id,
-                u.username,
+                m.is_edited,
+                m.reply_to_id,
+                m.forwarded_from_id,
+                m.user_id,
                 u.name as user_name,
-                u.role as user_role,
-                f.id as file_id_check,
-                f.original_filename as file_name,
-                f.mime_type as file_mime_type,
-                f.size_bytes as file_size,
-                f.file_type as file_type,
-                f.thumbnail_path,
-                f.width as file_width,
-                f.height as file_height
+                u.username,
+                (
+                    SELECT json_build_object(
+                        'id', f.id,
+                        'filename', f.original_filename,
+                        'size', f.size_bytes,
+                        'mimeType', f.mime_type,
+                        'type', f.file_type,
+                        'url', '/api/files/' || f.id,
+                        'thumbnailUrl', CASE WHEN f.thumbnail_path IS NOT NULL 
+                            THEN '/api/files/' || f.id || '/thumbnail' 
+                            ELSE NULL END,
+                        'width', f.width,
+                        'height', f.height
+                    )
+                    FROM files f WHERE f.id = m.file_id
+                ) as file,
+                (
+                    SELECT json_build_object(
+                        'id', rm.id,
+                        'content', rm.content,
+                        'user_id', rm.user_id,
+                        'user_name', ru.name
+                    )
+                    FROM messages rm
+                    JOIN users ru ON rm.user_id = ru.id
+                    WHERE rm.id = m.reply_to_id
+                ) as reply_to,
+                (
+                    SELECT json_build_object(
+                        'id', fm.id,
+                        'content', fm.content,
+                        'user_id', fm.user_id,
+                        'user_name', fu.name,
+                        'chat_id', fm.chat_id
+                    )
+                    FROM messages fm
+                    JOIN users fu ON fm.user_id = fu.id
+                    WHERE fm.id = m.forwarded_from_id
+                ) as forwarded_from,
+                (
+                    SELECT json_agg(json_build_object(
+                        'emoji', r.emoji,
+                        'user_id', r.user_id,
+                        'user_name', ru.name
+                    ))
+                    FROM reactions r
+                    JOIN users ru ON r.user_id = ru.id
+                    WHERE r.message_id = m.id
+                ) as reactions,
+                (
+                    SELECT json_agg(json_build_object(
+                        'user_id', mt.user_id,
+                        'user_name', mu.name,
+                        'username', mu.username
+                    ))
+                    FROM mentions mt
+                    JOIN users mu ON mt.user_id = mu.id
+                    WHERE mt.message_id = m.id
+                ) as mentions
             FROM messages m
             JOIN users u ON m.user_id = u.id
-            LEFT JOIN files f ON m.file_id = f.id
             WHERE m.chat_id = $1
         `;
 
@@ -43,57 +105,20 @@ const getMessages = async (req, res) => {
             paramCount++;
         }
 
-        queryText += ` ORDER BY m.created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-        params.push(limit, offset);
+        if (after) {
+            queryText += ` AND m.created_at > $${paramCount}`;
+            params.push(after);
+            paramCount++;
+        }
+
+        queryText += ` ORDER BY m.created_at DESC LIMIT $${paramCount}`;
+        params.push(limit);
 
         const result = await query(queryText, params);
 
-        // ИЗМЕНЕНО: добавлена информация о файле
-        const messages = result.rows.reverse().map(msg => {
-            const message = {
-                id: msg.id,
-                content: msg.content,
-                is_edited: msg.is_edited,
-                is_deleted: msg.is_deleted,
-                created_at: msg.created_at,
-                updated_at: msg.updated_at,
-                user_id: msg.user_id,
-                username: msg.username,
-                user_name: msg.user_name,
-                user_role: msg.user_role
-            };
-
-            // ДОБАВЛЕНО: файл если есть
-            if (msg.file_id_check) {
-                message.file = {
-                    id: msg.file_id_check,
-                    filename: msg.file_name,
-                    mimeType: msg.file_mime_type,
-                    size: msg.file_size,
-                    type: msg.file_type,
-                    url: `/api/files/${msg.file_id_check}`,
-                    thumbnailUrl: msg.thumbnail_path ? `/api/files/${msg.file_id_check}/thumbnail` : null,
-                    width: msg.file_width,
-                    height: msg.file_height
-                };
-            }
-
-            return message;
-        });
-
-        const countResult = await query(
-            'SELECT COUNT(*) as total FROM messages WHERE chat_id = $1',
-            [chatId]
-        );
-
-        res.json({
-            messages,
-            pagination: {
-                total: parseInt(countResult.rows[0].total),
-                limit: parseInt(limit),
-                offset: parseInt(offset),
-                hasMore: parseInt(offset) + messages.length < parseInt(countResult.rows[0].total)
-            }
+        res.json({ 
+            messages: result.rows.reverse(),
+            count: result.rows.length 
         });
     } catch (error) {
         console.error('Get messages error:', error);
@@ -108,98 +133,149 @@ const getMessages = async (req, res) => {
 const sendMessage = async (req, res) => {
     try {
         const { chatId } = req.params;
-        const { content, fileId } = req.body;  // ДОБАВЛЕНО: fileId
+        const { content, fileId, replyToId, forwardedFromId, mentions } = req.body;
         const userId = req.user.id;
 
-        // ИЗМЕНЕНО: content ИЛИ fileId должны быть
-        if ((!content || content.trim().length === 0) && !fileId) {
+        // Check access
+        const accessCheck = await query(
+            'SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
+            [chatId, userId]
+        );
+
+        if (accessCheck.rows.length === 0 && req.user.role !== 'admin') {
+            return res.status(403).json({ 
+                error: 'Access denied to this chat',
+                code: 'CHAT_ACCESS_DENIED'
+            });
+        }
+
+        if (!content && !fileId) {
             return res.status(400).json({ 
                 error: 'Message content or file is required',
                 code: 'EMPTY_MESSAGE'
             });
         }
 
-        if (content && content.length > 5000) {
-            return res.status(400).json({ 
-                error: 'Message is too long (max 5000 characters)',
-                code: 'MESSAGE_TOO_LONG'
-            });
-        }
-
-        // ДОБАВЛЕНО: проверка файла
-        if (fileId) {
-            const fileCheck = await query(
-                'SELECT id FROM files WHERE id = $1 AND uploaded_by = $2',
-                [fileId, userId]
+        // Verify reply_to exists
+        if (replyToId) {
+            const replyCheck = await query(
+                'SELECT id FROM messages WHERE id = $1 AND chat_id = $2',
+                [replyToId, chatId]
             );
-            if (fileCheck.rows.length === 0) {
+            if (replyCheck.rows.length === 0) {
                 return res.status(404).json({ 
-                    error: 'File not found or access denied',
-                    code: 'FILE_NOT_FOUND'
+                    error: 'Reply message not found',
+                    code: 'REPLY_NOT_FOUND'
                 });
             }
         }
 
-        // ИЗМЕНЕНО: добавлен file_id
-        const result = await query(
-            `INSERT INTO messages (chat_id, user_id, content, file_id)
-             VALUES ($1, $2, $3, $4)
-             RETURNING id, content, file_id, created_at, is_edited, is_deleted`,
-            [chatId, userId, content ? content.trim() : null, fileId || null]
-        );
-
-        const message = result.rows[0];
-
-        await query(
-            'UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-            [chatId]
-        );
-
-        const userInfo = await query(
-            'SELECT username, name, role FROM users WHERE id = $1',
-            [userId]
-        );
-
-        // ДОБАВЛЕНО: получение информации о файле
-        let fileInfo = null;
-        if (message.file_id) {
-            const fileResult = await query(
-                `SELECT id, original_filename, mime_type, size_bytes, 
-                        file_type, thumbnail_path, width, height
-                 FROM files WHERE id = $1`,
-                [message.file_id]
-            );
-
-            if (fileResult.rows.length > 0) {
-                const file = fileResult.rows[0];
-                fileInfo = {
-                    id: file.id,
-                    filename: file.original_filename,
-                    mimeType: file.mime_type,
-                    size: file.size_bytes,
-                    type: file.file_type,
-                    url: `/api/files/${file.id}`,
-                    thumbnailUrl: file.thumbnail_path ? `/api/files/${file.id}/thumbnail` : null,
-                    width: file.width,
-                    height: file.height
-                };
-
-                await query(
-                    'UPDATE files SET message_id = $1 WHERE id = $2',
-                    [message.id, file.id]
-                );
+        // Verify forwarded_from exists
+        if (forwardedFromId) {
+            const forwardCheck = await query('SELECT id FROM messages WHERE id = $1', [forwardedFromId]);
+            if (forwardCheck.rows.length === 0) {
+                return res.status(404).json({ 
+                    error: 'Forwarded message not found',
+                    code: 'FORWARD_NOT_FOUND'
+                });
             }
         }
 
-        res.status(201).json({
-            message: {
-                ...message,
-                user_id: userId,
-                username: userInfo.rows[0].username,
-                user_name: userInfo.rows[0].name,
-                user_role: userInfo.rows[0].role,
-                file: fileInfo  // ДОБАВЛЕНО
+        const result = await transaction(async (client) => {
+            // Insert message
+            const messageResult = await client.query(
+                `INSERT INTO messages (chat_id, user_id, content, file_id, reply_to_id, forwarded_from_id)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 RETURNING *`,
+                [chatId, userId, content || null, fileId || null, replyToId || null, forwardedFromId || null]
+            );
+
+            const message = messageResult.rows[0];
+
+            // Insert mentions if provided
+            if (mentions && mentions.length > 0) {
+                const mentionValues = mentions.map((mentionUserId, i) => 
+                    `($1, $${i + 2})`
+                ).join(', ');
+                
+                await client.query(
+                    `INSERT INTO mentions (message_id, user_id)
+                     VALUES ${mentionValues}
+                     ON CONFLICT DO NOTHING`,
+                    [message.id, ...mentions]
+                );
             }
+
+            // Update file message_id
+            if (fileId) {
+                await client.query(
+                    'UPDATE files SET message_id = $1 WHERE id = $2',
+                    [message.id, fileId]
+                );
+            }
+
+            // Update chat timestamp
+            await client.query(
+                'UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+                [chatId]
+            );
+
+            return message;
+        });
+
+        // Fetch complete message with relations
+        const completeMessage = await query(
+            `SELECT 
+                m.id,
+                m.content,
+                m.created_at,
+                m.user_id,
+                u.name as user_name,
+                u.username,
+                (
+                    SELECT json_build_object(
+                        'id', f.id,
+                        'filename', f.original_filename,
+                        'size', f.size_bytes,
+                        'mimeType', f.mime_type,
+                        'type', f.file_type,
+                        'url', '/api/files/' || f.id,
+                        'thumbnailUrl', CASE WHEN f.thumbnail_path IS NOT NULL 
+                            THEN '/api/files/' || f.id || '/thumbnail' 
+                            ELSE NULL END
+                    )
+                    FROM files f WHERE f.id = m.file_id
+                ) as file,
+                (
+                    SELECT json_build_object(
+                        'id', rm.id,
+                        'content', rm.content,
+                        'user_id', rm.user_id,
+                        'user_name', ru.name
+                    )
+                    FROM messages rm
+                    JOIN users ru ON rm.user_id = ru.id
+                    WHERE rm.id = m.reply_to_id
+                ) as reply_to,
+                (
+                    SELECT json_agg(json_build_object(
+                        'user_id', mt.user_id,
+                        'user_name', mu.name,
+                        'username', mu.username
+                    ))
+                    FROM mentions mt
+                    JOIN users mu ON mt.user_id = mu.id
+                    WHERE mt.message_id = m.id
+                ) as mentions
+            FROM messages m
+            JOIN users u ON m.user_id = u.id
+            WHERE m.id = $1`,
+            [result.id]
+        );
+
+        res.status(201).json({
+            message: 'Message sent successfully',
+            message: completeMessage.rows[0]
         });
     } catch (error) {
         console.error('Send message error:', error);
@@ -217,16 +293,16 @@ const editMessage = async (req, res) => {
         const { content } = req.body;
         const userId = req.user.id;
 
-        if (!content || content.trim().length === 0) {
+        if (!content) {
             return res.status(400).json({ 
-                error: 'Message content is required',
-                code: 'EMPTY_MESSAGE'
+                error: 'Content is required',
+                code: 'EMPTY_CONTENT'
             });
         }
 
-        // Check if message exists and belongs to user
+        // Check ownership
         const messageCheck = await query(
-            'SELECT id, user_id, is_deleted FROM messages WHERE id = $1',
+            'SELECT user_id, chat_id FROM messages WHERE id = $1',
             [messageId]
         );
 
@@ -237,35 +313,22 @@ const editMessage = async (req, res) => {
             });
         }
 
-        const message = messageCheck.rows[0];
-
-        if (message.is_deleted) {
-            return res.status(400).json({ 
-                error: 'Cannot edit deleted message',
-                code: 'MESSAGE_DELETED'
-            });
-        }
-
-        // Only message owner or admin can edit
-        if (message.user_id !== userId && req.user.role !== 'admin') {
+        if (messageCheck.rows[0].user_id !== userId && req.user.role !== 'admin') {
             return res.status(403).json({ 
-                error: 'You can only edit your own messages',
-                code: 'EDIT_NOT_ALLOWED'
+                error: 'Cannot edit this message',
+                code: 'EDIT_DENIED'
             });
         }
 
         // Update message
-        const result = await query(
+        await query(
             `UPDATE messages 
              SET content = $1, is_edited = true, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $2
-             RETURNING id, content, is_edited, created_at, updated_at`,
-            [content.trim(), messageId]
+             WHERE id = $2`,
+            [content, messageId]
         );
 
-        res.json({
-            message: result.rows[0]
-        });
+        res.json({ message: 'Message edited successfully' });
     } catch (error) {
         console.error('Edit message error:', error);
         res.status(500).json({ 
@@ -275,15 +338,15 @@ const editMessage = async (req, res) => {
     }
 };
 
-// Delete message (soft delete)
+// Delete message
 const deleteMessage = async (req, res) => {
     try {
         const { messageId } = req.params;
         const userId = req.user.id;
 
-        // Check if message exists and belongs to user
+        // Check ownership
         const messageCheck = await query(
-            'SELECT id, user_id, is_deleted FROM messages WHERE id = $1',
+            'SELECT user_id, file_id FROM messages WHERE id = $1',
             [messageId]
         );
 
@@ -294,30 +357,15 @@ const deleteMessage = async (req, res) => {
             });
         }
 
-        const message = messageCheck.rows[0];
-
-        if (message.is_deleted) {
-            return res.status(400).json({ 
-                error: 'Message already deleted',
-                code: 'ALREADY_DELETED'
-            });
-        }
-
-        // Only message owner or admin can delete
-        if (message.user_id !== userId && req.user.role !== 'admin') {
+        if (messageCheck.rows[0].user_id !== userId && req.user.role !== 'admin') {
             return res.status(403).json({ 
-                error: 'You can only delete your own messages',
-                code: 'DELETE_NOT_ALLOWED'
+                error: 'Cannot delete this message',
+                code: 'DELETE_DENIED'
             });
         }
 
-        // Soft delete
-        await query(
-            `UPDATE messages 
-             SET is_deleted = true, content = '[Deleted]', updated_at = CURRENT_TIMESTAMP
-             WHERE id = $1`,
-            [messageId]
-        );
+        // Delete message (cascade handles mentions, reactions)
+        await query('DELETE FROM messages WHERE id = $1', [messageId]);
 
         res.json({ message: 'Message deleted successfully' });
     } catch (error) {
@@ -329,16 +377,168 @@ const deleteMessage = async (req, res) => {
     }
 };
 
-// Search messages in chat
+// Add reaction
+const addReaction = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const { emoji } = req.body;
+        const userId = req.user.id;
+
+        if (!emoji) {
+            return res.status(400).json({ 
+                error: 'Emoji is required',
+                code: 'MISSING_EMOJI'
+            });
+        }
+
+        // Check message exists and user has access
+        const messageCheck = await query(
+            `SELECT m.id, m.chat_id 
+             FROM messages m
+             JOIN chat_participants cp ON m.chat_id = cp.chat_id
+             WHERE m.id = $1 AND cp.user_id = $2`,
+            [messageId, userId]
+        );
+
+        if (messageCheck.rows.length === 0 && req.user.role !== 'admin') {
+            return res.status(403).json({ 
+                error: 'Access denied',
+                code: 'REACTION_ACCESS_DENIED'
+            });
+        }
+
+        // Add reaction (upsert)
+        await query(
+            `INSERT INTO reactions (message_id, user_id, emoji)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (message_id, user_id) 
+             DO UPDATE SET emoji = $3, created_at = CURRENT_TIMESTAMP`,
+            [messageId, userId, emoji]
+        );
+
+        res.json({ message: 'Reaction added successfully' });
+    } catch (error) {
+        console.error('Add reaction error:', error);
+        res.status(500).json({ 
+            error: 'Failed to add reaction',
+            code: 'ADD_REACTION_ERROR'
+        });
+    }
+};
+
+// Remove reaction
+const removeReaction = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user.id;
+
+        await query(
+            'DELETE FROM reactions WHERE message_id = $1 AND user_id = $2',
+            [messageId, userId]
+        );
+
+        res.json({ message: 'Reaction removed successfully' });
+    } catch (error) {
+        console.error('Remove reaction error:', error);
+        res.status(500).json({ 
+            error: 'Failed to remove reaction',
+            code: 'REMOVE_REACTION_ERROR'
+        });
+    }
+};
+
+// Forward message
+const forwardMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const { targetChatIds } = req.body;
+        const userId = req.user.id;
+
+        if (!targetChatIds || targetChatIds.length === 0) {
+            return res.status(400).json({ 
+                error: 'Target chat IDs are required',
+                code: 'MISSING_TARGET_CHATS'
+            });
+        }
+
+        // Get original message
+        const originalMessage = await query(
+            'SELECT content, file_id, user_id FROM messages WHERE id = $1',
+            [messageId]
+        );
+
+        if (originalMessage.rows.length === 0) {
+            return res.status(404).json({ 
+                error: 'Message not found',
+                code: 'MESSAGE_NOT_FOUND'
+            });
+        }
+
+        const original = originalMessage.rows[0];
+
+        // Forward to each target chat
+        const forwardedMessages = [];
+        for (const targetChatId of targetChatIds) {
+            // Check access to target chat
+            const accessCheck = await query(
+                'SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
+                [targetChatId, userId]
+            );
+
+            if (accessCheck.rows.length === 0 && req.user.role !== 'admin') {
+                continue;
+            }
+
+            const result = await query(
+                `INSERT INTO messages (chat_id, user_id, content, file_id, forwarded_from_id)
+                 VALUES ($1, $2, $3, $4, $5)
+                 RETURNING id`,
+                [targetChatId, userId, original.content, original.file_id, messageId]
+            );
+
+            forwardedMessages.push({
+                chatId: targetChatId,
+                messageId: result.rows[0].id
+            });
+        }
+
+        res.json({
+            message: 'Message forwarded successfully',
+            forwardedTo: forwardedMessages
+        });
+    } catch (error) {
+        console.error('Forward message error:', error);
+        res.status(500).json({ 
+            error: 'Failed to forward message',
+            code: 'FORWARD_MESSAGE_ERROR'
+        });
+    }
+};
+
+// Search messages
 const searchMessages = async (req, res) => {
     try {
         const { chatId } = req.params;
-        const { query: searchQuery, limit = 20 } = req.query;
+        const { query: searchQuery, limit = 50 } = req.query;
+        const userId = req.user.id;
 
-        if (!searchQuery || searchQuery.trim().length < 2) {
+        if (!searchQuery) {
             return res.status(400).json({ 
-                error: 'Search query must be at least 2 characters',
-                code: 'INVALID_SEARCH'
+                error: 'Search query is required',
+                code: 'MISSING_QUERY'
+            });
+        }
+
+        // Check access
+        const accessCheck = await query(
+            'SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
+            [chatId, userId]
+        );
+
+        if (accessCheck.rows.length === 0 && req.user.role !== 'admin') {
+            return res.status(403).json({ 
+                error: 'Access denied',
+                code: 'SEARCH_ACCESS_DENIED'
             });
         }
 
@@ -347,122 +547,25 @@ const searchMessages = async (req, res) => {
                 m.id,
                 m.content,
                 m.created_at,
+                m.user_id,
                 u.name as user_name
              FROM messages m
              JOIN users u ON m.user_id = u.id
-             WHERE m.chat_id = $1 
-             AND m.is_deleted = false
-             AND m.content ILIKE $2
+             WHERE m.chat_id = $1 AND m.content ILIKE $2
              ORDER BY m.created_at DESC
              LIMIT $3`,
             [chatId, `%${searchQuery}%`, limit]
         );
 
-        res.json({ results: result.rows });
+        res.json({ 
+            messages: result.rows,
+            count: result.rows.length 
+        });
     } catch (error) {
         console.error('Search messages error:', error);
         res.status(500).json({ 
             error: 'Failed to search messages',
-            code: 'SEARCH_ERROR'
-        });
-    }
-};
-
-// Get all messages across all chats (admin only - for monitoring)
-const getAllMessages = async (req, res) => {
-    try {
-        const { limit = 100, offset = 0 } = req.query;
-
-        const result = await query(
-            `SELECT 
-                m.id,
-                m.content,
-                m.is_edited,
-                m.is_deleted,
-                m.created_at,
-                m.chat_id,
-                c.name as chat_name,
-                c.type as chat_type,
-                u.id as user_id,
-                u.name as user_name,
-                u.role as user_role
-             FROM messages m
-             JOIN chats c ON m.chat_id = c.id
-             JOIN users u ON m.user_id = u.id
-             ORDER BY m.created_at DESC
-             LIMIT $1 OFFSET $2`,
-            [limit, offset]
-        );
-
-        const countResult = await query('SELECT COUNT(*) as total FROM messages');
-
-        res.json({
-            messages: result.rows,
-            pagination: {
-                total: parseInt(countResult.rows[0].total),
-                limit: parseInt(limit),
-                offset: parseInt(offset)
-            }
-        });
-    } catch (error) {
-        console.error('Get all messages error:', error);
-        res.status(500).json({ 
-            error: 'Failed to get all messages',
-            code: 'GET_ALL_MESSAGES_ERROR'
-        });
-    }
-};
-
-// Get message statistics (admin only)
-const getMessageStats = async (req, res) => {
-    try {
-        const stats = await query(`
-            SELECT 
-                COUNT(*) as total_messages,
-                COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as messages_today,
-                COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as messages_this_week,
-                COUNT(*) FILTER (WHERE is_edited = true) as edited_messages,
-                COUNT(*) FILTER (WHERE is_deleted = true) as deleted_messages,
-                COUNT(DISTINCT chat_id) as active_chats,
-                COUNT(DISTINCT user_id) as active_users
-            FROM messages
-        `);
-
-        const chatStats = await query(`
-            SELECT 
-                c.name as chat_name,
-                c.type as chat_type,
-                COUNT(m.id) as message_count,
-                MAX(m.created_at) as last_message_at
-            FROM chats c
-            LEFT JOIN messages m ON c.id = m.chat_id
-            GROUP BY c.id, c.name, c.type
-            ORDER BY message_count DESC
-            LIMIT 10
-        `);
-
-        const userStats = await query(`
-            SELECT 
-                u.name as user_name,
-                u.role as user_role,
-                COUNT(m.id) as message_count
-            FROM users u
-            LEFT JOIN messages m ON u.id = m.user_id
-            GROUP BY u.id, u.name, u.role
-            ORDER BY message_count DESC
-            LIMIT 10
-        `);
-
-        res.json({
-            overall: stats.rows[0],
-            topChats: chatStats.rows,
-            topUsers: userStats.rows
-        });
-    } catch (error) {
-        console.error('Get message stats error:', error);
-        res.status(500).json({ 
-            error: 'Failed to get message statistics',
-            code: 'GET_STATS_ERROR'
+            code: 'SEARCH_MESSAGES_ERROR'
         });
     }
 };
@@ -472,7 +575,8 @@ module.exports = {
     sendMessage,
     editMessage,
     deleteMessage,
-    searchMessages,
-    getAllMessages,
-    getMessageStats
+    addReaction,
+    removeReaction,
+    forwardMessage,
+    searchMessages
 };
