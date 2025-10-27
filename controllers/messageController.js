@@ -570,8 +570,6 @@ const searchMessages = async (req, res) => {
     }
 };
 
-};
-
 // Get all messages (admin only)
 const getAllMessages = async (req, res) => {
     try {
