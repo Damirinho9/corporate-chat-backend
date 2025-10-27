@@ -53,6 +53,26 @@
             font-size: 12px;
             color: #cbd5e0;
         }
+        /* Кнопка перехода в чат */
+        .chat-link-btn {
+            display: block;
+            margin: 0 0 20px 0;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);
+        }
+        
+        .chat-link-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+        }
+
 
         .nav-item {
             padding: 12px 15px;
@@ -437,6 +457,11 @@
                 <h3 id="adminName">Administrator</h3>
                 <p id="adminRole">admin</p>
             </div>
+
+            <!-- Кнопка перехода в чат -->
+            <a href="/index.html" class="chat-link-btn">
+                💬 Перейти в чат
+            </a>
 
             <nav>
                 <div class="nav-item active" data-section="dashboard">
