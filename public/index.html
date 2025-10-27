@@ -212,6 +212,9 @@
             align-items: center;
             justify-content: center;
             font-weight: 600;
+
+            /* аватар всегда круглый */
+            aspect-ratio: 1 / 1; /* фикс узкого овала */
         }
 
         .user-details h3 {
@@ -814,6 +817,7 @@
                         </div>
                     </div>
                     <div class="header-actions">
+                        <button class="icon-btn" id="adminBtn" title="Админ-панель" style="display:none">🛠️</button>
                         <button class="icon-btn" id="themeToggle" title="Тема">🌓</button>
                         <button class="icon-btn" id="logoutBtn" title="Выход">🚪</button>
                     </div>
@@ -1118,17 +1122,34 @@
         // ==================== SHOW CHAT APP ====================
         function showChatApp() {
             console.log('🔵 Showing chat app');
-            
+
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('chatApp').style.display = 'block';
-            
-            const initials = currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase();
-            document.getElementById('userAvatar').textContent = initials;
-            document.getElementById('userName').textContent = currentUser.name;
-            document.getElementById('userRole').textContent = currentUser.role;
-            
+
+            updateUserUI(currentUser); // <-- добавлен вызов для отображения кнопки админки и аватара
+
             connectSocket();
             loadChats();
+        }
+
+        function updateUserUI(user) {
+            document.getElementById('userName').textContent = user.name;
+            document.getElementById('userRole').textContent = user.role;
+            document.getElementById('userAvatar').textContent =
+                (user.name || user.username || '?')
+                    .split(' ')
+                    .map(w => w[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase();
+
+            const adminBtn = document.getElementById('adminBtn');
+            if (user.role === 'admin') {
+                adminBtn.style.display = 'grid';
+                adminBtn.onclick = () => window.location.href = '/admin-panel.html';
+            } else {
+                adminBtn.style.display = 'none';
+            }
         }
 
         // ==================== SOCKET ====================
@@ -1490,6 +1511,10 @@
                 this.style.height = 'auto';
                 this.style.height = (this.scrollHeight) + 'px';
             });
+
+            // 🟢 добавлено: восстановление пользователя из localStorage
+            const savedUser = JSON.parse(localStorage.getItem('user') || 'null');
+            if (savedUser) updateUserUI(savedUser);
             
             if (token && currentUser) {
                 console.log('✅ Already logged in');

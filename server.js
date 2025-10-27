@@ -63,6 +63,11 @@ app.use('/api', apiRoutes);
 // Раздача статики
 app.use(express.static(path.join(__dirname, 'public')));
 
+// 🔧 Админ-панель по короткому пути /admin
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin-panel.html'));
+});
+
 // Главная страница
 app.get('/', (req, res) => {
   const indexPath = path.join(__dirname, 'public', 'index.html');
