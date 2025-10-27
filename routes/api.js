@@ -14,7 +14,7 @@ const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
 
 const { authenticateToken, requireAdmin, requireHead } = require('../middleware/auth');
-const { canAccessChat, canSendToChat, canCreateDirectMessage, canViewAllMessages } = require('../middleware/permissions');
+const { canAccessChat, canSendToChat, canCreateDirectMessage } = require('../middleware/permissions');
 
 const { body, param, query: queryValidator, validationResult } = require('express-validator');
 
@@ -269,11 +269,8 @@ router.get('/chats/:chatId/messages/search',
 router.get('/messages/all',
     authenticateToken,
     requireAdmin,
-    canViewAllMessages,
-    [
-        queryValidator('limit').optional().isInt({ min: 1, max: 200 }),
-        queryValidator('offset').optional().isInt({ min: 0 })
-    ],
+    queryValidator('limit').optional().isInt({ min: 1, max: 200 }),
+    queryValidator('offset').optional().isInt({ min: 0 }),
     validate,
     messageController.getAllMessages
 );
