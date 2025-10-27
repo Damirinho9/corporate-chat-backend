@@ -213,17 +213,6 @@ const getUserFiles = async (req, res) => {
     }
 };
 
-module.exports = {
-    uploadFile,
-    getFile,
-    getFileThumbnail,
-    deleteFile,
-    getUserFiles,
-    uploadFileToMessage,
-    uploadMultipleFiles,
-    deleteFileFromMessage,
-    getFileStats
-};
 
 // Upload file to message
 const uploadFileToMessage = async (req, res) => {
@@ -440,4 +429,16 @@ const getFileStats = async (req, res) => {
             code: 'GET_FILE_STATS_ERROR'
         });
     }
+};
+
+module.exports = {
+    uploadFile,
+    getFile,
+    getFileThumbnail,
+    deleteFile,
+    getUserFiles,
+    uploadFileToMessage,
+    uploadMultipleFiles,
+    deleteFileFromMessage,
+    getFileStats
 };

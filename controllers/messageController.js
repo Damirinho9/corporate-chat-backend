@@ -570,17 +570,6 @@ const searchMessages = async (req, res) => {
     }
 };
 
-module.exports = {
-    getMessages,
-    sendMessage,
-    editMessage,
-    deleteMessage,
-    addReaction,
-    removeReaction,
-    forwardMessage,
-    searchMessages,
-    getAllMessages,
-    getMessageStats
 };
 
 // Get all messages (admin only)
@@ -657,4 +646,17 @@ const getMessageStats = async (req, res) => {
             code: 'GET_MESSAGE_STATS_ERROR'
         });
     }
+};
+
+module.exports = {
+    getMessages,
+    sendMessage,
+    editMessage,
+    deleteMessage,
+    addReaction,
+    removeReaction,
+    forwardMessage,
+    searchMessages,
+    getAllMessages,
+    getMessageStats
 };
