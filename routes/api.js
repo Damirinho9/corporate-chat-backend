@@ -1,54 +1,28 @@
-// ДОБАВЬТЕ ЭТИ ИМПОРТЫ В НАЧАЛО ФАЙЛА:
+// ==================== BASE INIT ====================
+const express = require('express');
+const router = express.Router();
+const { query } = require('../config/database');
+
+// ==================== IMPORTS ====================
 const { uploadSingle, uploadMultiple, validateFile } = require('../middleware/fileUpload');
 const fileController = require('../controllers/fileController');
 const fileRoutes = require('./files');
-// ДОБАВЬТЕ ЭТИ МАРШРУТЫ В СЕКЦИЮ FILE ROUTES:
-// ==================== FILE ROUTES ====================
-router.post('/chats/:chatId/upload',
-    authenticateToken,
-    canAccessChat,
-    canSendToChat,
-    uploadSingle,
-    validateFile,
-    fileController.uploadFileToMessage
-);
 
-router.post('/chats/:chatId/upload-multiple',
-    authenticateToken,
-    canAccessChat,
-    canSendToChat,
-    uploadMultiple,
-    validateFile,
-    fileController.uploadMultipleFiles
-);
-
-router.delete('/messages/:messageId/file',
-    authenticateToken,
-    fileController.deleteFileFromMessage
-);
-
-router.get('/files/stats',
-    authenticateToken,
-    requireAdmin,
-    fileController.getFileStats
-);
-
-const express = require('express');
-const router = express.Router();
-const { query } = require('../config/database'); // ADDED!
 const authController = require('../controllers/authController');
 const userController = require('../controllers/userController');
 const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
+
 const { authenticateToken, requireAdmin, requireHead } = require('../middleware/auth');
 const { canAccessChat, canSendToChat, canCreateDirectMessage, canViewAllMessages } = require('../middleware/permissions');
+
 const { body, param, query: queryValidator, validationResult } = require('express-validator');
 
-// ADMIN ROUTES - IMPORT
+// ADMIN ROUTES - IMPORTS
 const adminBasic = require('./admin-basic');
 const adminExtended = require('./admin-extended');
 
-// Validation middleware
+// ==================== VALIDATION ====================
 const validate = (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -105,7 +79,6 @@ router.put('/auth/change-password',
 
 // ==================== USER ROUTES ====================
 router.get('/users', authenticateToken, requireAdmin, userController.getAllUsers);
-
 router.get('/users/stats', authenticateToken, requireAdmin, userController.getUserStats);
 
 router.get('/users/role/:role',
@@ -311,6 +284,38 @@ router.get('/messages/stats',
     messageController.getMessageStats
 );
 
+// ==================== FILE ROUTES ====================
+router.post('/chats/:chatId/upload',
+    authenticateToken,
+    canAccessChat,
+    canSendToChat,
+    uploadSingle,
+    validateFile,
+    fileController.uploadFileToMessage
+);
+
+router.post('/chats/:chatId/upload-multiple',
+    authenticateToken,
+    canAccessChat,
+    canSendToChat,
+    uploadMultiple,
+    validateFile,
+    fileController.uploadMultipleFiles
+);
+
+router.delete('/messages/:messageId/file',
+    authenticateToken,
+    fileController.deleteFileFromMessage
+);
+
+router.get('/files/stats',
+    authenticateToken,
+    requireAdmin,
+    fileController.getFileStats
+);
+
+router.use('/files', fileRoutes);
+
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {
     res.json({
@@ -319,5 +324,335 @@ router.get('/health', (req, res) => {
         uptime: process.uptime()
     });
 });
+
+// ==================== EXPORT ====================
+module.exports = router;
+// ==================== BASE INIT ====================
+const express = require('express');
+const router = express.Router();
+const { query } = require('../config/database');
+
+// ==================== IMPORTS ====================
+const { uploadSingle, uploadMultiple, validateFile } = require('../middleware/fileUpload');
+const fileController = require('../controllers/fileController');
+const fileRoutes = require('./files');
+
+const authController = require('../controllers/authController');
+const userController = require('../controllers/userController');
+const chatController = require('../controllers/chatController');
+const messageController = require('../controllers/messageController');
+
+const { authenticateToken, requireAdmin, requireHead } = require('../middleware/auth');
+const { canAccessChat, canSendToChat, canCreateDirectMessage, canViewAllMessages } = require('../middleware/permissions');
+
+const { body, param, query: queryValidator, validationResult } = require('express-validator');
+
+// ADMIN ROUTES - IMPORTS
+const adminBasic = require('./admin-basic');
+const adminExtended = require('./admin-extended');
+
+// ==================== VALIDATION ====================
+const validate = (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+    next();
+};
+
+// ==================== ADMIN ROUTES ====================
+router.use('/', adminBasic);
+router.use('/', adminExtended);
+
+// ==================== AUTH ROUTES ====================
+router.post('/auth/register',
+    authenticateToken,
+    requireAdmin,
+    [
+        body('username').trim().isLength({ min: 3, max: 50 }),
+        body('password').isLength({ min: 6 }),
+        body('name').trim().isLength({ min: 2, max: 100 }),
+        body('role').isIn(['admin', 'head', 'employee']),
+        body('department').optional().trim()
+    ],
+    validate,
+    authController.register
+);
+
+router.post('/auth/login',
+    [
+        body('username').trim().notEmpty(),
+        body('password').notEmpty()
+    ],
+    validate,
+    authController.login
+);
+
+router.post('/auth/refresh',
+    [body('refreshToken').notEmpty()],
+    validate,
+    authController.refresh
+);
+
+router.get('/auth/profile', authenticateToken, authController.getProfile);
+
+router.put('/auth/change-password',
+    authenticateToken,
+    [
+        body('currentPassword').notEmpty(),
+        body('newPassword').isLength({ min: 6 })
+    ],
+    validate,
+    authController.changePassword
+);
+
+// ==================== USER ROUTES ====================
+router.get('/users', authenticateToken, requireAdmin, userController.getAllUsers);
+router.get('/users/stats', authenticateToken, requireAdmin, userController.getUserStats);
+
+router.get('/users/role/:role',
+    authenticateToken,
+    requireHead,
+    [param('role').isIn(['admin', 'head', 'employee'])],
+    validate,
+    userController.getUsersByRole
+);
+
+router.get('/users/department/:department',
+    authenticateToken,
+    requireHead,
+    userController.getUsersByDepartment
+);
+
+router.get('/users/:userId',
+    authenticateToken,
+    [param('userId').isInt()],
+    validate,
+    userController.getUserById
+);
+
+router.put('/users/:userId',
+    authenticateToken,
+    requireAdmin,
+    [
+        param('userId').isInt(),
+        body('name').optional().trim().isLength({ min: 2, max: 100 }),
+        body('role').optional().isIn(['admin', 'head', 'employee']),
+        body('department').optional().trim(),
+        body('isActive').optional().isBoolean()
+    ],
+    validate,
+    userController.updateUser
+);
+
+router.delete('/users/:userId',
+    authenticateToken,
+    requireAdmin,
+    [param('userId').isInt()],
+    validate,
+    userController.deleteUser
+);
+
+router.post('/users/:userId/reset-password',
+    authenticateToken,
+    requireAdmin,
+    [
+        param('userId').isInt(),
+        body('newPassword').isLength({ min: 6 })
+    ],
+    validate,
+    userController.resetPassword
+);
+
+// ==================== CHAT ROUTES ====================
+router.get('/chats',
+    authenticateToken,
+    [
+        queryValidator('limit').optional().isInt({ min: 1, max: 100 }),
+        queryValidator('offset').optional().isInt({ min: 0 })
+    ],
+    validate,
+    chatController.getUserChats
+);
+
+router.get('/chats/:chatId',
+    authenticateToken,
+    [param('chatId').isInt()],
+    validate,
+    canAccessChat,
+    chatController.getChatById
+);
+
+router.post('/chats/direct',
+    authenticateToken,
+    [body('receiverId').isInt()],
+    validate,
+    canCreateDirectMessage,
+    chatController.createDirectChat
+);
+
+router.post('/chats/group',
+    authenticateToken,
+    requireAdmin,
+    [
+        body('name').trim().isLength({ min: 2, max: 100 }),
+        body('participantIds').isArray({ min: 1 })
+    ],
+    validate,
+    chatController.createGroupChat
+);
+
+router.post('/chats/:chatId/participants',
+    authenticateToken,
+    requireAdmin,
+    [
+        param('chatId').isInt(),
+        body('userId').isInt()
+    ],
+    validate,
+    chatController.addParticipant
+);
+
+router.delete('/chats/:chatId/participants/:userId',
+    authenticateToken,
+    requireAdmin,
+    [
+        param('chatId').isInt(),
+        param('userId').isInt()
+    ],
+    validate,
+    chatController.removeParticipant
+);
+
+router.put('/chats/:chatId/read',
+    authenticateToken,
+    [param('chatId').isInt()],
+    validate,
+    canAccessChat,
+    chatController.markAsRead
+);
+
+router.delete('/chats/:chatId',
+    authenticateToken,
+    requireAdmin,
+    [param('chatId').isInt()],
+    validate,
+    chatController.deleteChat
+);
+
+// ==================== MESSAGE ROUTES ====================
+router.get('/chats/:chatId/messages',
+    authenticateToken,
+    [
+        param('chatId').isInt(),
+        queryValidator('limit').optional().isInt({ min: 1, max: 100 }),
+        queryValidator('offset').optional().isInt({ min: 0 }),
+        queryValidator('before').optional().isISO8601()
+    ],
+    validate,
+    canAccessChat,
+    messageController.getMessages
+);
+
+router.post('/chats/:chatId/messages',
+    authenticateToken,
+    [
+        param('chatId').isInt(),
+        body('content').trim().isLength({ min: 1, max: 5000 })
+    ],
+    validate,
+    canAccessChat,
+    canSendToChat,
+    messageController.sendMessage
+);
+
+router.put('/messages/:messageId',
+    authenticateToken,
+    [
+        param('messageId').isInt(),
+        body('content').trim().isLength({ min: 1, max: 5000 })
+    ],
+    validate,
+    messageController.editMessage
+);
+
+router.delete('/messages/:messageId',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    messageController.deleteMessage
+);
+
+router.get('/chats/:chatId/messages/search',
+    authenticateToken,
+    [
+        param('chatId').isInt(),
+        queryValidator('query').trim().isLength({ min: 2 }),
+        queryValidator('limit').optional().isInt({ min: 1, max: 50 })
+    ],
+    validate,
+    canAccessChat,
+    messageController.searchMessages
+);
+
+router.get('/messages/all',
+    authenticateToken,
+    requireAdmin,
+    canViewAllMessages,
+    [
+        queryValidator('limit').optional().isInt({ min: 1, max: 200 }),
+        queryValidator('offset').optional().isInt({ min: 0 })
+    ],
+    validate,
+    messageController.getAllMessages
+);
+
+router.get('/messages/stats',
+    authenticateToken,
+    requireAdmin,
+    messageController.getMessageStats
+);
+
+// ==================== FILE ROUTES ====================
+router.post('/chats/:chatId/upload',
+    authenticateToken,
+    canAccessChat,
+    canSendToChat,
+    uploadSingle,
+    validateFile,
+    fileController.uploadFileToMessage
+);
+
+router.post('/chats/:chatId/upload-multiple',
+    authenticateToken,
+    canAccessChat,
+    canSendToChat,
+    uploadMultiple,
+    validateFile,
+    fileController.uploadMultipleFiles
+);
+
+router.delete('/messages/:messageId/file',
+    authenticateToken,
+    fileController.deleteFileFromMessage
+);
+
+router.get('/files/stats',
+    authenticateToken,
+    requireAdmin,
+    fileController.getFileStats
+);
+
 router.use('/files', fileRoutes);
+
+// ==================== HEALTH CHECK ====================
+router.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
+
+// ==================== EXPORT ====================
 module.exports = router;
