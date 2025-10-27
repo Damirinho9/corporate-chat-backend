@@ -1,5 +1,5 @@
 // ================================================
-// ИНСТРУКЦИЯ: Скопировать в middleware/fileUpload.js
+// middleware/fileUpload.js
 // ================================================
 
 const multer = require('multer');
@@ -14,6 +14,7 @@ const {
     generateUniqueFilename
 } = require('../config/fileConfig');
 
+// ==================== STORAGE CONFIG ====================
 const storage = multer.diskStorage({
     destination: async (req, file, cb) => {
         const tempDir = path.join(STORAGE_CONFIG.uploadDir, STORAGE_CONFIG.tempDir);
@@ -31,6 +32,7 @@ const storage = multer.diskStorage({
     }
 });
 
+// ==================== FILTER ====================
 const fileFilter = (req, file, cb) => {
     if (!isFileTypeAllowed(file.mimetype, file.originalname)) {
         return cb(new Error('File type not allowed'), false);
@@ -42,6 +44,7 @@ const fileFilter = (req, file, cb) => {
     cb(null, true);
 };
 
+// ==================== UPLOAD INIT ====================
 const upload = multer({
     storage: storage,
     limits: {
@@ -54,6 +57,7 @@ const upload = multer({
 const uploadSingle = upload.single('file');
 const uploadMultiple = upload.array('files', FILE_LIMITS.MAX_FILES_PER_MESSAGE);
 
+// ==================== ERROR HANDLER ====================
 const handleUploadError = (err, req, res, next) => {
     if (err instanceof multer.MulterError) {
         switch (err.code) {
@@ -76,6 +80,7 @@ const handleUploadError = (err, req, res, next) => {
     next();
 };
 
+// ==================== VALIDATION ====================
 const validateUploadedFile = async (req, res, next) => {
     if (!req.file && !req.files) {
         return res.status(400).json({ error: 'No file uploaded' });
@@ -98,6 +103,7 @@ const validateUploadedFile = async (req, res, next) => {
     }
 };
 
+// ==================== SCAN ====================
 const scanFile = async (req, res, next) => {
     const files = req.files || [req.file];
     try {
@@ -126,10 +132,12 @@ const scanFile = async (req, res, next) => {
     }
 };
 
+// ==================== EXPORTS ====================
 module.exports = {
     uploadSingle,
     uploadMultiple,
     handleUploadError,
     validateUploadedFile,
+    validateFile: validateUploadedFile, // ✅ алиас под старое имя
     scanFile
 };
