@@ -1,26 +1,45 @@
 // utils/logger.js
 const levels = ['error','warn','info','http','debug'];
-const level = process.env.LOG_LEVEL && levels.includes(process.env.LOG_LEVEL) ? process.env.LOG_LEVEL : 'info';
-
-const shouldLog = (lvl) => levels.indexOf(lvl) <= levels.indexOf(level);
 const ts = () => new Date().toISOString();
+const idx = (l) => levels.indexOf(l);
 
-const log = (lvl, ...args) => {
-  if (!shouldLog(lvl)) return;
-  const line = `[${ts()}] ${lvl.toUpperCase()}: ${args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')}`;
-  if (lvl === 'error') console.error(line);
-  else if (lvl === 'warn') console.warn(line);
-  else console.log(line);
-};
+class LoggerClass {
+  constructor(context = 'app', level = process.env.LOG_LEVEL || 'info') {
+    this.context = context;
+    this.level = levels.includes(level) ? level : 'info';
+    this.stream = { write: (msg) => this.http(String(msg).trim()) };
+  }
+  setLevel(level) { if (levels.includes(level)) this.level = level; }
+  shouldLog(level) { return idx(level) <= idx(this.level); }
+  line(level, args) {
+    const parts = args.map(a => typeof a === 'string' ? a : JSON.stringify(a));
+    return `[${ts()}] ${level.toUpperCase()} [${this.context}] ${parts.join(' ')}`;
+  }
+  log(level, ...args) {
+    if (!this.shouldLog(level)) return;
+    const s = this.line(level, args);
+    if (level === 'error') console.error(s);
+    else if (level === 'warn') console.warn(s);
+    else console.log(s);
+  }
+  error(...a){ this.log('error', ...a); }
+  warn(...a){ this.log('warn', ...a); }
+  info(...a){ this.log('info', ...a); }
+  http(...a){ this.log('http', ...a); }
+  debug(...a){ this.log('debug', ...a); }
+}
 
-const logger = {
-  error: (...a) => log('error', ...a),
-  warn:  (...a) => log('warn', ...a),
-  info:  (...a) => log('info', ...a),
-  http:  (...a) => log('http', ...a),
-  debug: (...a) => log('debug', ...a),
-  // совместимо с morgan
-  stream: { write: (msg) => logger.http(msg.trim()) }
-};
+// Экспорт как "конструктор" и как "статический" логгер одновременно
+function Logger(context, level) { return new LoggerClass(context, level); } // позволяет new Logger(...)
+const defaultLogger = new LoggerClass('app', process.env.LOG_LEVEL || 'info');
 
-module.exports = logger;
+Logger.Logger = LoggerClass;
+Logger.createLogger = (ctx, level) => new LoggerClass(ctx, level);
+Logger.stream = defaultLogger.stream;
+Logger.error = (...a) => defaultLogger.error(...a);
+Logger.warn  = (...a) => defaultLogger.warn(...a);
+Logger.info  = (...a) => defaultLogger.info(...a);
+Logger.http  = (...a) => defaultLogger.http(...a);
+Logger.debug = (...a) => defaultLogger.debug(...a);
+
+module.exports = Logger;
