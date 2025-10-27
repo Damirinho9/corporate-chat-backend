@@ -578,5 +578,83 @@ module.exports = {
     addReaction,
     removeReaction,
     forwardMessage,
-    searchMessages
+    searchMessages,
+    getAllMessages,
+    getMessageStats
+};
+
+// Get all messages (admin only)
+const getAllMessages = async (req, res) => {
+    try {
+        const { limit = 100, offset = 0 } = req.query;
+
+        const result = await query(
+            `SELECT 
+                m.id,
+                m.content,
+                m.created_at,
+                m.user_id,
+                u.name as user_name,
+                u.username,
+                m.chat_id,
+                c.name as chat_name
+            FROM messages m
+            JOIN users u ON m.user_id = u.id
+            JOIN chats c ON m.chat_id = c.id
+            ORDER BY m.created_at DESC
+            LIMIT $1 OFFSET $2`,
+            [limit, offset]
+        );
+
+        res.json({ 
+            messages: result.rows,
+            count: result.rows.length 
+        });
+    } catch (error) {
+        console.error('Get all messages error:', error);
+        res.status(500).json({ 
+            error: 'Failed to get messages',
+            code: 'GET_ALL_MESSAGES_ERROR'
+        });
+    }
+};
+
+// Get message statistics (admin only)
+const getMessageStats = async (req, res) => {
+    try {
+        const stats = await query(`
+            SELECT 
+                COUNT(*) as total_messages,
+                COUNT(DISTINCT user_id) as unique_senders,
+                COUNT(DISTINCT chat_id) as active_chats,
+                COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as messages_24h,
+                COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as messages_7d,
+                COUNT(*) FILTER (WHERE file_id IS NOT NULL) as messages_with_files
+            FROM messages
+        `);
+
+        const topUsers = await query(`
+            SELECT 
+                u.id,
+                u.name,
+                u.username,
+                COUNT(m.id) as message_count
+            FROM users u
+            JOIN messages m ON u.id = m.user_id
+            GROUP BY u.id, u.name, u.username
+            ORDER BY message_count DESC
+            LIMIT 10
+        `);
+
+        res.json({
+            overall: stats.rows[0],
+            topUsers: topUsers.rows
+        });
+    } catch (error) {
+        console.error('Get message stats error:', error);
+        res.status(500).json({ 
+            error: 'Failed to get message statistics',
+            code: 'GET_MESSAGE_STATS_ERROR'
+        });
+    }
 };
