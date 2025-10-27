@@ -269,8 +269,10 @@ router.get('/chats/:chatId/messages/search',
 router.get('/messages/all',
     authenticateToken,
     requireAdmin,
-    queryValidator('limit').optional().isInt({ min: 1, max: 200 }),
-    queryValidator('offset').optional().isInt({ min: 0 }),
+    [
+        queryValidator('limit').optional().isInt({ min: 1, max: 200 }),
+        queryValidator('offset').optional().isInt({ min: 0 }),
+    ],
     validate,
     messageController.getAllMessages
 );
