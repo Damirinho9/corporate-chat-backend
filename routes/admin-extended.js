@@ -6,93 +6,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const { query } = require('../config/database');
-const { authenticateToken } = require('../middleware/auth'); // FIXED!
-
-// ==================== USER PROFILE MANAGEMENT ====================
-
-// Get user profile (admin only)
-router.get('/users/:userId', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-
-        const { userId } = req.params;
-        const result = await query(`
-            SELECT id, username, name, role, department, is_active, created_at
-            FROM users WHERE id = $1
-        `, [userId]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        res.json({ user: result.rows[0] });
-    } catch (error) {
-        console.error('Get user error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Update user profile (admin only)
-router.put('/users/:userId', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-
-        const { userId } = req.params;
-        const { name, username, role, department } = req.body;
-
-        await query(`
-            UPDATE users 
-            SET name = COALESCE($1, name),
-                username = COALESCE($2, username),
-                role = COALESCE($3, role),
-                department = COALESCE($4, department)
-            WHERE id = $5
-        `, [name, username, role, department, userId]);
-
-        // Log action
-        await logAdminAction(req.user.id, 'update_user', { userId, changes: req.body });
-
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Update user error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Change user password (admin only)
-router.put('/users/:userId/password', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-
-        const { userId } = req.params;
-        const { newPassword } = req.body;
-
-        if (!newPassword || newPassword.length < 6) {
-            return res.status(400).json({ error: 'Password too short (min 6 chars)' });
-        }
-
-        const passwordHash = await bcrypt.hash(newPassword, 10);
-        
-        await query(
-            'UPDATE users SET password_hash = $1 WHERE id = $2',
-            [passwordHash, userId]
-        );
-
-        // Log action
-        await logAdminAction(req.user.id, 'change_password', { userId });
-
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Change password error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
+const { authenticateToken } = require('../middleware/auth');
 
 // ==================== DEPARTMENT MANAGEMENT ====================
 
@@ -143,31 +57,6 @@ router.post('/departments', authenticateToken, async (req, res) => {
         res.json({ success: true, department: name });
     } catch (error) {
         console.error('Create department error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Move user to another department (admin only)
-router.put('/users/:userId/department', authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-
-        const { userId } = req.params;
-        const { department } = req.body;
-
-        await query(
-            'UPDATE users SET department = $1 WHERE id = $2',
-            [department, userId]
-        );
-
-        // Log action
-        await logAdminAction(req.user.id, 'move_department', { userId, department });
-
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Move department error:', error);
         res.status(500).json({ error: error.message });
     }
 });

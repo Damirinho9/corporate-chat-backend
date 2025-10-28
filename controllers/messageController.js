@@ -1,4 +1,5 @@
-const { query, transaction } = require('../config/database');
+const { query } = require('../config/database');
+const { pool } = require('../config/database');
 
 // Get messages for chat
 const getMessages = async (req, res) => {
@@ -181,7 +182,12 @@ const sendMessage = async (req, res) => {
             }
         }
 
-        const result = await transaction(async (client) => {
+        const client = await pool.connect();
+        let result;
+        try {
+            await client.query('BEGIN');
+            
+
             // Insert message
             const messageResult = await client.query(
                 `INSERT INTO messages (chat_id, user_id, content, file_id, reply_to_id, forwarded_from_id)
@@ -220,8 +226,14 @@ const sendMessage = async (req, res) => {
                 [chatId]
             );
 
-            return message;
-        });
+            await client.query('COMMIT');
+            result = message;
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
 
         // Fetch complete message with relations
         const completeMessage = await query(

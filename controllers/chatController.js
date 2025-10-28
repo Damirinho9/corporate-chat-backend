@@ -1,4 +1,5 @@
-const { query, transaction } = require('../config/database');
+const { query } = require('../config/database');
+const { pool } = require('../config/database');
 
 // Get all accessible chats for user
 const getUserChats = async (req, res) => {
@@ -167,7 +168,12 @@ const createDirectChat = async (req, res) => {
         }
 
         // Create new chat
-        const result = await transaction(async (client) => {
+        const client = await pool.connect();
+        let result;
+        try {
+            await client.query('BEGIN');
+            
+
             const chatResult = await client.query(
                 `INSERT INTO chats (type, created_by)
                  VALUES ('direct', $1)
@@ -184,8 +190,14 @@ const createDirectChat = async (req, res) => {
                 [chatId, senderId, receiverId]
             );
 
-            return chatId;
-        });
+            await client.query('COMMIT');
+            result = chatId;
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
 
         res.status(201).json({
             message: 'Direct chat created successfully',
@@ -220,7 +232,12 @@ const createGroupChat = async (req, res) => {
             });
         }
 
-        const result = await transaction(async (client) => {
+        const client = await pool.connect();
+        let result;
+        try {
+            await client.query('BEGIN');
+            
+
             const chatResult = await client.query(
                 `INSERT INTO chats (name, type, created_by)
                  VALUES ($1, 'group', $2)
@@ -241,8 +258,14 @@ const createGroupChat = async (req, res) => {
                 [chatId, ...participantIds]
             );
 
-            return chatId;
-        });
+            await client.query('COMMIT');
+            result = chatId;
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
 
         res.status(201).json({
             message: 'Group chat created successfully',
