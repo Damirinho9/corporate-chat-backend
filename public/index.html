@@ -49,6 +49,11 @@
             box-sizing: border-box;
         }
 
+        html {
+            overflow-x: hidden;
+            max-width: 100vw;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--bg-secondary);
@@ -56,6 +61,7 @@
             height: 100vh;
             overflow: hidden;
             transition: background 0.3s ease;
+            max-width: 100vw;
         }
 
         .hidden { display: none !important; }
@@ -198,11 +204,37 @@
             overflow: hidden;
         }
 
-        .chat-container {
-            display: grid;
-            grid-template-columns: 350px 1fr;
-            height: 100vh;
-        }
+.chat-container {
+    display: grid;
+    grid-template-columns: minmax(280px, 350px) 1fr;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+@media (max-width: 768px) {
+    .chat-container {
+        grid-template-columns: 1fr;
+    }
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--bg-primary);
+        z-index: 20;
+        transition: transform 0.3s ease;
+    }
+    .sidebar.hidden {
+        transform: translateX(-100%);
+    }
+    .main-chat {
+        width: 100%;
+        height: 100vh;
+        overflow: hidden;
+    }
+}
 
         /* ==================== SIDEBAR ==================== */
         .sidebar {
@@ -428,6 +460,17 @@
             font-weight: 600;
         }
 
+        /* ==================== МЕДИА-ЗАПРОСЫ ==================== */
+        @media (max-width: 1024px) {
+            .chat-container {
+                grid-template-columns: 280px 1fr;
+            }
+            
+            .message-content {
+                max-width: 80%;
+            }
+        }
+
         @media (max-width: 768px) {
             .chat-container {
                 grid-template-columns: 1fr;
@@ -444,6 +487,10 @@
             .main-chat.hidden {
                 display: none !important;
             }
+            
+            .message-content {
+                max-width: 90%;
+            }
         }
 
         /* ==================== MAIN CHAT AREA ==================== */
@@ -451,6 +498,8 @@
             display: flex;
             flex-direction: column;
             background: var(--bg-secondary);
+            max-width: 100%;
+            overflow: hidden;
         }
 
         .chat-header {
@@ -1465,119 +1514,102 @@
         // ==================== CHAT SEARCH ====================
         let chatSearchQuery = '';
 
-        function filterChats(query) {
-            chatSearchQuery = query.toLowerCase();
-            renderChats();
-        }
-
         function renderChats() {
-            const chatsList = document.getElementById('chatsList');
+                const chatsList = document.getElementById('chatsList');
 
-            if (!chats || chats.length === 0) {
-                chatsList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">Нет доступных чатов</div>';
-                return;
-            }
-
-            // Filter chats by search query
-            let filteredChats = chats;
-            if (chatSearchQuery) {
-                filteredChats = chats.filter(chat => {
-                    const name = (chat.name || '').toLowerCase();
-                    const lastMsg = typeof chat.last_message === 'string'
-                        ? chat.last_message.toLowerCase()
-                        : (chat.last_message?.content || '').toLowerCase();
-                    return name.includes(chatSearchQuery) || lastMsg.includes(chatSearchQuery);
-                });
-            }
-
-            // Group chats by category
-            const grouped = {
-                leadership: [],
-                departments: [],
-                assistants: [],
-                direct: []
-            };
-
-            filteredChats.forEach(chat => {
-                const name = (chat.name || '').toLowerCase();
-                if (name.includes('руковод') || name.includes('админ')) {
-                    grouped.leadership.push(chat);
-                } else if (name.includes('отдел') || chat.department) {
-                    grouped.departments.push(chat);
-                } else if (name.includes('ассист')) {
-                    grouped.assistants.push(chat);
-                } else if (chat.type === 'direct') {
-                    grouped.direct.push(chat);
-                } else {
-                    grouped.direct.push(chat); // default category
-                }
-            });
-
-            function formatTimestamp(dateStr) {
-                if (!dateStr) return '';
-                const date = new Date(dateStr);
-                const now = new Date();
-                const diff = now - date;
-
-                if (diff < 86400000) { // Less than 24 hours
-                    return date.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
-                } else if (diff < 604800000) { // Less than 7 days
-                    return date.toLocaleDateString('ru', { weekday: 'short' });
-                } else {
-                    return date.toLocaleDateString('ru', { day: 'numeric', month: 'short' });
-                }
-            }
-
-            function renderSection(title, arr) {
-                if (!arr.length) return '';
-                return `
-                    <div class="chat-section">
-                        <h4>${title}</h4>
-                        ${arr.map(renderChatItem).join('')}
-                    </div>
-                `;
-            }
-
-            function renderChatItem(chat) {
-                let lastMessageText = '';
-                let timestamp = '';
-
-                // Only show chats with messages
-                if (chat.last_message) {
-                    if (typeof chat.last_message === 'object' && chat.last_message.content) {
-                        lastMessageText = escapeHtml(chat.last_message.content);
-                        timestamp = formatTimestamp(chat.last_message.created_at);
-                    } else if (typeof chat.last_message === 'string') {
-                        lastMessageText = escapeHtml(chat.last_message);
-                    }
+                if (!Array.isArray(chats) || chats.length === 0) {
+                        chatsList.innerHTML = `
+                                <div style="padding:20px;text-align:center;color:var(--text-secondary);">
+                                        Нет доступных чатов
+                                </div>`;
+                        return;
                 }
 
-                const chatName = escapeHtml(chat.name || 'Чат');
-                return `
-                    <div class="chat-item ${chat.id === currentChatId ? 'active' : ''}" data-chat-id="${chat.id}" onclick="openChat(${chat.id})">
-                        <div class="chat-item-header">
-                            <span class="chat-name">${chatName}</span>
-                            ${chat.unread_count > 0 ? `<span class="unread-badge">${chat.unread_count}</span>` : ''}
-                        </div>
-                        <div class="chat-last-message">
-                            <span class="chat-last-message-text">${lastMessageText || 'Нет сообщений'}</span>
-                            ${timestamp ? `<span class="chat-timestamp">${timestamp}</span>` : ''}
-                        </div>
-                    </div>
-                `;
-            }
+                // 1️⃣ Убираем дубли по name+type
+                const unique = [];
+                const seen = new Set();
+                for (const chat of chats) {
+                        const key = `${chat.name || ''}_${chat.type || ''}`;
+                        if (!seen.has(key)) {
+                                seen.add(key);
+                                unique.push(chat);
+                        }
+                }
 
-            chatsList.innerHTML = [
-                renderSection('Руководство', grouped.leadership),
-                renderSection('Отделы', grouped.departments),
-                renderSection('Ассистенты', grouped.assistants),
-                renderSection('Личные чаты', grouped.direct)
-            ].filter(s => s).join('');
+                // 2️⃣ Обновляем отображение
+                const filteredChats = chatSearchQuery
+                        ? unique.filter(chat => {
+                                const name = (chat.name || '').toLowerCase();
+                                const lastMsg = typeof chat.last_message === 'string'
+                                        ? chat.last_message.toLowerCase()
+                                        : (chat.last_message?.content || '').toLowerCase();
+                                return name.includes(chatSearchQuery) || lastMsg.includes(chatSearchQuery);
+                        })
+                        : unique;
 
-            // If no sections rendered, show default message
-            if (!chatsList.innerHTML.trim()) {
-                chatsList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">Нет доступных чатов</div>';
-            }
+                if (filteredChats.length === 0) {
+                        chatsList.innerHTML = `
+                                <div style="padding:20px;text-align:center;color:var(--text-secondary);">
+                                        Чаты не найдены
+                                </div>`;
+                        return;
+                }
+
+                const renderChatItem = (chat) => {
+                        let lastMessageText = '';
+                        let timestamp = '';
+
+                        if (chat.last_message) {
+                                if (typeof chat.last_message === 'object' && chat.last_message.content) {
+                                        lastMessageText = escapeHtml(chat.last_message.content);
+                                        timestamp = formatTimestamp(chat.last_message.created_at);
+                                } else if (typeof chat.last_message === 'string') {
+                                        lastMessageText = escapeHtml(chat.last_message);
+                                }
+                        }
+
+                        if (!lastMessageText) lastMessageText = 'Пока тишина';
+
+                        const chatName = escapeHtml(chat.name || 'Чат');
+                        return `
+                                <div class="chat-item ${chat.id === currentChatId ? 'active' : ''}"
+                                     data-chat-id="${chat.id}"
+                                     onclick="openChat(${chat.id})">
+                                        <div class="chat-item-header">
+                                                <span class="chat-name">${chatName}</span>
+                                                ${chat.unread_count > 0
+                                                        ? `<span class="unread-badge">${chat.unread_count}</span>`
+                                                        : ''}
+                                        </div>
+                                        <div class="chat-last-message">
+                                                <span class="chat-last-message-text">${lastMessageText}</span>
+                                                ${timestamp
+                                                        ? `<span class="chat-timestamp">${timestamp}</span>`
+                                                        : ''}
+                                        </div>
+                                </div>
+                        `;
+                };
+
+                const sections = {
+                        'Руководство': filteredChats.filter(c => /админ|руковод/i.test(c.name || '')),
+                        'Отделы': filteredChats.filter(c => /отдел/i.test(c.name || '')),
+                        'Ассистенты': filteredChats.filter(c => /ассист/i.test(c.name || '')),
+                        'Личные чаты': filteredChats.filter(c => c.type === 'direct')
+                };
+
+                chatsList.innerHTML = Object.entries(sections)
+                        .filter(([_, arr]) => arr.length > 0)
+                        .map(([title, arr]) => `
+                                <div class="chat-section">
+                                        <h4>${title}</h4>
+                                        ${arr.map(renderChatItem).join('')}
+                                </div>
+                        `)
+                        .join('') || `
+                                <div style="padding:20px;text-align:center;color:var(--text-secondary);">
+                                        Нет доступных чатов
+                                </div>`;
         }
 
         function updateChatLastMessage(chatId, message) {
