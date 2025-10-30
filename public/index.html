@@ -52,6 +52,7 @@
         html {
             overflow-x: hidden;
             max-width: 100vw;
+            scroll-behavior: smooth;
         }
 
         body {
@@ -62,6 +63,7 @@
             overflow: hidden;
             transition: background 0.3s ease;
             max-width: 100vw;
+            width: 100vw;
         }
 
         .hidden { display: none !important; }
@@ -355,6 +357,7 @@
             flex: 1;
             overflow-y: auto;
             min-height: 0;
+            scroll-behavior: smooth;
         }
 
         .chats-list::-webkit-scrollbar {
@@ -374,11 +377,18 @@
             background: var(--text-secondary);
         }
 
+        .chats-list ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
         .chat-item {
             padding: 15px 20px;
             cursor: pointer;
             border-bottom: 1px solid var(--border);
             transition: background 0.2s;
+            list-style: none;
         }
 
         .chat-item:hover {
@@ -528,6 +538,7 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+            scroll-behavior: smooth;
         }
 
         .messages-container::-webkit-scrollbar {
@@ -552,6 +563,12 @@
             gap: 10px;
             position: relative;
             animation: slideUp 0.3s ease;
+            transition: opacity 0.3s ease;
+        }
+
+        .message.sending {
+            opacity: 0.6;
+            pointer-events: none;
         }
 
         .message:hover .message-actions {
@@ -1030,6 +1047,90 @@
         .toast.removing {
             animation: slideOut 0.3s ease forwards;
         }
+
+        /* ==================== SKELETON LOADER ==================== */
+        .skeleton-loader {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .skeleton-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .skeleton-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-hover) 50%, var(--bg-tertiary) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        .skeleton-text {
+            flex: 1;
+        }
+
+        .skeleton-line {
+            height: 12px;
+            background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-hover) 50%, var(--bg-tertiary) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .skeleton-line:last-child {
+            width: 60%;
+            margin-bottom: 0;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        /* ==================== SECTION NAVIGATION ==================== */
+        .section-navigation {
+            display: flex;
+            gap: 5px;
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .section-navigation::-webkit-scrollbar {
+            display: none;
+        }
+
+        .section-nav-btn {
+            padding: 6px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            font-size: 12px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+            color: var(--text-primary);
+        }
+
+        .section-nav-btn:hover {
+            background: var(--bg-hover);
+        }
+
+        .section-nav-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
     </style>
 </head>
 <body>
@@ -1090,9 +1191,37 @@
                     <input type="text" id="chatSearchInput" placeholder="🔍 Поиск по чатам...">
                 </div>
 
+                <div class="section-navigation" id="sectionNavigation">
+                    <button class="section-nav-btn active" data-section="all">Все</button>
+                    <button class="section-nav-btn" data-section="Руководство">Руководство</button>
+                    <button class="section-nav-btn" data-section="Отделы">Отделы</button>
+                    <button class="section-nav-btn" data-section="Ассистенты">Ассистенты</button>
+                    <button class="section-nav-btn" data-section="Личные чаты">Личные</button>
+                </div>
+
                 <div class="chats-list" id="chatsList">
-                    <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
-                        Загрузка чатов...
+                    <div class="skeleton-loader">
+                        <div class="skeleton-item">
+                            <div class="skeleton-avatar"></div>
+                            <div class="skeleton-text">
+                                <div class="skeleton-line"></div>
+                                <div class="skeleton-line"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-item">
+                            <div class="skeleton-avatar"></div>
+                            <div class="skeleton-text">
+                                <div class="skeleton-line"></div>
+                                <div class="skeleton-line"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-item">
+                            <div class="skeleton-avatar"></div>
+                            <div class="skeleton-text">
+                                <div class="skeleton-line"></div>
+                                <div class="skeleton-line"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1506,13 +1635,48 @@
 
                 chats = data.chats || [];
                 renderChats();
+                restoreLastActiveChat();
             } catch (err) {
                 showToast('Ошибка загрузки чатов', 'error');
             }
         }
 
+        // ==================== HELPER FUNCTIONS ====================
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+
+            if (minutes < 1) return 'сейчас';
+            if (minutes < 60) return `${minutes}м`;
+            if (hours < 24) return `${hours}ч`;
+            if (days < 7) return `${days}д`;
+            return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+        }
+
         // ==================== CHAT SEARCH ====================
         let chatSearchQuery = '';
+        let activeSectionFilter = 'all';
+
+        function filterChats(query) {
+            chatSearchQuery = query.toLowerCase();
+            renderChats();
+        }
+
+        function filterBySection(section) {
+            activeSectionFilter = section;
+
+            // Update nav buttons
+            document.querySelectorAll('.section-nav-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.section === section);
+            });
+
+            renderChats();
+        }
 
         function renderChats() {
                 const chatsList = document.getElementById('chatsList');
@@ -1572,9 +1736,9 @@
 
                         const chatName = escapeHtml(chat.name || 'Чат');
                         return `
-                                <div class="chat-item ${chat.id === currentChatId ? 'active' : ''}"
-                                     data-chat-id="${chat.id}"
-                                     onclick="openChat(${chat.id})">
+                                <li class="chat-item ${chat.id === currentChatId ? 'active' : ''}"
+                                    data-chat-id="${chat.id}"
+                                    onclick="openChat(${chat.id})">
                                         <div class="chat-item-header">
                                                 <span class="chat-name">${chatName}</span>
                                                 ${chat.unread_count > 0
@@ -1587,7 +1751,7 @@
                                                         ? `<span class="chat-timestamp">${timestamp}</span>`
                                                         : ''}
                                         </div>
-                                </div>
+                                </li>
                         `;
                 };
 
@@ -1598,12 +1762,21 @@
                         'Личные чаты': filteredChats.filter(c => c.type === 'direct')
                 };
 
-                chatsList.innerHTML = Object.entries(sections)
+                // Apply section filter
+                let sectionsToShow = sections;
+                if (activeSectionFilter !== 'all') {
+                        sectionsToShow = {};
+                        sectionsToShow[activeSectionFilter] = sections[activeSectionFilter] || [];
+                }
+
+                chatsList.innerHTML = Object.entries(sectionsToShow)
                         .filter(([_, arr]) => arr.length > 0)
                         .map(([title, arr]) => `
                                 <div class="chat-section">
                                         <h4>${title}</h4>
-                                        ${arr.map(renderChatItem).join('')}
+                                        <ul>
+                                                ${arr.map(renderChatItem).join('')}
+                                        </ul>
                                 </div>
                         `)
                         .join('') || `
@@ -1638,6 +1811,9 @@
 
             currentChatId = chatId;
 
+            // Save last active chat to localStorage
+            localStorage.setItem('lastActiveChatId', chatId);
+
             document.querySelectorAll('.chat-item').forEach(item => {
                 item.classList.remove('active');
             });
@@ -1666,6 +1842,14 @@
 
             if (socket) {
                 socket.emit('join_chat', { chatId });
+            }
+        }
+
+        // ==================== RESTORE LAST CHAT ====================
+        function restoreLastActiveChat() {
+            const lastChatId = localStorage.getItem('lastActiveChatId');
+            if (lastChatId && chats.some(c => c.id == lastChatId)) {
+                setTimeout(() => openChat(parseInt(lastChatId)), 500);
             }
         }
 
@@ -1706,14 +1890,14 @@
             }
         }
 
-        function appendMessage(message) {
+        function appendMessage(message, isTempSending = false) {
             const messagesContainer = document.getElementById('messagesContainer');
-            
+
             const emptyState = messagesContainer.querySelector('.empty-state');
             if (emptyState) {
                 emptyState.remove();
             }
-            
+
             const isOwn = message.user_id === currentUser.id;
             const userName = message.user_name || 'Unknown';
             const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
@@ -1751,9 +1935,9 @@
                     }
                 });
 
-                reactionsHtml = '<div class="message-reactions">' + 
-                    Object.entries(reactionCounts).map(([emoji, data]) => 
-                        `<div class="reaction-item ${data.hasOwn ? 'own' : ''}" 
+                reactionsHtml = '<div class="message-reactions">' +
+                    Object.entries(reactionCounts).map(([emoji, data]) =>
+                        `<div class="reaction-item ${data.hasOwn ? 'own' : ''}"
                               onclick="${data.hasOwn ? `removeReaction(${message.id})` : `addReaction(${message.id}, '${emoji}')`}"
                               title="${data.users.join(', ')}">
                             ${emoji} ${data.count}
@@ -1762,9 +1946,12 @@
             }
 
             const emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
-            
+
             const messageEl = document.createElement('div');
-            messageEl.className = `message ${isOwn ? 'own' : ''}`;
+            messageEl.className = `message ${isOwn ? 'own' : ''} ${isTempSending || message.isSending ? 'sending' : ''}`;
+            if (isTempSending || message.isSending) {
+                messageEl.setAttribute('data-message-id', message.id);
+            }
             messageEl.innerHTML = `
                 <div class="message-avatar" style="background: ${avatarColor};">${initials}</div>
                 <div class="message-content">
@@ -1783,6 +1970,7 @@
                     ${reactionsHtml}
                     ${isOwn ? `<span class="message-time" style="text-align: right; font-size: 11px; color: var(--text-tertiary);">${time}</span>` : ''}
                 </div>
+                ${!isTempSending && !message.isSending ? `
                 <div class="message-actions">
                     <button class="action-btn" onclick="setReplyTo({id: ${message.id}, content: '${escapeHtml(message.content || '📎').replace(/'/g, "\\'")}'})" title="Ответить">↩️</button>
                     <button class="action-btn" onclick="showEmojiPicker(${message.id})" title="Реакция">😊</button>
@@ -1790,8 +1978,9 @@
                         ${emojis.map(e => `<span class="emoji-btn" onclick="addReaction(${message.id}, '${e}')">${e}</span>`).join('')}
                     </div>
                 </div>
+                ` : ''}
             `;
-            
+
             messagesContainer.appendChild(messageEl);
         }
 
@@ -1842,6 +2031,22 @@
             sendBtn.textContent = '⏳';
             input.disabled = true;
 
+            // Create a temporary message element with "sending" state
+            let tempMessageId = null;
+            if (content && selectedFiles.length === 0) {
+                tempMessageId = Date.now();
+                const tempMessage = {
+                    id: tempMessageId,
+                    content: content,
+                    user_id: currentUser.id,
+                    user_name: currentUser.name || currentUser.username,
+                    created_at: new Date().toISOString(),
+                    isSending: true
+                };
+                appendMessage(tempMessage, true);
+                scrollToBottom(true);
+            }
+
             try {
                 if (selectedFiles.length > 0) {
                     for (const fileObj of selectedFiles) {
@@ -1852,8 +2057,8 @@
                                 'Authorization': `Bearer ${token}`,
                                 'Content-Type': 'application/json'
                             },
-                            body: JSON.stringify({ 
-                                content: content || null, 
+                            body: JSON.stringify({
+                                content: content || null,
                                 fileId: fileId,
                                 replyToId: replyToMessage?.id || null
                             })
@@ -1883,9 +2088,19 @@
                     const data = await response.json();
 
                     if (data.message) {
+                        // Remove temp message and add real message
+                        if (tempMessageId) {
+                            const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
+                            if (tempEl) tempEl.remove();
+                        }
                         appendMessage(data.message);
                         scrollToBottom(true);
                     } else {
+                        // Remove temp message on error
+                        if (tempMessageId) {
+                            const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
+                            if (tempEl) tempEl.remove();
+                        }
                         showToast('Ошибка отправки сообщения', 'error');
                     }
                 }
@@ -1894,6 +2109,11 @@
                 input.style.height = 'auto';
                 cancelReply();
             } catch (err) {
+                // Remove temp message on error
+                if (tempMessageId) {
+                    const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
+                    if (tempEl) tempEl.remove();
+                }
                 showToast('Ошибка отправки сообщения', 'error');
             } finally {
                 // Re-enable send button and input
@@ -1949,6 +2169,13 @@
             const chatSearchInput = document.getElementById('chatSearchInput');
             chatSearchInput?.addEventListener('input', (e) => {
                 filterChats(e.target.value);
+            });
+
+            // Section navigation
+            document.querySelectorAll('.section-nav-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    filterBySection(btn.dataset.section);
+                });
             });
 
             const messageInput = document.getElementById('messageInput');
