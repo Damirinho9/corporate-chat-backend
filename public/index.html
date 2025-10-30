@@ -1623,19 +1623,65 @@
         }
 
         // ==================== LOAD CHATS ====================
+        let contacts = { departments: [], assistants: { users: [] } };
+
         async function loadChats() {
             try {
-                const response = await fetch(`${API_URL}/chats`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                // Загружаем чаты и контакты параллельно
+                const [chatsResponse, contactsResponse] = await Promise.all([
+                    fetch(`${API_URL}/chats`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_URL}/contacts/structured`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                ]);
 
-                const data = await response.json();
+                const chatsData = await chatsResponse.json();
+                const contactsData = await contactsResponse.json();
 
-                chats = data.chats || [];
+                chats = chatsData.chats || [];
+                contacts = contactsData || { departments: [], assistants: { users: [] } };
+
                 renderChats();
                 restoreLastActiveChat();
             } catch (err) {
+                console.error('Load chats error:', err);
                 showToast('Ошибка загрузки чатов', 'error');
+            }
+        }
+
+        // Создать или открыть прямой чат с пользователем
+        async function openDirectChatWithUser(userId, userName) {
+            try {
+                showToast('Создание чата...', 'info');
+                const response = await fetch(`${API_URL}/chats/direct`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ receiverId: userId })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Не удалось создать чат');
+                }
+
+                const data = await response.json();
+
+                // Перезагружаем чаты чтобы получить новый
+                await loadChats();
+
+                // Открываем чат
+                setTimeout(() => {
+                    openChat(data.chatId);
+                    showToast(`Чат с ${userName} открыт`, 'success');
+                }, 300);
+            } catch (err) {
+                console.error('Create direct chat error:', err);
+                showToast(err.message || 'Ошибка создания чата', 'error');
             }
         }
 
@@ -1757,7 +1803,7 @@
                 const departments = {};
                 const assistants = [];
                 const directChats = [];
-                
+
                 filteredChats.forEach(chat => {
                         // Ассистенты
                         if (/ассист/i.test(chat.name || '')) {
@@ -1772,14 +1818,14 @@
                                 const match = chat.name.match(/отдел\s*(\d+)/i);
                                 const deptNum = match ? match[1] : '?';
                                 const deptKey = `Отдел ${deptNum}`;
-                                
+
                                 if (!departments[deptKey]) {
                                         departments[deptKey] = {
                                                 main: null,
                                                 users: []
                                         };
                                 }
-                                
+
                                 // Главный чат отдела
                                 if (chat.name === deptKey) {
                                         departments[deptKey].main = chat;
@@ -1790,35 +1836,88 @@
                         }
                 });
 
+                // Функция отрисовки контакта (пользователя для создания чата)
+                const renderContactItem = (user) => {
+                        const roleEmoji = {
+                                'rop': '👔',
+                                'operator': '👤',
+                                'assistant': '🤝',
+                                'employee': '👨‍💼',
+                                'admin': '⚙️'
+                        };
+                        const emoji = roleEmoji[user.role] || '👤';
+                        const roleName = {
+                                'rop': 'РОП',
+                                'operator': 'Оператор',
+                                'assistant': 'Ассистент',
+                                'employee': 'Сотрудник',
+                                'admin': 'Админ'
+                        };
+                        const role = roleName[user.role] || user.role;
+
+                        return `
+                                <li class="chat-item contact-item"
+                                    onclick="openDirectChatWithUser(${user.id}, '${escapeHtml(user.name)}')">
+                                        <div class="chat-item-header">
+                                                <span class="chat-name">${emoji} ${escapeHtml(user.name)}</span>
+                                        </div>
+                                        <div class="chat-last-message">
+                                                <span class="chat-last-message-text">${role}</span>
+                                        </div>
+                                </li>
+                        `;
+                };
+
                 // Apply section filter
                 let html = '';
-                
+
                 if (activeSectionFilter === 'all' || activeSectionFilter === 'Отделы') {
-                        Object.entries(departments).forEach(([deptName, dept]) => {
-                                if (dept.main || dept.users.length > 0) {
+                        // Отображаем отделы из API контактов
+                        contacts.departments.forEach(dept => {
+                                if (dept.users && dept.users.length > 0) {
                                         html += `<div class="chat-section">
-                                                <h4>${deptName}</h4>
+                                                <h4>${escapeHtml(dept.department)}</h4>
                                                 <ul>`;
-                                        
-                                        // Главный чат отдела
-                                        if (dept.main) {
-                                                html += renderChatItem(dept.main);
-                                        }
-                                        
-                                        // Чаты пользователей отдела
-                                        dept.users.forEach(userChat => {
-                                                html += renderChatItem(userChat);
+
+                                        // Отображаем пользователей отдела как контакты
+                                        dept.users.forEach(user => {
+                                                html += renderContactItem(user);
                                         });
-                                        
+
+                                        html += `</ul></div>`;
+                                }
+                        });
+
+                        // Также показываем групповые чаты отделов если есть
+                        Object.entries(departments).forEach(([deptName, dept]) => {
+                                if (dept.main) {
+                                        html += `<div class="chat-section">
+                                                <h4>${deptName} (Групповой чат)</h4>
+                                                <ul>`;
+                                        html += renderChatItem(dept.main);
                                         html += `</ul></div>`;
                                 }
                         });
                 }
 
                 if (activeSectionFilter === 'all' || activeSectionFilter === 'Ассистенты') {
-                        if (assistants.length > 0) {
+                        // Отображаем ассистентов из API контактов
+                        if (contacts.assistants && contacts.assistants.users && contacts.assistants.users.length > 0) {
                                 html += `<div class="chat-section">
                                         <h4>Ассистенты</h4>
+                                        <ul>`;
+
+                                contacts.assistants.users.forEach(user => {
+                                        html += renderContactItem(user);
+                                });
+
+                                html += `</ul></div>`;
+                        }
+
+                        // Также показываем групповой чат ассистентов если есть
+                        if (assistants.length > 0) {
+                                html += `<div class="chat-section">
+                                        <h4>Ассистенты (Групповой чат)</h4>
                                         <ul>${assistants.map(renderChatItem).join('')}</ul>
                                 </div>`;
                         }

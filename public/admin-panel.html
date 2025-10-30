@@ -881,19 +881,144 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
-                
+
                 const div = document.getElementById('departmentsList');
                 if (data.departments && data.departments.length > 0) {
-                    div.innerHTML = data.departments.map(dept => `
-                        <div class="card" style="margin-bottom: 15px;">
-                            <h4>${dept}</h4>
-                        </div>
-                    `).join('');
+                    div.innerHTML = data.departments.map(dept => {
+                        const ropUser = dept.users ? dept.users.find(u => u.role === 'rop') : null;
+                        const operators = dept.users ? dept.users.filter(u => u.role === 'operator') : [];
+
+                        return `
+                            <div class="card" style="margin-bottom: 20px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                    <h3>🏢 ${dept.department}</h3>
+                                    <div>
+                                        <span style="background: #e2e8f0; padding: 5px 12px; border-radius: 6px; font-size: 13px; margin-right: 10px;">
+                                            ${dept.user_count || 0} человек
+                                        </span>
+                                        <button class="btn btn-sm btn-primary" onclick="showAddUserToDepartmentModal('${dept.department}')">
+                                            ➕ Добавить
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div style="margin-bottom: 10px;">
+                                    <strong>РОП:</strong> ${ropUser ?
+                                        `<span style="color: #4299e1;">${ropUser.name} (${ropUser.username})</span>` :
+                                        '<span style="color: #a0aec0;">Не назначен</span>'}
+                                    ${ropUser ? '' : `<button class="btn btn-sm btn-success" onclick="showAssignHeadModal('${dept.department}')" style="margin-left: 10px;">Назначить РОПа</button>`}
+                                </div>
+
+                                ${operators.length > 0 ? `
+                                    <div style="margin-top: 15px;">
+                                        <strong>Операторы:</strong>
+                                        <div style="margin-top: 10px;">
+                                            ${operators.map(user => `
+                                                <div style="background: #f7fafc; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                                                    <span>👤 ${user.name} (${user.username})</span>
+                                                    <button class="btn btn-sm btn-danger" onclick="removeUserFromDepartment(${user.id}, '${dept.department}')">Удалить</button>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                ` : '<div style="margin-top: 10px; color: #a0aec0;">Нет операторов</div>'}
+                            </div>
+                        `;
+                    }).join('');
                 } else {
-                    div.innerHTML = '<p style="text-align: center; color: #a0aec0;">No departments found</p>';
+                    div.innerHTML = '<p style="text-align: center; color: #a0aec0;">Отделы не найдены. Создайте первый отдел.</p>';
                 }
             } catch (err) {
                 console.error('Load departments error:', err);
+                document.getElementById('departmentsList').innerHTML = '<p style="text-align: center; color: #f56565;">Ошибка загрузки отделов</p>';
+            }
+        }
+
+        async function removeUserFromDepartment(userId, departmentName) {
+            if (!confirm(`Удалить пользователя из отдела ${departmentName}?`)) return;
+
+            try {
+                const res = await fetch(`${API_URL}/users/${userId}/department`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.ok) {
+                    showToast('Пользователь удален из отдела', 'success');
+                    await loadDepartments();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка удаления', 'error');
+                }
+            } catch (err) {
+                console.error('Remove user error:', err);
+                showToast('Ошибка удаления пользователя', 'error');
+            }
+        }
+
+        function showAssignHeadModal(departmentName) {
+            // Простой prompt для демонстрации - можно заменить на модальное окно
+            const userId = prompt(`Введите ID пользователя для назначения РОПом отдела ${departmentName}:`);
+            if (!userId) return;
+
+            assignDepartmentHead(departmentName, parseInt(userId));
+        }
+
+        async function assignDepartmentHead(departmentName, userId) {
+            try {
+                const res = await fetch(`${API_URL}/departments/${encodeURIComponent(departmentName)}/head`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userId })
+                });
+
+                if (res.ok) {
+                    showToast('РОП назначен успешно', 'success');
+                    await loadDepartments();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка назначения РОПа', 'error');
+                }
+            } catch (err) {
+                console.error('Assign head error:', err);
+                showToast('Ошибка назначения РОПа', 'error');
+            }
+        }
+
+        function showAddUserToDepartmentModal(departmentName) {
+            const userId = prompt(`Введите ID пользователя для добавления в ${departmentName}:`);
+            if (!userId) return;
+
+            const role = prompt('Введите роль (operator/employee):', 'operator');
+            if (!role) return;
+
+            addUserToDepartment(departmentName, parseInt(userId), role);
+        }
+
+        async function addUserToDepartment(departmentName, userId, role) {
+            try {
+                const res = await fetch(`${API_URL}/departments/${encodeURIComponent(departmentName)}/users`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userId, role })
+                });
+
+                if (res.ok) {
+                    showToast('Пользователь добавлен в отдел', 'success');
+                    await loadDepartments();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка добавления', 'error');
+                }
+            } catch (err) {
+                console.error('Add user to department error:', err);
+                showToast('Ошибка добавления пользователя', 'error');
             }
         }
 
@@ -1280,6 +1405,43 @@ async function createNewDepartment() {
                 }
             } catch (err) {
                 showToast('Ошибка', 'error');
+            }
+        }
+
+        // ========== CREATE DEPARTMENT ==========
+        function showCreateDepartmentModal() {
+            const departmentName = prompt('Введите название нового отдела (например: Отдел 3):');
+            if (!departmentName) return;
+
+            const userId = prompt('Введите ID пользователя для назначения РОПом (необязательно):');
+
+            createDepartment(departmentName, userId ? parseInt(userId) : null);
+        }
+
+        async function createDepartment(name, headUserId) {
+            try {
+                const body = { name };
+                if (headUserId) body.headUserId = headUserId;
+
+                const res = await fetch(`${API_URL}/departments`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                if (res.ok) {
+                    showToast('Отдел создан успешно', 'success');
+                    await loadDepartments();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка создания отдела', 'error');
+                }
+            } catch (err) {
+                console.error('Create department error:', err);
+                showToast('Ошибка создания отдела', 'error');
             }
         }
 
