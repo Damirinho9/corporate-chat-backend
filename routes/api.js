@@ -13,8 +13,9 @@ const authController = require('../controllers/authController');
 const userController = require('../controllers/userController');
 const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
+const departmentController = require('../controllers/departmentController');
 
-const { authenticateToken, requireAdmin, requireHead } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, requireHead, requireAdminOrRop } = require('../middleware/auth');
 const { canAccessChat, canSendToChat, canCreateDirectMessage } = require('../middleware/permissions');
 
 const { body, param, query: queryValidator, validationResult } = require('express-validator');
@@ -210,6 +211,137 @@ router.delete('/chats/:chatId',
     [param('chatId').isInt()],
     validate,
     chatController.deleteChat
+);
+
+// Chat settings routes (admin/rop)
+router.get('/chats/:chatId/settings',
+    authenticateToken,
+    requireAdminOrRop,
+    [param('chatId').isInt()],
+    validate,
+    chatController.getChatSettings
+);
+
+router.put('/chats/:chatId/settings',
+    authenticateToken,
+    requireAdminOrRop,
+    [
+        param('chatId').isInt(),
+        body('name').optional().trim().isLength({ min: 2, max: 100 }),
+        body('description').optional().trim()
+    ],
+    validate,
+    chatController.updateChatSettings
+);
+
+router.put('/chats/:chatId/participants/:userId/permissions',
+    authenticateToken,
+    requireAdmin,
+    [
+        param('chatId').isInt(),
+        param('userId').isInt(),
+        body('canAddMembers').optional().isBoolean(),
+        body('canRemoveMembers').optional().isBoolean(),
+        body('role').optional().isIn(['owner', 'admin', 'member'])
+    ],
+    validate,
+    chatController.updateParticipantPermissions
+);
+
+// ==================== DEPARTMENT ROUTES ====================
+
+// Get structured contacts (departments + assistants)
+router.get('/contacts/structured',
+    authenticateToken,
+    departmentController.getContactsStructured
+);
+
+// Get all departments with stats
+router.get('/departments',
+    authenticateToken,
+    requireAdminOrRop,
+    departmentController.getAllDepartments
+);
+
+// Get department users
+router.get('/departments/:departmentName/users',
+    authenticateToken,
+    requireAdminOrRop,
+    [param('departmentName').trim().notEmpty()],
+    validate,
+    departmentController.getDepartmentUsers
+);
+
+// Get assistants
+router.get('/assistants',
+    authenticateToken,
+    departmentController.getAssistants
+);
+
+// Create department (admin only)
+router.post('/departments',
+    authenticateToken,
+    requireAdmin,
+    [
+        body('name').trim().isLength({ min: 2, max: 100 }),
+        body('headUserId').optional().isInt()
+    ],
+    validate,
+    departmentController.createDepartment
+);
+
+// Assign department head (admin only)
+router.put('/departments/:departmentName/head',
+    authenticateToken,
+    requireAdmin,
+    [
+        param('departmentName').trim().notEmpty(),
+        body('userId').isInt()
+    ],
+    validate,
+    departmentController.assignDepartmentHead
+);
+
+// Move user to department (admin only)
+router.put('/users/:userId/department',
+    authenticateToken,
+    requireAdmin,
+    [
+        param('userId').isInt(),
+        body('departmentName').trim().notEmpty(),
+        body('role').optional().isIn(['admin', 'assistant', 'rop', 'operator', 'employee'])
+    ],
+    validate,
+    departmentController.moveUserToDepartment
+);
+
+// Add user to department (admin/rop)
+router.post('/departments/:departmentName/users',
+    authenticateToken,
+    requireAdminOrRop,
+    [
+        param('departmentName').trim().notEmpty(),
+        body('userId').isInt(),
+        body('role').optional().isIn(['rop', 'operator', 'employee'])
+    ],
+    validate,
+    departmentController.addUserToDepartment
+);
+
+// Remove user from department (admin only)
+router.delete('/users/:userId/department',
+    authenticateToken,
+    requireAdmin,
+    [param('userId').isInt()],
+    validate,
+    departmentController.removeUserFromDepartment
+);
+
+// Get department stats (admin only)
+router.get('/departments/stats',
+    authenticateToken,
+    requireAdmin,
+    departmentController.getDepartmentStats
 );
 
 // ==================== MESSAGE ROUTES ====================

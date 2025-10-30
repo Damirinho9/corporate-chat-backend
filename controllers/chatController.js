@@ -273,14 +273,17 @@ const createGroupChat = async (req, res) => {
     }
 };
 
-// Add participant to chat (admin only)
+// Add participant to chat (admin or ROP can add to their department chats)
 const addParticipant = async (req, res) => {
     try {
         const { chatId } = req.params;
         const { userId } = req.body;
+        const currentUserId = req.user.id;
+        const currentUserRole = req.user.role;
+        const currentUserDept = req.user.department;
 
         if (!userId) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 error: 'User ID is required',
                 code: 'MISSING_USER_ID'
             });
@@ -288,21 +291,51 @@ const addParticipant = async (req, res) => {
 
         // Check if chat exists
         const chatCheck = await query(
-            'SELECT id, type FROM chats WHERE id = $1',
+            'SELECT id, type, department FROM chats WHERE id = $1',
             [chatId]
         );
 
         if (chatCheck.rows.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 error: 'Chat not found',
                 code: 'CHAT_NOT_FOUND'
             });
         }
 
-        if (chatCheck.rows[0].type === 'direct') {
-            return res.status(400).json({ 
+        const chat = chatCheck.rows[0];
+
+        if (chat.type === 'direct') {
+            return res.status(400).json({
                 error: 'Cannot add participants to direct chats',
                 code: 'DIRECT_CHAT_MODIFY'
+            });
+        }
+
+        // Check permissions: admin can add to any chat, ROP can add to their department chats
+        if (currentUserRole === 'rop') {
+            if (chat.type === 'department' && chat.department !== currentUserDept) {
+                return res.status(403).json({
+                    error: 'ROP can only add participants to their own department chats',
+                    code: 'PERMISSION_DENIED'
+                });
+            }
+            // РОП может добавлять в групповые чаты, где он является участником с правами
+            if (chat.type === 'group') {
+                const ropPermCheck = await query(
+                    'SELECT can_add_members FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
+                    [chatId, currentUserId]
+                );
+                if (ropPermCheck.rows.length === 0 || !ropPermCheck.rows[0].can_add_members) {
+                    return res.status(403).json({
+                        error: 'You do not have permission to add members to this chat',
+                        code: 'PERMISSION_DENIED'
+                    });
+                }
+            }
+        } else if (currentUserRole !== 'admin') {
+            return res.status(403).json({
+                error: 'Only admin or ROP can add participants',
+                code: 'PERMISSION_DENIED'
             });
         }
 
@@ -313,7 +346,7 @@ const addParticipant = async (req, res) => {
         );
 
         if (userCheck.rows.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 error: 'User not found',
                 code: 'USER_NOT_FOUND'
             });
@@ -330,7 +363,7 @@ const addParticipant = async (req, res) => {
         res.json({ message: 'Participant added successfully' });
     } catch (error) {
         console.error('Add participant error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to add participant',
             code: 'ADD_PARTICIPANT_ERROR'
         });
@@ -487,6 +520,211 @@ const getAvailableRecipients = async (req, res) => {
   }
 };
 
+// Get chat settings (admin/rop)
+const getChatSettings = async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const currentUser = req.user;
+
+        // Check if chat exists
+        const chatCheck = await query(
+            'SELECT id, type, department, name FROM chats WHERE id = $1',
+            [chatId]
+        );
+
+        if (chatCheck.rows.length === 0) {
+            return res.status(404).json({
+                error: 'Chat not found',
+                code: 'CHAT_NOT_FOUND'
+            });
+        }
+
+        const chat = chatCheck.rows[0];
+
+        // Check permissions
+        if (currentUser.role === 'rop') {
+            if (chat.type === 'department' && chat.department !== currentUser.department) {
+                return res.status(403).json({
+                    error: 'Access denied',
+                    code: 'PERMISSION_DENIED'
+                });
+            }
+        } else if (currentUser.role !== 'admin') {
+            return res.status(403).json({
+                error: 'Only admin or ROP can access chat settings',
+                code: 'PERMISSION_DENIED'
+            });
+        }
+
+        // Get participants with their roles
+        const participants = await query(`
+            SELECT
+                u.id, u.name, u.username, u.role as user_role, u.department,
+                cp.role as chat_role, cp.can_add_members, cp.can_remove_members
+            FROM chat_participants cp
+            JOIN users u ON cp.user_id = u.id
+            WHERE cp.chat_id = $1
+            ORDER BY u.name
+        `, [chatId]);
+
+        res.json({
+            chat,
+            participants: participants.rows
+        });
+    } catch (error) {
+        console.error('Get chat settings error:', error);
+        res.status(500).json({
+            error: 'Failed to get chat settings',
+            code: 'GET_SETTINGS_ERROR'
+        });
+    }
+};
+
+// Update chat settings (admin/rop)
+const updateChatSettings = async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const { name, description } = req.body;
+        const currentUser = req.user;
+
+        // Check if chat exists
+        const chatCheck = await query(
+            'SELECT id, type, department FROM chats WHERE id = $1',
+            [chatId]
+        );
+
+        if (chatCheck.rows.length === 0) {
+            return res.status(404).json({
+                error: 'Chat not found',
+                code: 'CHAT_NOT_FOUND'
+            });
+        }
+
+        const chat = chatCheck.rows[0];
+
+        // Check permissions
+        if (currentUser.role === 'rop') {
+            if (chat.type === 'department' && chat.department !== currentUser.department) {
+                return res.status(403).json({
+                    error: 'Access denied',
+                    code: 'PERMISSION_DENIED'
+                });
+            }
+        } else if (currentUser.role !== 'admin') {
+            return res.status(403).json({
+                error: 'Only admin or ROP can update chat settings',
+                code: 'PERMISSION_DENIED'
+            });
+        }
+
+        // Build update query
+        const updates = [];
+        const values = [];
+        let paramCount = 1;
+
+        if (name !== undefined) {
+            updates.push(`name = $${paramCount}`);
+            values.push(name);
+            paramCount++;
+        }
+
+        if (description !== undefined) {
+            updates.push(`description = $${paramCount}`);
+            values.push(description);
+            paramCount++;
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({
+                error: 'No fields to update',
+                code: 'NO_UPDATE_FIELDS'
+            });
+        }
+
+        values.push(chatId);
+
+        await query(
+            `UPDATE chats SET ${updates.join(', ')} WHERE id = $${paramCount}`,
+            values
+        );
+
+        res.json({ message: 'Chat settings updated successfully' });
+    } catch (error) {
+        console.error('Update chat settings error:', error);
+        res.status(500).json({
+            error: 'Failed to update chat settings',
+            code: 'UPDATE_SETTINGS_ERROR'
+        });
+    }
+};
+
+// Update participant permissions (admin only)
+const updateParticipantPermissions = async (req, res) => {
+    try {
+        const { chatId, userId } = req.params;
+        const { canAddMembers, canRemoveMembers, role } = req.body;
+
+        // Check if participant exists
+        const participantCheck = await query(
+            'SELECT * FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
+            [chatId, userId]
+        );
+
+        if (participantCheck.rows.length === 0) {
+            return res.status(404).json({
+                error: 'Participant not found in this chat',
+                code: 'PARTICIPANT_NOT_FOUND'
+            });
+        }
+
+        // Build update query
+        const updates = [];
+        const values = [];
+        let paramCount = 1;
+
+        if (canAddMembers !== undefined) {
+            updates.push(`can_add_members = $${paramCount}`);
+            values.push(canAddMembers);
+            paramCount++;
+        }
+
+        if (canRemoveMembers !== undefined) {
+            updates.push(`can_remove_members = $${paramCount}`);
+            values.push(canRemoveMembers);
+            paramCount++;
+        }
+
+        if (role !== undefined) {
+            updates.push(`role = $${paramCount}`);
+            values.push(role);
+            paramCount++;
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({
+                error: 'No fields to update',
+                code: 'NO_UPDATE_FIELDS'
+            });
+        }
+
+        values.push(chatId, userId);
+
+        await query(
+            `UPDATE chat_participants SET ${updates.join(', ')}
+             WHERE chat_id = $${paramCount} AND user_id = $${paramCount + 1}`,
+            values
+        );
+
+        res.json({ message: 'Participant permissions updated successfully' });
+    } catch (error) {
+        console.error('Update participant permissions error:', error);
+        res.status(500).json({
+            error: 'Failed to update participant permissions',
+            code: 'UPDATE_PERMISSIONS_ERROR'
+        });
+    }
+};
+
 module.exports = {
     getUserChats,
     getChatById,
@@ -496,5 +734,8 @@ module.exports = {
     removeParticipant,
     markAsRead,
     deleteChat,
-    getAvailableRecipients
+    getAvailableRecipients,
+    getChatSettings,
+    updateChatSettings,
+    updateParticipantPermissions
 };
