@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { query } = require('../config/database');
+const { getAvailableRecipients } = require('../controllers/chatController');
 
 // ==================== IMPORTS ====================
 const { uploadSingle, uploadMultiple, validateFile } = require('../middleware/fileUpload');
@@ -34,7 +35,7 @@ const validate = (req, res, next) => {
 // ==================== ADMIN ROUTES ====================
 router.use('/', adminBasic);
 router.use('/', adminExtended);
-
+router.get('/chats/available-recipients', authenticateToken, getAvailableRecipients);
 // ==================== AUTH ROUTES ====================
 router.post('/auth/register',
     authenticateToken,

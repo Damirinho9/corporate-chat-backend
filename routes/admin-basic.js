@@ -67,7 +67,8 @@ router.post('/auth/register', authenticateToken, async (req, res) => {
         `, [username, password_hash, name, role || 'employee', department]);
 
         res.json({ 
-            success: true, 
+            success: true,
+            userId: result.rows[0].id, 
             user: result.rows[0] 
         });
     } catch (error) {
@@ -228,4 +229,181 @@ router.delete('/chats/:chatId/participants/:userId', authenticateToken, async (r
     }
 });
 
+
+
+// Get all chats (admin only)
+router.get('/admin/chats', authenticateToken, async (req, res) => {
+    try {
+        // Check permissions
+        if (req.user.role !== 'admin' && req.user.role !== 'rop') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        
+        const result = await query(`
+            SELECT 
+                c.id,
+                c.name,
+                c.type,
+                c.created_at,
+                COUNT(DISTINCT cp.user_id) as participant_count,
+                COUNT(DISTINCT m.id) as message_count
+            FROM chats c
+            LEFT JOIN chat_participants cp ON c.id = cp.chat_id
+            LEFT JOIN messages m ON c.id = m.chat_id
+            GROUP BY c.id, c.name, c.type, c.created_at
+            ORDER BY c.created_at DESC
+        `);
+        
+        res.json({ chats: result.rows });
+    } catch (err) {
+        console.error('Get chats error:', err);
+        res.status(500).json({ error: 'Failed to get chats' });
+    }
+});
+
+
+// Delete chat (admin only)
+router.delete('/admin/chats/:chatId', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin' && req.user.role !== 'rop') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        
+        const { chatId } = req.params;
+        
+        // Delete messages first (foreign key constraint)
+        await query('DELETE FROM messages WHERE chat_id = $1', [chatId]);
+        
+        // Delete participants
+        await query('DELETE FROM chat_participants WHERE chat_id = $1', [chatId]);
+        
+        // Delete chat
+        await query('DELETE FROM chats WHERE id = $1', [chatId]);
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Delete chat error:', err);
+        res.status(500).json({ error: 'Failed to delete chat' });
+    }
+});
+
+// Update chat (admin only)
+router.patch('/admin/chats/:chatId', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin' && req.user.role !== 'rop') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        
+        const { chatId } = req.params;
+        const { name } = req.body;
+        
+        if (!name || name.trim() === '') {
+            return res.status(400).json({ error: 'Name is required' });
+        }
+        
+        await query('UPDATE chats SET name = $1 WHERE id = $2', [name.trim(), chatId]);
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Update chat error:', err);
+        res.status(500).json({ error: 'Failed to update chat' });
+    }
+});
+
+// Create chat (admin only)
+router.post('/admin/chats', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin' && req.user.role !== 'rop') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        
+        const { name, type } = req.body;
+        
+        if (!name || name.trim() === '') {
+            return res.status(400).json({ error: 'Name is required' });
+        }
+        
+        if (!type || !['group', 'direct'].includes(type)) {
+            return res.status(400).json({ error: 'Invalid chat type' });
+        }
+        
+        const result = await query(
+            'INSERT INTO chats (name, type, created_by) VALUES ($1, $2, $3) RETURNING id',
+            [name.trim(), type, req.user.id]
+        );
+        
+        res.json({ success: true, chatId: result.rows[0].id });
+    } catch (err) {
+        console.error('Create chat error:', err);
+        res.status(500).json({ error: 'Failed to create chat' });
+    }
+});
+
 module.exports = router;
+
+// Update user (admin only)
+router.patch('/admin/users/:userId', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin' && req.user.role !== 'rop') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        
+        const { userId } = req.params;
+        const { name, role, department } = req.body;
+        
+        const updates = [];
+        const values = [];
+        let paramCount = 1;
+        
+        if (name) {
+            updates.push(`name = $${paramCount++}`);
+            values.push(name);
+        }
+        if (role) {
+            updates.push(`role = $${paramCount++}`);
+            values.push(role);
+        }
+        if (department !== undefined) {
+            updates.push(`department = $${paramCount++}`);
+            values.push(department);
+        }
+        
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+        
+        values.push(userId);
+        await query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${paramCount}`, values);
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Update user error:', err);
+        res.status(500).json({ error: 'Failed to update user' });
+    }
+});
+
+// Delete user permanently (hard delete) - admin only
+router.delete('/admin/users/:userId', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin' && req.user.role !== 'rop') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        
+        const { userId } = req.params;
+        
+        // Hard delete - permanently remove from database
+        // First, remove user from chat_participants
+        await query('DELETE FROM chat_participants WHERE user_id = $1', [userId]);
+        
+        // Remove user's messages (or set author to null if you want to keep messages)
+        await query('DELETE FROM messages WHERE author_id = $1', [userId]);
+        
+        // Finally, delete the user
+        await query('DELETE FROM users WHERE id = $1', [userId]);
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Delete user error:', err);
+        res.status(500).json({ error: 'Failed to delete user' });
+    }
+});

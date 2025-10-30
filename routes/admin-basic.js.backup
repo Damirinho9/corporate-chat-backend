@@ -1,15 +1,17 @@
 // ================================================
-// ADMIN ROUTES - Добавить в routes/api.js
+// ADMIN ROUTES - BASIC
 // ================================================
 
 const express = require('express');
 const router = express.Router();
-const { auth, isAdmin } = require('../middleware/auth');
+const bcrypt = require('bcrypt');
+const { query } = require('../config/database');
+const { authenticateToken } = require('../middleware/auth'); // FIXED!
 
 // ==================== USER MANAGEMENT ====================
 
 // Get all users (admin/rop only)
-router.get('/users', auth, async (req, res) => {
+router.get('/users', authenticateToken, async (req, res) => {
     try {
         // Check permissions
         if (req.user.role !== 'admin' && req.user.role !== 'rop') {
@@ -30,7 +32,7 @@ router.get('/users', auth, async (req, res) => {
 });
 
 // Create user (admin only)
-router.post('/auth/register', auth, async (req, res) => {
+router.post('/auth/register', authenticateToken, async (req, res) => {
     try {
         // Check admin
         if (req.user.role !== 'admin') {
@@ -55,7 +57,6 @@ router.post('/auth/register', auth, async (req, res) => {
         }
 
         // Hash password
-        const bcrypt = require('bcrypt');
         const password_hash = await bcrypt.hash(password, 10);
 
         // Insert user
@@ -66,7 +67,8 @@ router.post('/auth/register', auth, async (req, res) => {
         `, [username, password_hash, name, role || 'employee', department]);
 
         res.json({ 
-            success: true, 
+            success: true,
+            userId: result.rows[0].id, 
             user: result.rows[0] 
         });
     } catch (error) {
@@ -76,7 +78,7 @@ router.post('/auth/register', auth, async (req, res) => {
 });
 
 // Update user role (admin only)
-router.put('/users/:userId/role', auth, async (req, res) => {
+router.put('/users/:userId/role', authenticateToken, async (req, res) => {
     try {
         // Check admin
         if (req.user.role !== 'admin') {
@@ -105,7 +107,7 @@ router.put('/users/:userId/role', auth, async (req, res) => {
 });
 
 // Deactivate user (admin only)
-router.delete('/users/:userId', auth, async (req, res) => {
+router.delete('/users/:userId', authenticateToken, async (req, res) => {
     try {
         // Check admin
         if (req.user.role !== 'admin') {
@@ -134,7 +136,7 @@ router.delete('/users/:userId', auth, async (req, res) => {
 // ==================== CHAT MANAGEMENT ====================
 
 // Create chat (admin/rop only)
-router.post('/chats', auth, async (req, res) => {
+router.post('/chats', authenticateToken, async (req, res) => {
     try {
         // Check permissions
         if (req.user.role !== 'admin' && req.user.role !== 'rop') {
@@ -172,7 +174,7 @@ router.post('/chats', auth, async (req, res) => {
 });
 
 // Add participant to chat (admin/rop only)
-router.post('/chats/:chatId/participants', auth, async (req, res) => {
+router.post('/chats/:chatId/participants', authenticateToken, async (req, res) => {
     try {
         // Check permissions
         if (req.user.role !== 'admin' && req.user.role !== 'rop') {
@@ -206,7 +208,7 @@ router.post('/chats/:chatId/participants', auth, async (req, res) => {
 });
 
 // Remove participant from chat (admin/rop only)
-router.delete('/chats/:chatId/participants/:userId', auth, async (req, res) => {
+router.delete('/chats/:chatId/participants/:userId', authenticateToken, async (req, res) => {
     try {
         // Check permissions
         if (req.user.role !== 'admin' && req.user.role !== 'rop') {
@@ -228,30 +230,3 @@ router.delete('/chats/:chatId/participants/:userId', auth, async (req, res) => {
 });
 
 module.exports = router;
-
-// Get all chats (admin only)
-router.get('/chats', auth, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT 
-                c.id,
-                c.name,
-                c.type,
-                c.created_at,
-                d.name as department_name,
-                COUNT(DISTINCT cp.user_id) as participant_count,
-                COUNT(DISTINCT m.id) as message_count
-            FROM chats c
-            LEFT JOIN departments d ON c.department_id = d.id
-            LEFT JOIN chat_participants cp ON c.id = cp.chat_id
-            LEFT JOIN messages m ON c.id = m.chat_id
-            GROUP BY c.id, d.name
-            ORDER BY c.created_at DESC
-        `);
-        
-        res.json({ chats: result.rows });
-    } catch (err) {
-        console.error('Get chats error:', err);
-        res.status(500).json({ error: 'Failed to get chats' });
-    }
-});

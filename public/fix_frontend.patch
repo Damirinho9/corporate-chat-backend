@@ -1,0 +1,10 @@
+# Исправление 1: last_message должен быть .content
+# Исправление 2: Экранирование XSS в last_message
+
+# Строка 1242 - исправляем вывод last_message
+sed -i '1242s/\${chat.last_message || /\${escapeHtml(chat.last_message?.content || chat.last_message) || /' index.html
+
+# Строка 1251 - сохраняем объект как есть (это правильно)
+# Ничего не меняем
+
+echo "✅ Исправления применены"

@@ -470,6 +470,57 @@
             background: #dc2626;
         }
     </style>
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: var(--bg-primary);
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .modal-content h2 {
+            margin-top: 0;
+            color: var(--text-primary);
+        }
+        .close {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+        .close:hover {
+            color: var(--text-primary);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-primary);
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
 </head>
 <body>
     <div class="container">
@@ -1283,6 +1334,108 @@ async function createNewDepartment() {
             }
         }
 
+</script>
+// Create chat form handler
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('createChatForm');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('chatName').value.trim();
+            const type = document.getElementById('chatType').value;
+            const token = localStorage.getItem('token');
+            const API_URL = window.location.origin + '/api';
+            
+            try {
+                const res = await fetch(`${API_URL}/admin/chats`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, type })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    closeCreateChatModal();
+                    loadChats();
+                    alert('Чат создан!');
+                } else {
+                    alert(data.error || 'Ошибка создания');
+                }
+            } catch (err) {
+                console.error('Create chat error:', err);
+                alert('Ошибка создания');
+            }
+        });
+    }
+});
+</script>
+
+<!-- Create Chat Modal -->
+<div id="createChatModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeCreateChatModal()">&times;</span>
+        <h2>Создать чат</h2>
+        <form id="createChatForm">
+            <div class="form-group">
+                <label>Название:</label>
+                <input type="text" id="chatName" required>
+            </div>
+            <div class="form-group">
+                <label>Тип:</label>
+                <select id="chatType">
+                    <option value="group">Группа</option>
+                    <option value="direct">Личный</option>
+                </select>
+            </div>
+            <button type="submit" class="btn-primary">Создать</button>
+        </form>
+    </div>
+</div>
+
+<script>
+// Create Chat Form Handler
+(function() {
+    const form = document.getElementById('createChatForm');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('chatName').value.trim();
+            const type = document.getElementById('chatType').value;
+            const token = localStorage.getItem('token');
+            const API_URL = window.location.origin + '/api';
+            
+            try {
+                const res = await fetch(`${API_URL}/admin/chats`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, type })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    alert('Чат создан!');
+                    closeCreateChatModal();
+                    loadChats();
+                } else {
+                    alert(data.error || 'Ошибка создания');
+                }
+            } catch (err) {
+                console.error('Create chat error:', err);
+                alert('Ошибка создания');
+            }
+        });
+    }
+})();
 </script>
 </body>
 </html>

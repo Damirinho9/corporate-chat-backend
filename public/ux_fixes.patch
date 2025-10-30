@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# ==============================================
+# КРИТИЧНЫЕ ИСПРАВЛЕНИЯ
+# ==============================================
+
+# 1. Кнопка "назад" для мобильной версии
+sed -i '/<div class="chat-header/a\
+                    <button class="mobile-back-btn" id="mobileBackBtn" onclick="closeMobileChat()">← Назад</button>' index.html
+
+# Добавим CSS для кнопки назад
+sed -i '/\.chat-header {/a\
+        .mobile-back-btn {\
+            display: none;\
+            padding: 8px 16px;\
+            background: var(--primary);\
+            color: white;\
+            border: none;\
+            border-radius: 6px;\
+            cursor: pointer;\
+            font-size: 14px;\
+            margin-right: 10px;\
+        }\
+        @media (max-width: 768px) {\
+            .mobile-back-btn { display: inline-block; }\
+        }' index.html
+
+# 2. Фикс реакций (правильный positioning)
+sed -i 's/\.message-reactions {/\.message-reactions {\
+            display: flex;\
+            flex-wrap: wrap;\
+            gap: 5px;\
+            margin-top: 5px;/' index.html
+
+# 3. Индикатор отправки
+sed -i '/async function sendMessage/a\
+            const sendBtn = document.getElementById("sendBtn");\
+            sendBtn.disabled = true;\
+            sendBtn.textContent = "⏳";' index.html
+
+sed -i '/input.value = "";/a\
+            sendBtn.disabled = false;\
+            sendBtn.textContent = "➤";' index.html
+
+echo "✅ Критичные исправления применены"
+
+# ==============================================
+# СРЕДНИЕ ИСПРАВЛЕНИЯ
+# ==============================================
+
+# 4. Индикатор загрузки чата
+sed -i '/async function loadMessages/a\
+            const container = document.getElementById("messagesContainer");\
+            container.innerHTML = "<div style=\"text-align:center;padding:40px;color:var(--text-secondary)\">⏳ Загрузка сообщений...</div>";' index.html
+
+# 6. Неактивная кнопка отправки при пустом поле
+sed -i '/messageInput\?\.addEventListener.*input/a\
+                const isEmpty = this.value.trim().length === 0;\
+                document.getElementById("sendBtn").disabled = isEmpty;\
+                document.getElementById("sendBtn").style.opacity = isEmpty ? "0.5" : "1";' index.html
+
+# 7. Счетчик символов
+sed -i '/<textarea id="messageInput"/a\
+                            <span id="charCounter" style="font-size:11px;color:var(--text-secondary);margin-left:10px;">0/5000</span>' index.html
+
+sed -i '/messageInput\?\.addEventListener.*input/a\
+                const count = this.value.length;\
+                document.getElementById("charCounter").textContent = count + "/5000";\
+                document.getElementById("charCounter").style.color = count > 4500 ? "red" : "var(--text-secondary)";' index.html
+
+# 12. Авторазмер textarea
+sed -i '/messageInput\?\.addEventListener.*input/a\
+                this.style.height = "auto";\
+                this.style.height = Math.min(this.scrollHeight, 150) + "px";' index.html
+
+echo "✅ Средние исправления применены"
+
+# ==============================================
+# МЕЛКИЕ ИСПРАВЛЕНИЯ  
+# ==============================================
+
+# 10. Время последнего сообщения в списке чатов
+# (требует изменений в renderChats - сделаем отдельно)
+
+echo "✅ Все исправления применены!"

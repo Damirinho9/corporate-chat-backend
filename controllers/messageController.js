@@ -39,7 +39,7 @@ const getMessages = async (req, res) => {
                         'filename', f.original_filename,
                         'size', f.size_bytes,
                         'mimeType', f.mime_type,
-                        'type', f.file_type,
+                        'type', f.mime_type,
                         'url', '/api/files/' || f.id,
                         'thumbnailUrl', CASE WHEN f.thumbnail_path IS NOT NULL 
                             THEN '/api/files/' || f.id || '/thumbnail' 
@@ -250,7 +250,7 @@ const sendMessage = async (req, res) => {
                         'filename', f.original_filename,
                         'size', f.size_bytes,
                         'mimeType', f.mime_type,
-                        'type', f.file_type,
+                        'type', f.mime_type,
                         'url', '/api/files/' || f.id,
                         'thumbnailUrl', CASE WHEN f.thumbnail_path IS NOT NULL 
                             THEN '/api/files/' || f.id || '/thumbnail' 
@@ -623,12 +623,12 @@ const getMessageStats = async (req, res) => {
     try {
         const stats = await query(`
             SELECT 
-                COUNT(*) as total_messages,
-                COUNT(DISTINCT user_id) as unique_senders,
-                COUNT(DISTINCT chat_id) as active_chats,
-                COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as messages_24h,
-                COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as messages_7d,
-                COUNT(*) FILTER (WHERE file_id IS NOT NULL) as messages_with_files
+                (COUNT(*))::integer as total_messages,
+                (COUNT(DISTINCT user_id))::integer as unique_senders,
+                (COUNT(DISTINCT chat_id))::integer as active_chats,
+                (COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours'))::integer as messages_24h,
+                (COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days'))::integer as messages_7d,
+                (COUNT(*) FILTER (WHERE file_id IS NOT NULL))::integer as messages_with_files
             FROM messages
         `);
 
@@ -637,7 +637,7 @@ const getMessageStats = async (req, res) => {
                 u.id,
                 u.name,
                 u.username,
-                COUNT(m.id) as message_count
+                COUNT(m.id)::integer as message_count
             FROM users u
             JOIN messages m ON u.id = m.user_id
             GROUP BY u.id, u.name, u.username

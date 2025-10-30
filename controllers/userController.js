@@ -238,7 +238,7 @@ const getUsersByRole = async (req, res) => {
     try {
         const { role } = req.params;
 
-        if (!['admin', 'head', 'employee'].includes(role)) {
+        if (!['admin', 'rop', 'employee'].includes(role)) {
             return res.status(400).json({ 
                 error: 'Invalid role',
                 code: 'INVALID_ROLE'
@@ -268,21 +268,21 @@ const getUserStats = async (req, res) => {
     try {
         const stats = await query(`
             SELECT 
-                COUNT(*) as total_users,
-                COUNT(*) FILTER (WHERE is_active = true) as active_users,
-                COUNT(*) FILTER (WHERE role = 'admin') as admins,
-                COUNT(*) FILTER (WHERE role = 'head') as heads,
-                COUNT(*) FILTER (WHERE role = 'employee') as employees,
-                COUNT(*) FILTER (WHERE last_seen > NOW() - INTERVAL '5 minutes') as online_users
+                (COUNT(*))::integer as total_users,
+                (COUNT(*) FILTER (WHERE is_active = true))::integer as active_users,
+                (COUNT(*) FILTER (WHERE role = 'admin'))::integer as admins,
+                (COUNT(*) FILTER (WHERE role = 'rop'))::integer as rops,
+                (COUNT(*) FILTER (WHERE role = 'employee'))::integer as employees,
+                (COUNT(*) FILTER (WHERE last_seen > NOW() - INTERVAL '5 minutes'))::integer as online_users
             FROM users
         `);
 
         const deptStats = await query(`
             SELECT 
                 department,
-                COUNT(*) as user_count,
-                COUNT(*) FILTER (WHERE role = 'head') as heads,
-                COUNT(*) FILTER (WHERE role = 'employee') as employees
+                (COUNT(*))::integer as user_count,
+                (COUNT(*) FILTER (WHERE role = 'rop'))::integer as rops,
+                (COUNT(*) FILTER (WHERE role = 'employee'))::integer as employees
             FROM users
             WHERE department IS NOT NULL AND is_active = true
             GROUP BY department

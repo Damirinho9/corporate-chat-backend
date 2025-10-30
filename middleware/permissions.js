@@ -112,16 +112,21 @@ const canSendToChat = async (req, res, next) => {
             return next();
         }
 
-        // For department chats, only heads can send messages
+        // For department chats, allow heads and operators of same department
         if (chat.type === 'department') {
-            if (userRole !== 'head' || userDept !== chat.department) {
-                return res.status(403).json({ 
-                    error: 'Only department heads can send messages in department chats',
-                    code: 'HEAD_ONLY_CHAT'
-                });
+            // Allow head or operator of the same department
+            if ((userRole === 'head' || userRole === 'operator') && userDept === chat.department) {
+                return next();
             }
-
-            return next();
+            // Allow admin
+            if (userRole === 'admin') {
+                return next();
+            }
+            // Deny others
+            return res.status(403).json({ 
+                error: 'Only department members can send messages in department chats',
+                code: 'DEPARTMENT_ONLY'
+            });
         }
 
         res.status(403).json({ 

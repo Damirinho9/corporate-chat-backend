@@ -3,61 +3,54 @@ const { pool } = require('../config/database');
 
 // Get all accessible chats for user
 const getUserChats = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const { limit = 50, offset = 0 } = req.query;
+  try {
+    const userId = req.user.id;
+    const me = await query('SELECT role FROM users WHERE id=$1', [userId]);
+    const isAdmin = me.rows[0]?.role === 'admin';
 
-        const result = await query(
-            `SELECT 
-                c.id,
-                c.name,
-                c.type,
-                c.department,
-                cp.last_read_at,
-                c.updated_at,
-                (
-                    SELECT COUNT(*)
-                    FROM messages m
-                    WHERE m.chat_id = c.id 
-                    AND m.created_at > COALESCE(cp.last_read_at, '1970-01-01')
-                    AND m.user_id != $1
-                ) as unread_count,
-                (
-                    SELECT json_build_object(
-                        'id', m.id,
-                        'content', m.content,
-                        'created_at', m.created_at,
-                        'user_id', m.user_id,
-                        'username', u.name
-                    )
-                    FROM messages m
-                    JOIN users u ON m.user_id = u.id
-                    WHERE m.chat_id = c.id
-                    ORDER BY m.created_at DESC
-                    LIMIT 1
-                ) as last_message,
-                (
-                    SELECT json_agg(json_build_object('id', u.id, 'name', u.name, 'role', u.role))
-                    FROM chat_participants cp2
-                    JOIN users u ON cp2.user_id = u.id
-                    WHERE cp2.chat_id = c.id AND u.id != $1
-                ) as participants
-            FROM chats c
-            JOIN chat_participants cp ON c.id = cp.chat_id
-            WHERE cp.user_id = $1
-            ORDER BY c.updated_at DESC
-            LIMIT $2 OFFSET $3`,
-            [userId, limit, offset]
-        );
+    const { limit = 50, offset = 0 } = req.query;
 
-        res.json({ chats: result.rows });
-    } catch (error) {
-        console.error('Get user chats error:', error);
-        res.status(500).json({ 
-            error: 'Failed to get chats',
-            code: 'GET_CHATS_ERROR'
-        });
-    }
+    const baseSelect = `
+      SELECT 
+        c.id, c.name, c.type, c.department, cp.last_read_at, c.updated_at,
+        (
+          SELECT COUNT(*) FROM messages m
+           WHERE m.chat_id = c.id 
+             AND m.created_at > COALESCE(cp.last_read_at, '1970-01-01')
+             AND m.user_id != $1
+        ) AS unread_count,
+        (
+          SELECT json_build_object(
+            'id', m.id, 'content', m.content, 'created_at', m.created_at,
+            'user_id', m.user_id, 'username', u.name
+          )
+            FROM messages m
+            JOIN users u ON m.user_id=u.id
+           WHERE m.chat_id = c.id
+           ORDER BY m.created_at DESC
+           LIMIT 1
+        ) AS last_message,
+        (
+          SELECT json_agg(json_build_object('id', u.id, 'name', u.name, 'role', u.role))
+            FROM chat_participants cp2
+            JOIN users u ON cp2.user_id=u.id
+           WHERE cp2.chat_id = c.id AND u.id <> $1
+        ) AS participants
+      FROM chats c
+      JOIN chat_participants cp ON c.id = cp.chat_id
+    `;
+
+    const sql = isAdmin
+      ? baseSelect + ` WHERE 1=1 ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`
+      : baseSelect + ` WHERE cp.user_id = $1 ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`;
+
+    const result = await query(sql, [userId, limit, offset]);
+
+    res.json({ chats: result.rows });
+  } catch (error) {
+    console.error('Get user chats error:', error);
+    res.status(500).json({ error: 'Failed to get chats', code: 'GET_CHATS_ERROR' });
+  }
 };
 
 // Get chat by ID
@@ -439,6 +432,61 @@ const deleteChat = async (req, res) => {
     }
 };
 
+// helper: получить доступных адресатов для DM по RBAC
+const getAvailableRecipients = async (req, res) => {
+  try {
+    const meId = req.user.id;
+    const me = await query(
+      'SELECT id, role, department FROM users WHERE id = $1',
+      [meId]
+    );
+    if (me.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+
+    const { role, department } = me.rows[0];
+
+    // админ и ассистент - могут писать всем активным
+    if (role === 'admin' || role === 'assistant') {
+      const r = await query(
+        'SELECT id, name, role, department FROM users WHERE is_active = true AND id <> $1 ORDER BY role, name',
+        [meId]
+      );
+      return res.json({ recipients: r.rows });
+    }
+
+    // руководитель - всем
+    if (role === 'manager') {
+      const r = await query(
+        'SELECT id, name, role, department FROM users WHERE is_active = true AND id <> $1 ORDER BY role, name',
+        [meId]
+      );
+      return res.json({ recipients: r.rows });
+    }
+
+    // оператор - только ассистентам + руководителю своего отдела
+    if (role === 'operator') {
+      const r = await query(
+        `SELECT id, name, role, department
+           FROM users
+          WHERE is_active = true
+            AND id <> $1
+            AND (
+              role = 'assistant'
+              OR (role = 'manager' AND department = $2)
+            )
+          ORDER BY role, name`,
+        [meId, department]
+      );
+      return res.json({ recipients: r.rows });
+    }
+
+    // по умолчанию: никому
+    return res.json({ recipients: [] });
+  } catch (e) {
+    console.error('getAvailableRecipients error:', e);
+    return res.status(500).json({ error: 'Failed to get recipients' });
+  }
+};
+
 module.exports = {
     getUserChats,
     getChatById,
@@ -447,5 +495,6 @@ module.exports = {
     addParticipant,
     removeParticipant,
     markAsRead,
-    deleteChat
+    deleteChat,
+    getAvailableRecipients
 };
