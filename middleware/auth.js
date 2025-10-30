@@ -103,9 +103,31 @@ const requireAdmin = (req, res, next) => {
 // Check if user is head or admin
 const requireHead = (req, res, next) => {
     if (req.user.role !== 'admin' && req.user.role !== 'head') {
-        return res.status(403).json({ 
+        return res.status(403).json({
             error: 'Head or admin access required',
             code: 'HEAD_REQUIRED'
+        });
+    }
+    next();
+};
+
+// Check if user is ROP (Regional Operations Manager)
+const requireRop = (req, res, next) => {
+    if (req.user.role !== 'rop' && req.user.role !== 'admin') {
+        return res.status(403).json({
+            error: 'ROP or admin access required',
+            code: 'ROP_REQUIRED'
+        });
+    }
+    next();
+};
+
+// Check if user is admin or ROP
+const requireAdminOrRop = (req, res, next) => {
+    if (req.user.role !== 'admin' && req.user.role !== 'rop') {
+        return res.status(403).json({
+            error: 'Admin or ROP access required',
+            code: 'ADMIN_OR_ROP_REQUIRED'
         });
     }
     next();
@@ -126,5 +148,7 @@ module.exports = {
     authenticateToken,
     requireAdmin,
     requireHead,
+    requireRop,
+    requireAdminOrRop,
     verifyRefreshToken
 };
