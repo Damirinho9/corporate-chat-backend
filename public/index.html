@@ -1369,6 +1369,11 @@
     </div>
 
     <script>
+        // ==================== VERSION INFO ====================
+        const APP_VERSION = 'v2.0.0-chat-fix'; // Версия с исправлением открытия чатов
+        console.log('%c🚀 Корпоративный чат ' + APP_VERSION, 'font-size: 16px; font-weight: bold; color: #2196f3;');
+        console.log('%c✅ Исправления: открытие существующих чатов, детальное логирование', 'color: #4caf50;');
+
         // ==================== GLOBAL VARIABLES ====================
         const API_URL = window.location.origin + '/api';
         let token = localStorage.getItem('token');
@@ -2362,26 +2367,26 @@
 
             currentChatId = Number(chatId);
 
-            // Save last active chat to localStorage
-            localStorage.setItem('lastActiveChatId', chatId);
+                // Save last active chat to localStorage
+                localStorage.setItem('lastActiveChatId', chatId);
 
             document.querySelectorAll('.chat-item').forEach(item => {
                 item.classList.remove('active');
             });
             document.querySelectorAll(`[data-chat-id="${chatId}"]`).forEach(item => item.classList.add('active'));
 
-            document.getElementById('chatHeader').classList.remove('hidden');
+                document.getElementById('chatHeader').classList.remove('hidden');
 
-            // Enable input field
-            const messageInput = document.getElementById('messageInput');
-            const sendBtn = document.getElementById('sendBtn');
-            const attachBtn = document.getElementById('attachBtn');
+                // Enable input field
+                const messageInput = document.getElementById('messageInput');
+                const sendBtn = document.getElementById('sendBtn');
+                const attachBtn = document.getElementById('attachBtn');
 
-            messageInput.disabled = false;
-            messageInput.placeholder = 'Напишите сообщение...';
-            sendBtn.disabled = false;
-            attachBtn.disabled = false;
-            messageInput.focus();
+                messageInput.disabled = false;
+                messageInput.placeholder = 'Напишите сообщение...';
+                sendBtn.disabled = false;
+                attachBtn.disabled = false;
+                messageInput.focus();
 
             const chat = chats.find(c => c.id === chatId);
             if (chat) {
@@ -2439,6 +2444,8 @@
             messagesContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;"><div style="text-align:center;color:var(--text-secondary);"><div style="font-size:32px;margin-bottom:10px;">⏳</div><div>Загрузка сообщений...</div></div></div>';
 
             try {
+                console.log('[loadMessages] Загрузка сообщений для chatId:', chatId);
+
                 const response = await fetch(`${API_URL}/chats/${chatId}/messages`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -2492,6 +2499,8 @@
                         </div>
                     `;
                 }
+
+                console.log('[loadMessages] Сообщения успешно загружены');
             } catch (err) {
                 console.error('[loadMessages] Критическая ошибка:', err);
                 messagesContainer.innerHTML = `
