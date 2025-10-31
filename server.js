@@ -46,11 +46,16 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { error: 'Too many requests' },
+  windowMs: 15 * 60 * 1000, // 15 минут
+  max: 1000, // Увеличено до 1000 запросов (было 100)
+  message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Пропускаем rate limiting для локальных запросов в dev режиме
+    if (process.env.NODE_ENV === 'development') return true;
+    return false;
+  }
 });
 app.use('/api/', limiter);
 

@@ -880,6 +880,18 @@
                 const res = await fetch(`${API_URL}/departments`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+
+                if (!res.ok) {
+                    const error = await res.json();
+                    console.error('[Departments] Ошибка API:', error);
+                    document.getElementById('departmentsList').innerHTML = `
+                        <p style="text-align: center; color: #f56565;">
+                            Ошибка загрузки: ${error.error || res.statusText}
+                        </p>`;
+                    showToast(`Ошибка: ${error.error || res.statusText}`, 'error');
+                    return;
+                }
+
                 const data = await res.json();
                 console.log('Departments data:', data);
 
