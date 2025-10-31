@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to match seed.js
 const { query } = require('../config/database');
 const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../middleware/auth');
 
@@ -142,8 +142,15 @@ const login = async (req, res) => {
     try {
         const { username, password } = req.body;
 
+        console.log('[LOGIN] Attempt:', {
+            username,
+            passwordLength: password?.length,
+            timestamp: new Date().toISOString()
+        });
+
         if (!username || !password) {
-            return res.status(400).json({ 
+            console.log('[LOGIN] Missing credentials');
+            return res.status(400).json({
                 error: 'Username and password are required',
                 code: 'MISSING_CREDENTIALS'
             });
@@ -156,8 +163,14 @@ const login = async (req, res) => {
             [username]
         );
 
+        console.log('[LOGIN] User query result:', {
+            found: result.rows.length > 0,
+            username: username
+        });
+
         if (result.rows.length === 0) {
-            return res.status(401).json({ 
+            console.log('[LOGIN] User not found:', username);
+            return res.status(401).json({
                 error: 'Invalid credentials',
                 code: 'INVALID_CREDENTIALS'
             });
@@ -165,19 +178,32 @@ const login = async (req, res) => {
 
         const user = result.rows[0];
 
+        console.log('[LOGIN] User found:', {
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            is_active: user.is_active,
+            has_password_hash: !!user.password_hash,
+            password_hash_length: user.password_hash?.length
+        });
+
         // Check if user is active
         if (!user.is_active) {
-            return res.status(403).json({ 
+            console.log('[LOGIN] User inactive:', username);
+            return res.status(403).json({
                 error: 'User account is deactivated',
                 code: 'USER_INACTIVE'
             });
         }
 
         // Verify password
+        console.log('[LOGIN] Comparing passwords...');
         const passwordMatch = await bcrypt.compare(password, user.password_hash);
+        console.log('[LOGIN] Password match:', passwordMatch);
 
         if (!passwordMatch) {
-            return res.status(401).json({ 
+            console.log('[LOGIN] Invalid password for:', username);
+            return res.status(401).json({
                 error: 'Invalid credentials',
                 code: 'INVALID_CREDENTIALS'
             });

@@ -149,10 +149,15 @@ const canCreateDirectMessage = async (req, res, next) => {
         const senderId = req.user.id;
 
         if (senderId === receiverId) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 error: 'Cannot create chat with yourself',
                 code: 'SELF_CHAT_ERROR'
             });
+        }
+
+        // Admins and assistants can create chats with anyone
+        if (req.user.role === 'admin' || req.user.role === 'assistant') {
+            return next();
         }
 
         // Check if DM is allowed
@@ -162,7 +167,7 @@ const canCreateDirectMessage = async (req, res, next) => {
         );
 
         if (!result.rows[0].can_send) {
-            return res.status(403).json({ 
+            return res.status(403).json({
                 error: 'You cannot create a direct message with this user',
                 code: 'DM_CREATION_NOT_ALLOWED'
             });
@@ -171,7 +176,7 @@ const canCreateDirectMessage = async (req, res, next) => {
         next();
     } catch (error) {
         console.error('DM creation check error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to verify DM creation permission',
             code: 'DM_CHECK_ERROR'
         });

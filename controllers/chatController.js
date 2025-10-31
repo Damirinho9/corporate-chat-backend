@@ -643,12 +643,50 @@ const updateChatSettings = async (req, res) => {
 
         values.push(chatId);
 
-        await query(
-            `UPDATE chats SET ${updates.join(', ')} WHERE id = $${paramCount}`,
-            values
-        );
+        // Если это чат отдела и меняется название - синхронизируем с отделом
+        if (chat.type === 'department' && name !== undefined && chat.department !== name) {
+            console.log('[updateChatSettings] Department chat name changed, syncing department:', {
+                oldDepartment: chat.department,
+                newDepartment: name
+            });
 
-        res.json({ message: 'Chat settings updated successfully' });
+            // Используем транзакцию для атомарности
+            await query('BEGIN');
+
+            try {
+                // 1. Обновляем название чата и department в таблице chats
+                await query(
+                    `UPDATE chats SET ${updates.join(', ')}, department = $${paramCount + 1} WHERE id = $${paramCount}`,
+                    [...values, name]
+                );
+
+                // 2. Обновляем department у всех пользователей старого отдела
+                await query(
+                    'UPDATE users SET department = $1 WHERE department = $2',
+                    [name, chat.department]
+                );
+
+                console.log('[updateChatSettings] Synced department name with chat name');
+
+                await query('COMMIT');
+
+                res.json({
+                    message: 'Chat settings and department name updated successfully',
+                    departmentSynced: true
+                });
+            } catch (error) {
+                await query('ROLLBACK');
+                throw error;
+            }
+        } else {
+            // Обычное обновление без синхронизации отдела
+            await query(
+                `UPDATE chats SET ${updates.join(', ')} WHERE id = $${paramCount}`,
+                values
+            );
+
+            res.json({ message: 'Chat settings updated successfully' });
+        }
     } catch (error) {
         console.error('Update chat settings error:', error);
         res.status(500).json({

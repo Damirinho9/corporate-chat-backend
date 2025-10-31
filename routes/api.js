@@ -302,6 +302,18 @@ router.put('/departments/:departmentName/head',
     departmentController.assignDepartmentHead
 );
 
+// Rename department (admin only) - syncs department and chat name
+router.put('/departments/:departmentName/rename',
+    authenticateToken,
+    requireAdmin,
+    [
+        param('departmentName').trim().notEmpty(),
+        body('newName').trim().isLength({ min: 2, max: 50 })
+    ],
+    validate,
+    departmentController.renameDepartment
+);
+
 // Move user to department (admin only)
 router.put('/users/:userId/department',
     authenticateToken,

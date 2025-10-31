@@ -34,6 +34,9 @@ const getAllDepartments = async (req, res) => {
             ORDER BY d.name
         `);
 
+        console.log('[getAllDepartments] SQL result.rows:', JSON.stringify(result.rows, null, 2));
+        console.log('[getAllDepartments] Sending response:', JSON.stringify({ departments: result.rows }, null, 2));
+
         res.json({ departments: result.rows });
     } catch (error) {
         console.error('Get departments error:', error);
@@ -398,6 +401,95 @@ const removeUserFromDepartment = async (req, res) => {
     }
 };
 
+// Переименовать отдел (admin only) - синхронизирует название отдела и чата
+const renameDepartment = async (req, res) => {
+    try {
+        const { departmentName } = req.params;
+        const { newName } = req.body;
+
+        console.log('[renameDepartment] Renaming department:', { from: departmentName, to: newName });
+
+        if (!newName || newName.trim().length === 0) {
+            return res.status(400).json({
+                error: 'New department name is required',
+                code: 'MISSING_NEW_NAME'
+            });
+        }
+
+        const trimmedNewName = newName.trim();
+
+        // Проверяем, существует ли отдел
+        const deptCheck = await query(
+            'SELECT COUNT(*) as count FROM users WHERE department = $1',
+            [departmentName]
+        );
+
+        if (deptCheck.rows[0].count === 0) {
+            return res.status(404).json({
+                error: 'Department not found',
+                code: 'DEPT_NOT_FOUND'
+            });
+        }
+
+        // Проверяем, не занято ли новое название
+        const existingCheck = await query(
+            'SELECT COUNT(*) as count FROM users WHERE department = $1',
+            [trimmedNewName]
+        );
+
+        if (existingCheck.rows[0].count > 0 && departmentName !== trimmedNewName) {
+            return res.status(400).json({
+                error: 'Department with this name already exists',
+                code: 'DEPT_EXISTS'
+            });
+        }
+
+        // Используем транзакцию для атомарности
+        await query('BEGIN');
+
+        try {
+            // 1. Обновляем department у всех пользователей отдела
+            await query(
+                'UPDATE users SET department = $1 WHERE department = $2',
+                [trimmedNewName, departmentName]
+            );
+
+            console.log('[renameDepartment] Updated users.department');
+
+            // 2. Обновляем department и name в чате отдела
+            const chatUpdateResult = await query(
+                `UPDATE chats
+                 SET department = $1, name = $1, updated_at = CURRENT_TIMESTAMP
+                 WHERE type = 'department' AND department = $2
+                 RETURNING id, name`,
+                [trimmedNewName, departmentName]
+            );
+
+            console.log('[renameDepartment] Updated chat:', chatUpdateResult.rows[0]);
+
+            await query('COMMIT');
+
+            res.json({
+                success: true,
+                message: 'Department renamed successfully',
+                oldName: departmentName,
+                newName: trimmedNewName,
+                updatedChat: chatUpdateResult.rows[0]
+            });
+        } catch (error) {
+            await query('ROLLBACK');
+            throw error;
+        }
+    } catch (error) {
+        console.error('Rename department error:', error);
+        res.status(500).json({
+            error: 'Failed to rename department',
+            code: 'RENAME_DEPT_ERROR',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 // Получить статистику по отделам (admin only)
 const getDepartmentStats = async (req, res) => {
     try {
@@ -435,5 +527,6 @@ module.exports = {
     moveUserToDepartment,
     addUserToDepartment,
     removeUserFromDepartment,
+    renameDepartment,
     getDepartmentStats
 };

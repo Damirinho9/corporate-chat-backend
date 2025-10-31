@@ -1630,6 +1630,7 @@
 
         async function loadChats() {
             try {
+                console.log('[loadChats] Начало загрузки...');
                 // Загружаем чаты и контакты параллельно
                 const [chatsResponse, contactsResponse] = await Promise.all([
                     fetch(`${API_URL}/chats`, {
@@ -1640,8 +1641,33 @@
                     })
                 ]);
 
+                console.log('[loadChats] Статусы ответов:', {
+                    chats: chatsResponse.status,
+                    contacts: contactsResponse.status
+                });
+
+                if (!chatsResponse.ok) {
+                    const error = await chatsResponse.json();
+                    console.error('[loadChats] Ошибка чатов:', error);
+                    showToast(`Ошибка загрузки чатов: ${error.error || chatsResponse.status}`, 'error');
+                    return;
+                }
+
+                if (!contactsResponse.ok) {
+                    const error = await contactsResponse.json();
+                    console.error('[loadChats] Ошибка контактов:', error);
+                    showToast(`Ошибка загрузки контактов: ${error.error || contactsResponse.status}`, 'error');
+                    return;
+                }
+
                 const chatsData = await chatsResponse.json();
                 const contactsData = await contactsResponse.json();
+
+                console.log('[loadChats] Данные получены:', {
+                    chatsCount: chatsData.chats?.length || 0,
+                    departments: contactsData.departments?.length || 0,
+                    assistants: contactsData.assistants?.users?.length || 0
+                });
 
                 chats = chatsData.chats || [];
                 contacts = contactsData || { departments: [], assistants: { users: [] } };
@@ -1649,15 +1675,17 @@
                 renderChats();
                 restoreLastActiveChat();
             } catch (err) {
-                console.error('Load chats error:', err);
-                showToast('Ошибка загрузки чатов', 'error');
+                console.error('[loadChats] Критическая ошибка:', err);
+                showToast(`Ошибка загрузки: ${err.message}`, 'error');
             }
         }
 
         // Создать или открыть прямой чат с пользователем
         async function openDirectChatWithUser(userId, userName) {
             try {
+                console.log('[openDirectChat] Создание чата с пользователем:', { userId, userName });
                 showToast('Создание чата...', 'info');
+
                 const response = await fetch(`${API_URL}/chats/direct`, {
                     method: 'POST',
                     headers: {
@@ -1667,12 +1695,17 @@
                     body: JSON.stringify({ receiverId: userId })
                 });
 
+                console.log('[openDirectChat] Статус ответа:', response.status);
+
                 if (!response.ok) {
                     const error = await response.json();
+                    console.error('[openDirectChat] Ошибка от API:', error);
+                    showToast(`Ошибка: ${error.error || response.statusText}`, 'error');
                     throw new Error(error.error || 'Не удалось создать чат');
                 }
 
                 const data = await response.json();
+                console.log('[openDirectChat] Ответ от API:', data);
 
                 // Перезагружаем чаты чтобы получить новый
                 await loadChats();
@@ -1683,7 +1716,7 @@
                     showToast(`Чат с ${userName} открыт`, 'success');
                 }, 300);
             } catch (err) {
-                console.error('Create direct chat error:', err);
+                console.error('[openDirectChat] Критическая ошибка:', err);
                 showToast(err.message || 'Ошибка создания чата', 'error');
             }
         }
