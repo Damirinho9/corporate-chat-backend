@@ -32,7 +32,7 @@ async function seedDatabase() {
     await query('BEGIN');
 
     // Чистим таблицы аккуратно и сбрасываем идентификаторы
-    await query('TRUNCATE admin_logs, messages, chat_participants, chats, users RESTART IDENTITY CASCADE');
+    await query('TRUNCATE admin_logs, reactions, mentions, files, messages, chat_participants, chats, users RESTART IDENTITY CASCADE');
     console.log('✅ Cleared existing data');
 
     // 1) Пользователи

@@ -31,6 +31,7 @@ router.post(
     fileController.uploadFile
 );
 
+router.get('/:id/thumbnail', fileController.getFileThumbnail);
 router.get('/:id', fileController.getFile);
 router.delete('/:id', fileController.deleteFile);
 

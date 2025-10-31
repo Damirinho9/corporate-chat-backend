@@ -9,12 +9,18 @@ class InMemoryDatabase {
             chats: [],
             chat_participants: [],
             messages: [],
+            files: [],
+            reactions: [],
+            mentions: [],
             admin_logs: []
         };
         this.sequences = {
             users: 1,
             chats: 1,
             messages: 1,
+            files: 1,
+            reactions: 1,
+            mentions: 1,
             admin_logs: 1
         };
     }
@@ -42,6 +48,7 @@ class InMemoryDatabase {
             return { rows: [], rowCount: 0 };
         }
 
+        if (normalized.startsWith('TRUNCATE')) {
         if (normalized.startsWith('TRUNCATE admin_logs, messages, chat_participants, chats, users')) {
             this.reset();
             return { rows: [], rowCount: 0 };
