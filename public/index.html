@@ -1340,7 +1340,7 @@
                 
                 <div class="file-upload-container" id="fileUploadContainer">
                     <div class="file-upload-area" id="fileUploadArea">
-                        📎 Перетащите файлы или <input type="file" id="fileInput" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+                        📎 Перетащите файлы или <input type="file" id="fileInput" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.tar,.gz,.tgz,.bz2">
                         <button onclick="document.getElementById('fileInput').click()" style="margin-left:5px;padding:5px 10px;background:#2196f3;color:white;border:none;border-radius:4px;cursor:pointer">Выбрать</button>
                     </div>
                     <div class="file-preview-container" id="filePreviewContainer"></div>
@@ -1380,10 +1380,26 @@
         let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
         let socket = null;
         let currentChatId = null;
+        let currentDirectContactId = null;
         let chats = [];
+        const directChatByUser = new Map();
         const expandedDepartments = new Set();
         let selectedFiles = [];
         let replyToMessage = null;
+
+        const ROLE_DISPLAY_NAMES = {
+            'rop': 'РОП',
+            'operator': 'Оператор',
+            'assistant': 'Ассистент',
+            'employee': 'Сотрудник',
+            'admin': 'Администратор',
+            'head': 'Руководитель'
+        };
+
+        function getRoleDisplayName(role) {
+            if (!role) return '';
+            return ROLE_DISPLAY_NAMES[role] || role;
+        }
 
         // ==================== REPLY FUNCTIONALITY ====================
         function setReplyTo(message) {
@@ -1474,13 +1490,31 @@
         async function uploadFile(fileObj) {
             const formData = new FormData();
             formData.append('file', fileObj.file);
-            const res = await fetch('/api/files/upload', {
+
+            const res = await fetch(`${API_URL}/files/upload`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
-            const data = await res.json();
-            return data.file.id;
+
+            let data = {};
+            try {
+                data = await res.json();
+            } catch (error) {
+                console.warn('[uploadFile] Не удалось распарсить ответ:', error);
+            }
+
+            if (!res.ok) {
+                const message = data?.error || `Не удалось загрузить файл (${res.status})`;
+                throw new Error(message);
+            }
+
+            const fileId = data?.file?.id;
+            if (!fileId) {
+                throw new Error('Сервер не вернул идентификатор файла');
+            }
+
+            return fileId;
         }
 
         function renderMessageFile(msg) {
@@ -1723,6 +1757,34 @@
         // ==================== LOAD CHATS ====================
         let contacts = { departments: [], assistants: { users: [] } };
 
+        function rebuildDirectChatLookup() {
+            directChatByUser.clear();
+
+            chats
+                .filter(chat => chat && chat.type === 'direct')
+                .forEach(chat => {
+                    const chatId = Number(chat.id);
+                    if (!chatId) {
+                        return;
+                    }
+
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+
+                    participants.forEach(participant => {
+                        if (participant && participant.id) {
+                            directChatByUser.set(participant.id, chatId);
+                        }
+                    });
+
+                    const rawName = typeof chat.name === 'string' ? chat.name.trim() : '';
+                    if (participants.length === 1) {
+                        if (!rawName || rawName.toLowerCase() === 'direct') {
+                            chat.name = participants[0].name || rawName || 'Личный чат';
+                        }
+                    }
+                });
+        }
+
         async function loadChats() {
             try {
                 console.log('[loadChats] Начало загрузки...');
@@ -1765,6 +1827,7 @@
                 });
 
                 chats = chatsData.chats || [];
+                rebuildDirectChatLookup();
                 contacts = contactsData || { departments: [], assistants: { users: [] } };
 
                 renderChats();
@@ -1779,7 +1842,8 @@
         async function openDirectChatWithUser(userId, userName) {
             try {
                 console.log('[openDirectChat] Создание чата с пользователем:', { userId, userName });
-                showToast('Открытие чата...', 'info');
+
+                currentDirectContactId = userId;
 
                 const response = await fetch(`${API_URL}/chats/direct`, {
                     method: 'POST',
@@ -1792,46 +1856,80 @@
 
                 console.log('[openDirectChat] Статус ответа:', response.status);
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    console.error('[openDirectChat] Ошибка от API:', error);
-                    showToast(`Ошибка: ${error.error || response.statusText}`, 'error');
-                    throw new Error(error.error || 'Не удалось создать чат');
+                let data = {};
+                try {
+                    data = await response.json();
+                } catch (parseError) {
+                    console.warn('[openDirectChat] Не удалось распарсить ответ:', parseError);
                 }
 
-                const data = await response.json();
+                if (!response.ok) {
+                    console.error('[openDirectChat] Ошибка от API:', data);
+                    const message = data?.error || response.statusText || 'Не удалось создать чат';
+                    showToast(`Ошибка: ${message}`, 'error');
+                    throw new Error(message);
+                }
+
                 console.log('[openDirectChat] Ответ от API:', data);
 
-                // Если чат новый - перезагружаем список, иначе - просто открываем
-                if (data.isNew) {
-                    console.log('[openDirectChat] Новый чат создан, перезагрузка списка...');
+                const chatId = Number(data.chatId);
+                if (!chatId) {
+                    throw new Error('Не удалось получить идентификатор чата');
+                }
+
+                const isNew = Boolean(data.isNew);
+                let chatInCache = chats.find(chat => Number(chat.id) === chatId);
+
+                if (isNew) {
+                    console.log('[openDirectChat] Создан новый чат, обновляем список чатов');
                     await loadChats();
-                    setTimeout(() => {
-                        console.log('[openDirectChat] Открытие нового чата:', data.chatId);
-                        openChat(data.chatId);
-                        showToast(`Чат с ${userName} создан`, 'success');
-                    }, 300);
-                } else {
-                    // Чат уже существует - открываем сразу
-                    console.log('[openDirectChat] Чат уже существует, открытие:', data.chatId);
-                    console.log('[openDirectChat] Доступные чаты:', chats.map(c => ({id: c.id, name: c.name})));
+                    chatInCache = chats.find(chat => Number(chat.id) === chatId);
+                }
 
-                    const chatExists = chats.find(c => c.id === data.chatId);
-                    console.log('[openDirectChat] Чат найден в списке:', chatExists);
+                if (!chatInCache) {
+                    console.log('[openDirectChat] Чат не найден в списке, выполняем дополнительную загрузку');
+                    try {
+                        const chatResponse = await fetch(`${API_URL}/chats/${chatId}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
 
-                    if (chatExists) {
-                        openChat(data.chatId);
-                        showToast(`Чат с ${userName} открыт`, 'success');
-                    } else {
-                        console.warn('[openDirectChat] Чат не найден в списке, перезагрузка...');
+                        if (chatResponse.ok) {
+                            const chatPayload = await chatResponse.json();
+                            const chatData = chatPayload?.chat;
+                            if (chatData) {
+                                chats.push({
+                                    id: chatData.id,
+                                    name: chatData.name || userName,
+                                    type: chatData.type || 'direct',
+                                    department: chatData.department || null,
+                                    participants: chatData.participants || [],
+                                    unread_count: 0
+                                });
+                                rebuildDirectChatLookup();
+                                renderChats();
+                                chatInCache = chats.find(chat => Number(chat.id) === chatId);
+                                console.log('[openDirectChat] Чат добавлен из дополнительной загрузки');
+                            }
+                        } else {
+                            console.warn('[openDirectChat] Не удалось напрямую загрузить чат, выполняем полную перезагрузку списка');
+                            await loadChats();
+                            chatInCache = chats.find(chat => Number(chat.id) === chatId);
+                        }
+                    } catch (fetchError) {
+                        console.error('[openDirectChat] Ошибка при дополнительной загрузке чата:', fetchError);
                         await loadChats();
-                        setTimeout(() => {
-                            openChat(data.chatId);
-                            showToast(`Чат с ${userName} открыт`, 'success');
-                        }, 300);
+                        chatInCache = chats.find(chat => Number(chat.id) === chatId);
                     }
                 }
+
+                if (!chatInCache) {
+                    throw new Error('Чат не найден среди доступных после обновления');
+                }
+
+                await openChat(chatId);
+                showToast(`Чат с ${userName} открыт`, 'success');
             } catch (err) {
+                currentDirectContactId = null;
                 console.error('[openDirectChat] Критическая ошибка:', err);
                 showToast(err.message || 'Ошибка создания чата', 'error');
             }
@@ -1968,6 +2066,8 @@
                                 ? `<span class="unread-badge">${chat.unread_count}</span>`
                                 : '';
 
+                        const isActive = Number(chat.id) === Number(currentChatId);
+
                         const content = `
                                 <div class="chat-item-header">
                                         <span class="chat-name">${chatName}</span>
@@ -1984,7 +2084,7 @@
                         if (withArrow) {
                                 const arrowClass = expanded ? 'department-toggle expanded' : 'department-toggle';
                                 return `
-                                        <li class="chat-item ${extraClass} ${chat.id === currentChatId ? 'active' : ''}"
+                                        <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
                                             data-chat-id="${chat.id}"
                                             onclick="openChat(${chat.id})">
                                                 <button class="${arrowClass}" onclick="toggleDepartment(event, '${deptKey}')">&#9656;</button>
@@ -1996,7 +2096,7 @@
                         }
 
                         return `
-                                <li class="chat-item ${extraClass} ${chat.id === currentChatId ? 'active' : ''}"
+                                <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
                                     data-chat-id="${chat.id}"
                                     onclick="openChat(${chat.id})">
                                         ${content}
@@ -2082,19 +2182,20 @@
                                 'admin': '⚙️'
                         };
                         const emoji = roleEmoji[user.role] || '👤';
-                        const roleName = {
-                                'rop': 'РОП',
-                                'operator': 'Оператор',
-                                'assistant': 'Ассистент',
-                                'employee': 'Сотрудник',
-                                'admin': 'Админ'
-                        };
-                        const role = roleName[user.role] || user.role;
+                        const role = getRoleDisplayName(user.role) || user.role || '';
+
+                        const nestedClass = nested ? ' nested-contact' : '';
+                        const directChatId = directChatByUser.get(user.id);
+                        const isActive =
+                                Number(directChatId) === Number(currentChatId) ||
+                                (!directChatId && currentDirectContactId && Number(user.id) === Number(currentDirectContactId));
+                        const chatAttr = directChatId ? ` data-chat-id="${directChatId}"` : '';
 
                         const nestedClass = nested ? ' nested-contact' : '';
 
                         return `
-                                <li class="chat-item contact-item${nestedClass}"
+                                <li class="chat-item contact-item${nestedClass}${isActive ? ' active' : ''}"
+                                    data-contact-id="${user.id}"${chatAttr}
                                     onclick="openDirectChatWithUser(${user.id}, '${escapeHtml(user.name)}')">
                                         <div class="chat-item-header">
                                                 <span class="chat-name">${emoji} ${escapeHtml(user.name)}</span>
@@ -2211,6 +2312,8 @@
                         <div style="padding:20px;text-align:center;color:var(--text-secondary);">
                                 Нет доступных чатов
                         </div>`;
+
+                syncContactHighlights();
         }
 
         function updateChatLastMessage(chatId, message) {
@@ -2219,6 +2322,32 @@
                 chat.last_message = message.content;
                 renderChats();
             }
+        }
+
+        function syncContactHighlights() {
+            const contactItems = document.querySelectorAll('.contact-item');
+            if (contactItems.length === 0) {
+                return;
+            }
+
+            if (!currentDirectContactId) {
+                contactItems.forEach(item => {
+                    const chatId = item.dataset.chatId;
+                    if (!chatId || Number(chatId) !== Number(currentChatId)) {
+                        item.classList.remove('active');
+                    }
+                });
+                return;
+            }
+
+            contactItems.forEach(item => {
+                const contactId = Number(item.dataset.contactId);
+                if (contactId === Number(currentDirectContactId)) {
+                    item.classList.add('active');
+                } else if (!item.dataset.chatId || Number(item.dataset.chatId) !== Number(currentChatId)) {
+                    item.classList.remove('active');
+                }
+            });
         }
 
         // ==================== MOBILE NAVIGATION ====================
@@ -2231,28 +2360,22 @@
 
         // ==================== OPEN CHAT ====================
         async function openChat(chatId) {
-            try {
-                console.log('[openChat] Открытие чата:', chatId);
-                console.log('[openChat] Тип chatId:', typeof chatId);
-                console.log('[openChat] Всего чатов:', chats.length);
+            console.log('[openChat] Открытие чата:', chatId);
+            // Mobile: hide sidebar, show chat
+            if (window.innerWidth <= 768) {
+                document.querySelector('.sidebar')?.classList.add('hidden');
+                document.querySelector('.main-chat')?.classList.remove('hidden');
+            }
 
-                // Mobile: hide sidebar, show chat
-                if (window.innerWidth <= 768) {
-                    document.querySelector('.sidebar')?.classList.add('hidden');
-                    document.querySelector('.main-chat')?.classList.remove('hidden');
-                }
-
-                currentChatId = chatId;
+            currentChatId = Number(chatId);
 
                 // Save last active chat to localStorage
                 localStorage.setItem('lastActiveChatId', chatId);
 
-                document.querySelectorAll('.chat-item').forEach(item => {
-                    item.classList.remove('active');
-                });
-                const chatElement = document.querySelector(`[data-chat-id="${chatId}"]`);
-                console.log('[openChat] Элемент чата найден:', !!chatElement);
-                chatElement?.classList.add('active');
+            document.querySelectorAll('.chat-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelectorAll(`[data-chat-id="${chatId}"]`).forEach(item => item.classList.add('active'));
 
                 document.getElementById('chatHeader').classList.remove('hidden');
 
@@ -2267,30 +2390,45 @@
                 attachBtn.disabled = false;
                 messageInput.focus();
 
-                const chat = chats.find(c => c.id === chatId || c.id == chatId);
-                console.log('[openChat] Чат найден в массиве:', chat);
+            const chat = chats.find(c => c.id === chatId);
+            if (chat) {
+                let title = chat.name || 'Чат';
+                let subtitle = '';
 
-                if (chat) {
-                    document.getElementById('chatTitle').textContent = chat.name || 'Чат';
-                    document.getElementById('chatSubtitle').textContent = chat.type || '';
+                if (chat.type === 'direct') {
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+                    const partner = participants.find(p => Number(p.id) !== Number(currentUser?.id)) || participants[0];
+                    currentDirectContactId = partner?.id || null;
+                    if (partner?.name) {
+                        title = partner.name;
+                    }
+                    const roleLabel = partner?.role ? getRoleDisplayName(partner.role) : '';
+                    subtitle = roleLabel ? `Личный чат • ${roleLabel}` : 'Личный чат';
+                } else if (chat.type === 'group') {
+                    currentDirectContactId = null;
+                    subtitle = 'Групповой чат';
+                } else if (chat.type === 'department') {
+                    currentDirectContactId = null;
+                    subtitle = 'Отдел';
+                } else if (chat.type) {
+                    currentDirectContactId = null;
+                    subtitle = chat.type;
                 } else {
-                    console.error('[openChat] Чат не найден! chatId:', chatId, 'Доступные IDs:', chats.map(c => c.id));
-                    document.getElementById('chatTitle').textContent = 'Чат';
-                    document.getElementById('chatSubtitle').textContent = '';
+                    currentDirectContactId = null;
                 }
 
-                console.log('[openChat] Загрузка сообщений...');
-                await loadMessages(chatId);
+                document.getElementById('chatTitle').textContent = title;
+                document.getElementById('chatSubtitle').textContent = subtitle;
+            }
 
-                if (socket) {
-                    console.log('[openChat] Подключение к сокету чата...');
-                    socket.emit('join_chat', { chatId });
-                }
+            syncContactHighlights();
 
-                console.log('[openChat] Чат успешно открыт');
-            } catch (err) {
-                console.error('[openChat] Ошибка при открытии чата:', err);
-                showToast('Ошибка открытия чата', 'error');
+            await loadMessages(chatId);
+
+            console.log('[openChat] Чат успешно открыт:', chatId);
+
+            if (socket) {
+                socket.emit('join_chat', { chatId });
             }
         }
 
@@ -2314,30 +2452,45 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                console.log('[loadMessages] Статус ответа:', response.status);
+                let rawBody = '';
+                try {
+                    rawBody = await response.text();
+                } catch (readError) {
+                    console.error('[loadMessages] Ошибка чтения ответа:', readError);
+                }
+
+                let data = {};
+                if (rawBody) {
+                    try {
+                        data = JSON.parse(rawBody);
+                    } catch (parseError) {
+                        console.error('[loadMessages] Ошибка парсинга ответа:', parseError);
+                    }
+                }
 
                 if (!response.ok) {
-                    const error = await response.json();
-                    console.error('[loadMessages] Ошибка от API:', error);
-
+                    const message = data?.error || `Ошибка загрузки (${response.status})`;
+                    console.warn('[loadMessages] Ответ с ошибкой:', { status: response.status, body: data });
                     messagesContainer.innerHTML = `
                         <div class="empty-state">
-                            <div class="empty-state-icon">🚫</div>
+                            <div class="empty-state-icon">⚠️</div>
                             <h2>Нет доступа</h2>
-                            <p>${error.error || 'У вас нет прав для просмотра этого чата'}</p>
+                            <p>${escapeHtml(message)}</p>
                         </div>
                     `;
-                    showToast(`Ошибка: ${error.error || response.statusText}`, 'error');
+                    showToast(message, 'error');
                     return;
                 }
 
-                const data = await response.json();
-                console.log('[loadMessages] Получено сообщений:', data.messages?.length || 0);
+                console.log('[loadMessages] Статус ответа:', response.status);
 
                 messagesContainer.innerHTML = '';
 
-                if (data.messages && data.messages.length > 0) {
-                    data.messages.forEach(msg => appendMessage(msg));
+                const messageList = Array.isArray(data.messages) ? data.messages : [];
+                console.log('[loadMessages] Получено сообщений:', messageList.length);
+
+                if (messageList.length > 0) {
+                    messageList.forEach(msg => appendMessage(msg));
                     scrollToBottom(true);
                 } else {
                     messagesContainer.innerHTML = `
@@ -2536,7 +2689,19 @@
                                 replyToId: replyToMessage?.id || null
                             })
                         });
-                        const data = await response.json();
+
+                        let data = {};
+                        try {
+                            data = await response.json();
+                        } catch (error) {
+                            console.warn('[sendMessage] Не удалось распарсить ответ сервера:', error);
+                        }
+
+                        if (!response.ok) {
+                            const message = data?.error || `Ошибка отправки сообщения (${response.status})`;
+                            throw new Error(message);
+                        }
+
                         if (data.message) {
                             appendMessage(data.message);
                             scrollToBottom(true); // Force scroll after sending
@@ -2558,7 +2723,17 @@
                         })
                     });
 
-                    const data = await response.json();
+                    let data = {};
+                    try {
+                        data = await response.json();
+                    } catch (error) {
+                        console.warn('[sendMessage] Не удалось распарсить ответ сервера:', error);
+                    }
+
+                    if (!response.ok) {
+                        const message = data?.error || `Ошибка отправки сообщения (${response.status})`;
+                        throw new Error(message);
+                    }
 
                     if (data.message) {
                         // Remove temp message and add real message
@@ -2587,7 +2762,8 @@
                     const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                     if (tempEl) tempEl.remove();
                 }
-                showToast('Ошибка отправки сообщения', 'error');
+                console.error('[sendMessage] Ошибка отправки сообщения:', err);
+                showToast(err.message || 'Ошибка отправки сообщения', 'error');
             } finally {
                 // Re-enable send button and input
                 sendBtn.disabled = false;

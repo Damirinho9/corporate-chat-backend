@@ -8,8 +8,7 @@
     "dev": "nodemon server.js",
     "seed": "node database/seed.js",
     "postbuild": "node database/seed.js",
-    "test": "node tests/permissions.test.js",
-    "test:permissions": "node tests/permissions.test.js",
+    "test": "node tests/directMessages.test.js",
     "db:init": "psql -U postgres -d corporate_chat -f database/schema.sql"
   },
   "engines": {
