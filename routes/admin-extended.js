@@ -9,13 +9,18 @@ const { query } = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 
 // ==================== DEPARTMENT MANAGEMENT ====================
+// DEPRECATED: Old department routes moved to departmentController.js
+// These routes were returning simple strings instead of full department objects
+// Now using proper routes in api.js with departmentController
+
+/* COMMENTED OUT - Use departmentController.js routes instead
 
 // Get all departments
 router.get('/departments', authenticateToken, async (req, res) => {
     try {
         const result = await query(`
-            SELECT DISTINCT department 
-            FROM users 
+            SELECT DISTINCT department
+            FROM users
             WHERE department IS NOT NULL
             ORDER BY department
         `);
@@ -60,6 +65,8 @@ router.post('/departments', authenticateToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+*/ // END OF COMMENTED OUT DEPARTMENT ROUTES
 
 // ==================== CHAT MANAGEMENT ====================
 
