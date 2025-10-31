@@ -4,7 +4,7 @@
 
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to match seed.js
 const { query } = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 

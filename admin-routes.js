@@ -55,7 +55,7 @@ router.post('/auth/register', auth, async (req, res) => {
         }
 
         // Hash password
-        const bcrypt = require('bcrypt');
+        const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to match seed.js
         const password_hash = await bcrypt.hash(password, 10);
 
         // Insert user
