@@ -230,6 +230,8 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-startServer();
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
 
-module.exports = { app, server, io };
+module.exports = { app, server, io, startServer };
