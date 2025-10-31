@@ -77,8 +77,10 @@ async function seedDatabase() {
       // name,            type,        department, created_by
       ['Руководство',     'group',     null,       adminId],
       ['Все ассистенты',  'group',     null,       adminId],
-      ['Отдел продаж',    'department','Sales',    ropSalesId],
-      ['Отдел маркетинга','department','Marketing',ropMarketingId],
+      // ВАЖНО: для чатов отделов name должен совпадать с department для синхронизации!
+      ['Sales',           'department','Sales',    ropSalesId],
+      ['Marketing',       'department','Marketing',ropMarketingId],
+      ['IT',              'department','IT',       employee1Id],
       [null,              'direct',    null,       adminId],        // админ + ассистент1
       [null,              'direct',    null,       ropSalesId],     // роп sales + оператор1
       [null,              'direct',    null,       assistant1Id],   // ассистент1 + оператор1
@@ -96,9 +98,10 @@ async function seedDatabase() {
     const assistantsChatId = chatsResult.rows[1].id;
     const salesChatId      = chatsResult.rows[2].id;
     const marketingChatId  = chatsResult.rows[3].id;
-    const directChat1Id    = chatsResult.rows[4].id;
-    const directChat2Id    = chatsResult.rows[5].id;
-    const directChat3Id    = chatsResult.rows[6].id;
+    const itChatId         = chatsResult.rows[4].id;
+    const directChat1Id    = chatsResult.rows[5].id;
+    const directChat2Id    = chatsResult.rows[6].id;
+    const directChat3Id    = chatsResult.rows[7].id;
 
     // 3) Участники чатов
     const participants = [
@@ -120,6 +123,10 @@ async function seedDatabase() {
       // Отдел маркетинга: РОП + оператор Marketing
       [marketingChatId, ropMarketingId],
       [marketingChatId, operator3Id],
+
+      // Отдел IT: два сотрудника
+      [itChatId, employee1Id],
+      [itChatId, employee2Id],
 
       // Direct 1: админ + ассистент1
       [directChat1Id, adminId],
@@ -146,6 +153,10 @@ async function seedDatabase() {
       // sales
       [salesChatId,      ropSalesId,  'Отдел продаж, приветствую! Начинаем работу.'],
       [salesChatId,      operator1Id, 'Здравствуйте! Готов к задачам.'],
+      // marketing
+      [marketingChatId,  ropMarketingId, 'Отдел маркетинга на связи!'],
+      // IT
+      [itChatId,         employee1Id, 'IT отдел готов помочь с технической поддержкой!'],
       // direct 1
       [directChat1Id,    adminId,     'Привет! Как дела?'],
       [directChat1Id,    assistant1Id,'Отлично, спасибо!'],
