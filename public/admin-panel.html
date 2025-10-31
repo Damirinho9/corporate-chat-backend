@@ -881,10 +881,12 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
+                console.log('Departments data:', data);
 
                 const div = document.getElementById('departmentsList');
                 if (data.departments && data.departments.length > 0) {
                     div.innerHTML = data.departments.map(dept => {
+                        console.log('Processing dept:', dept);
                         const ropUser = dept.users ? dept.users.find(u => u.role === 'rop') : null;
                         const operators = dept.users ? dept.users.filter(u => u.role === 'operator') : [];
 
