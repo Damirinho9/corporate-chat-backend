@@ -1340,7 +1340,7 @@
                 
                 <div class="file-upload-container" id="fileUploadContainer">
                     <div class="file-upload-area" id="fileUploadArea">
-                        📎 Перетащите файлы или <input type="file" id="fileInput" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+                        📎 Перетащите файлы или <input type="file" id="fileInput" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.tar,.gz,.tgz,.bz2">
                         <button onclick="document.getElementById('fileInput').click()" style="margin-left:5px;padding:5px 10px;background:#2196f3;color:white;border:none;border-radius:4px;cursor:pointer">Выбрать</button>
                     </div>
                     <div class="file-preview-container" id="filePreviewContainer"></div>
@@ -1375,6 +1375,7 @@
         let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
         let socket = null;
         let currentChatId = null;
+        let currentDirectContactId = null;
         let chats = [];
         const directChatByUser = new Map();
         const expandedDepartments = new Set();
@@ -1837,6 +1838,8 @@
             try {
                 console.log('[openDirectChat] Создание чата с пользователем:', { userId, userName });
 
+                currentDirectContactId = userId;
+
                 const response = await fetch(`${API_URL}/chats/direct`, {
                     method: 'POST',
                     headers: {
@@ -1921,6 +1924,7 @@
                 await openChat(chatId);
                 showToast(`Чат с ${userName} открыт`, 'success');
             } catch (err) {
+                currentDirectContactId = null;
                 console.error('[openDirectChat] Критическая ошибка:', err);
                 showToast(err.message || 'Ошибка создания чата', 'error');
             }
@@ -2177,7 +2181,9 @@
 
                         const nestedClass = nested ? ' nested-contact' : '';
                         const directChatId = directChatByUser.get(user.id);
-                        const isActive = Number(directChatId) === Number(currentChatId);
+                        const isActive =
+                                Number(directChatId) === Number(currentChatId) ||
+                                (!directChatId && currentDirectContactId && Number(user.id) === Number(currentDirectContactId));
                         const chatAttr = directChatId ? ` data-chat-id="${directChatId}"` : '';
 
                         return `
@@ -2299,6 +2305,8 @@
                         <div style="padding:20px;text-align:center;color:var(--text-secondary);">
                                 Нет доступных чатов
                         </div>`;
+
+                syncContactHighlights();
         }
 
         function updateChatLastMessage(chatId, message) {
@@ -2307,6 +2315,32 @@
                 chat.last_message = message.content;
                 renderChats();
             }
+        }
+
+        function syncContactHighlights() {
+            const contactItems = document.querySelectorAll('.contact-item');
+            if (contactItems.length === 0) {
+                return;
+            }
+
+            if (!currentDirectContactId) {
+                contactItems.forEach(item => {
+                    const chatId = item.dataset.chatId;
+                    if (!chatId || Number(chatId) !== Number(currentChatId)) {
+                        item.classList.remove('active');
+                    }
+                });
+                return;
+            }
+
+            contactItems.forEach(item => {
+                const contactId = Number(item.dataset.contactId);
+                if (contactId === Number(currentDirectContactId)) {
+                    item.classList.add('active');
+                } else if (!item.dataset.chatId || Number(item.dataset.chatId) !== Number(currentChatId)) {
+                    item.classList.remove('active');
+                }
+            });
         }
 
         // ==================== MOBILE NAVIGATION ====================
@@ -2356,23 +2390,31 @@
 
                 if (chat.type === 'direct') {
                     const participants = Array.isArray(chat.participants) ? chat.participants : [];
-                    const partner = participants[0];
+                    const partner = participants.find(p => Number(p.id) !== Number(currentUser?.id)) || participants[0];
+                    currentDirectContactId = partner?.id || null;
                     if (partner?.name) {
                         title = partner.name;
                     }
                     const roleLabel = partner?.role ? getRoleDisplayName(partner.role) : '';
                     subtitle = roleLabel ? `Личный чат • ${roleLabel}` : 'Личный чат';
                 } else if (chat.type === 'group') {
+                    currentDirectContactId = null;
                     subtitle = 'Групповой чат';
                 } else if (chat.type === 'department') {
+                    currentDirectContactId = null;
                     subtitle = 'Отдел';
                 } else if (chat.type) {
+                    currentDirectContactId = null;
                     subtitle = chat.type;
+                } else {
+                    currentDirectContactId = null;
                 }
 
                 document.getElementById('chatTitle').textContent = title;
                 document.getElementById('chatSubtitle').textContent = subtitle;
             }
+
+            syncContactHighlights();
 
             await loadMessages(chatId);
 
