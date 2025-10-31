@@ -914,7 +914,13 @@
                         return `
                             <div class="card" style="margin-bottom: 20px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                    <h3>🏢 ${dept.department}</h3>
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <h3>🏢 ${dept.department}</h3>
+                                        <button class="btn btn-sm" onclick="showRenameDepartmentModal('${dept.department}')"
+                                                style="background: #f7fafc; border: 1px solid #e2e8f0; padding: 4px 8px;">
+                                            ✏️ Переименовать
+                                        </button>
+                                    </div>
                                     <div>
                                         <span style="background: #e2e8f0; padding: 5px 12px; border-radius: 6px; font-size: 13px; margin-right: 10px;">
                                             ${dept.user_count || 0} человек
@@ -976,6 +982,42 @@
             } catch (err) {
                 console.error('Remove user error:', err);
                 showToast('Ошибка удаления пользователя', 'error');
+            }
+        }
+
+        function showRenameDepartmentModal(departmentName) {
+            const newName = prompt(`Введите новое название отдела "${departmentName}".\n\n⚠️ Внимание: Название отдела будет синхронизировано с названием чата отдела!`, departmentName);
+            if (!newName || newName.trim() === '' || newName === departmentName) return;
+
+            renameDepartment(departmentName, newName.trim());
+        }
+
+        async function renameDepartment(oldName, newName) {
+            try {
+                console.log('[renameDepartment] Renaming:', { oldName, newName });
+
+                const res = await fetch(`${API_URL}/departments/${encodeURIComponent(oldName)}/rename`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ newName })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    showToast(`Отдел переименован: "${oldName}" → "${newName}"`, 'success');
+                    console.log('[renameDepartment] Success:', data);
+                    await loadDepartments();
+                } else {
+                    const err = await res.json();
+                    console.error('[renameDepartment] Error:', err);
+                    showToast(err.error || 'Ошибка переименования отдела', 'error');
+                }
+            } catch (err) {
+                console.error('Rename department error:', err);
+                showToast('Ошибка переименования отдела', 'error');
             }
         }
 
