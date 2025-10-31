@@ -2184,17 +2184,15 @@
                         const emoji = roleEmoji[user.role] || '👤';
                         const role = getRoleDisplayName(user.role) || user.role || '';
 
-                        const nestedClass = nested ? ' nested-contact' : '';
+                        const contactNestingClass = nested ? ' nested-contact' : '';
                         const directChatId = directChatByUser.get(user.id);
                         const isActive =
                                 Number(directChatId) === Number(currentChatId) ||
                                 (!directChatId && currentDirectContactId && Number(user.id) === Number(currentDirectContactId));
                         const chatAttr = directChatId ? ` data-chat-id="${directChatId}"` : '';
 
-                        const nestedClass = nested ? ' nested-contact' : '';
-
                         return `
-                                <li class="chat-item contact-item${nestedClass}${isActive ? ' active' : ''}"
+                                <li class="chat-item contact-item${contactNestingClass}${isActive ? ' active' : ''}"
                                     data-contact-id="${user.id}"${chatAttr}
                                     onclick="openDirectChatWithUser(${user.id}, '${escapeHtml(user.name)}')">
                                         <div class="chat-item-header">
