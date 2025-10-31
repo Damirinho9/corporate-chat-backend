@@ -34,6 +34,9 @@ const getAllDepartments = async (req, res) => {
             ORDER BY d.name
         `);
 
+        console.log('[getAllDepartments] SQL result.rows:', JSON.stringify(result.rows, null, 2));
+        console.log('[getAllDepartments] Sending response:', JSON.stringify({ departments: result.rows }, null, 2));
+
         res.json({ departments: result.rows });
     } catch (error) {
         console.error('Get departments error:', error);

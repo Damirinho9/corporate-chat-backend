@@ -893,12 +893,21 @@
                 }
 
                 const data = await res.json();
-                console.log('Departments data:', data);
+                console.log('[Departments] Raw data received:', data);
+                console.log('[Departments] data.departments type:', typeof data.departments);
+                console.log('[Departments] data.departments is array:', Array.isArray(data.departments));
+                console.log('[Departments] data.departments length:', data.departments?.length);
+                console.log('[Departments] First item:', data.departments?.[0]);
+                console.log('[Departments] First item type:', typeof data.departments?.[0]);
+                console.log('[Departments] First item stringified:', JSON.stringify(data.departments?.[0], null, 2));
 
                 const div = document.getElementById('departmentsList');
                 if (data.departments && data.departments.length > 0) {
                     div.innerHTML = data.departments.map(dept => {
-                        console.log('Processing dept:', dept);
+                        console.log('[Departments] Processing dept:', dept);
+                        console.log('[Departments] dept type:', typeof dept);
+                        console.log('[Departments] dept.department value:', dept.department);
+                        console.log('[Departments] dept.users value:', dept.users);
                         const ropUser = dept.users ? dept.users.find(u => u.role === 'rop') : null;
                         const operators = dept.users ? dept.users.filter(u => u.role === 'operator') : [];
 
