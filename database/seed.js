@@ -177,7 +177,9 @@ async function seedDatabase() {
     console.error('❌ Error seeding database:', e);
     throw e;
   } finally {
-    try { await pool.end(); } catch {}
+    if (process.env.NODE_ENV !== 'test' && process.env.USE_IN_MEMORY_DB !== 'true') {
+      try { await pool.end(); } catch {}
+    }
   }
 }
 

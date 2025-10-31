@@ -650,33 +650,36 @@ const updateChatSettings = async (req, res) => {
                 newDepartment: name
             });
 
-            // Используем транзакцию для атомарности
-            await query('BEGIN');
+            const client = await pool.connect();
 
             try {
+                await client.query('BEGIN');
+
                 // 1. Обновляем название чата и department в таблице chats
-                await query(
+                await client.query(
                     `UPDATE chats SET ${updates.join(', ')}, department = $${paramCount + 1} WHERE id = $${paramCount}`,
                     [...values, name]
                 );
 
                 // 2. Обновляем department у всех пользователей старого отдела
-                await query(
+                await client.query(
                     'UPDATE users SET department = $1 WHERE department = $2',
                     [name, chat.department]
                 );
 
-                console.log('[updateChatSettings] Synced department name with chat name');
+                await client.query('COMMIT');
 
-                await query('COMMIT');
+                console.log('[updateChatSettings] Synced department name with chat name');
 
                 res.json({
                     message: 'Chat settings and department name updated successfully',
                     departmentSynced: true
                 });
             } catch (error) {
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 throw error;
+            } finally {
+                client.release();
             }
         } else {
             // Обычное обновление без синхронизации отдела
