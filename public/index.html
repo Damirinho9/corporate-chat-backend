@@ -1376,9 +1376,24 @@
         let socket = null;
         let currentChatId = null;
         let chats = [];
+        const directChatByUser = new Map();
         const expandedDepartments = new Set();
         let selectedFiles = [];
         let replyToMessage = null;
+
+        const ROLE_DISPLAY_NAMES = {
+            'rop': 'РОП',
+            'operator': 'Оператор',
+            'assistant': 'Ассистент',
+            'employee': 'Сотрудник',
+            'admin': 'Администратор',
+            'head': 'Руководитель'
+        };
+
+        function getRoleDisplayName(role) {
+            if (!role) return '';
+            return ROLE_DISPLAY_NAMES[role] || role;
+        }
 
         // ==================== REPLY FUNCTIONALITY ====================
         function setReplyTo(message) {
@@ -1469,13 +1484,31 @@
         async function uploadFile(fileObj) {
             const formData = new FormData();
             formData.append('file', fileObj.file);
-            const res = await fetch('/api/files/upload', {
+
+            const res = await fetch(`${API_URL}/files/upload`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
-            const data = await res.json();
-            return data.file.id;
+
+            let data = {};
+            try {
+                data = await res.json();
+            } catch (error) {
+                console.warn('[uploadFile] Не удалось распарсить ответ:', error);
+            }
+
+            if (!res.ok) {
+                const message = data?.error || `Не удалось загрузить файл (${res.status})`;
+                throw new Error(message);
+            }
+
+            const fileId = data?.file?.id;
+            if (!fileId) {
+                throw new Error('Сервер не вернул идентификатор файла');
+            }
+
+            return fileId;
         }
 
         function renderMessageFile(msg) {
@@ -1718,6 +1751,34 @@
         // ==================== LOAD CHATS ====================
         let contacts = { departments: [], assistants: { users: [] } };
 
+        function rebuildDirectChatLookup() {
+            directChatByUser.clear();
+
+            chats
+                .filter(chat => chat && chat.type === 'direct')
+                .forEach(chat => {
+                    const chatId = Number(chat.id);
+                    if (!chatId) {
+                        return;
+                    }
+
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+
+                    participants.forEach(participant => {
+                        if (participant && participant.id) {
+                            directChatByUser.set(participant.id, chatId);
+                        }
+                    });
+
+                    const rawName = typeof chat.name === 'string' ? chat.name.trim() : '';
+                    if (participants.length === 1) {
+                        if (!rawName || rawName.toLowerCase() === 'direct') {
+                            chat.name = participants[0].name || rawName || 'Личный чат';
+                        }
+                    }
+                });
+        }
+
         async function loadChats() {
             try {
                 console.log('[loadChats] Начало загрузки...');
@@ -1760,6 +1821,7 @@
                 });
 
                 chats = chatsData.chats || [];
+                rebuildDirectChatLookup();
                 contacts = contactsData || { departments: [], assistants: { users: [] } };
 
                 renderChats();
@@ -1835,6 +1897,7 @@
                                     participants: chatData.participants || [],
                                     unread_count: 0
                                 });
+                                rebuildDirectChatLookup();
                                 renderChats();
                                 chatInCache = chats.find(chat => Number(chat.id) === chatId);
                                 console.log('[openDirectChat] Чат добавлен из дополнительной загрузки');
@@ -1994,6 +2057,8 @@
                                 ? `<span class="unread-badge">${chat.unread_count}</span>`
                                 : '';
 
+                        const isActive = Number(chat.id) === Number(currentChatId);
+
                         const content = `
                                 <div class="chat-item-header">
                                         <span class="chat-name">${chatName}</span>
@@ -2010,7 +2075,7 @@
                         if (withArrow) {
                                 const arrowClass = expanded ? 'department-toggle expanded' : 'department-toggle';
                                 return `
-                                        <li class="chat-item ${extraClass} ${chat.id === currentChatId ? 'active' : ''}"
+                                        <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
                                             data-chat-id="${chat.id}"
                                             onclick="openChat(${chat.id})">
                                                 <button class="${arrowClass}" onclick="toggleDepartment(event, '${deptKey}')">&#9656;</button>
@@ -2022,7 +2087,7 @@
                         }
 
                         return `
-                                <li class="chat-item ${extraClass} ${chat.id === currentChatId ? 'active' : ''}"
+                                <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
                                     data-chat-id="${chat.id}"
                                     onclick="openChat(${chat.id})">
                                         ${content}
@@ -2108,19 +2173,16 @@
                                 'admin': '⚙️'
                         };
                         const emoji = roleEmoji[user.role] || '👤';
-                        const roleName = {
-                                'rop': 'РОП',
-                                'operator': 'Оператор',
-                                'assistant': 'Ассистент',
-                                'employee': 'Сотрудник',
-                                'admin': 'Админ'
-                        };
-                        const role = roleName[user.role] || user.role;
+                        const role = getRoleDisplayName(user.role) || user.role || '';
 
                         const nestedClass = nested ? ' nested-contact' : '';
+                        const directChatId = directChatByUser.get(user.id);
+                        const isActive = Number(directChatId) === Number(currentChatId);
+                        const chatAttr = directChatId ? ` data-chat-id="${directChatId}"` : '';
 
                         return `
-                                <li class="chat-item contact-item${nestedClass}"
+                                <li class="chat-item contact-item${nestedClass}${isActive ? ' active' : ''}"
+                                    data-contact-id="${user.id}"${chatAttr}
                                     onclick="openDirectChatWithUser(${user.id}, '${escapeHtml(user.name)}')">
                                         <div class="chat-item-header">
                                                 <span class="chat-name">${emoji} ${escapeHtml(user.name)}</span>
@@ -2264,7 +2326,7 @@
                 document.querySelector('.main-chat')?.classList.remove('hidden');
             }
 
-            currentChatId = chatId;
+            currentChatId = Number(chatId);
 
             // Save last active chat to localStorage
             localStorage.setItem('lastActiveChatId', chatId);
@@ -2272,7 +2334,7 @@
             document.querySelectorAll('.chat-item').forEach(item => {
                 item.classList.remove('active');
             });
-            document.querySelector(`[data-chat-id="${chatId}"]`)?.classList.add('active');
+            document.querySelectorAll(`[data-chat-id="${chatId}"]`).forEach(item => item.classList.add('active'));
 
             document.getElementById('chatHeader').classList.remove('hidden');
 
@@ -2289,8 +2351,27 @@
 
             const chat = chats.find(c => c.id === chatId);
             if (chat) {
-                document.getElementById('chatTitle').textContent = chat.name || 'Чат';
-                document.getElementById('chatSubtitle').textContent = chat.type || '';
+                let title = chat.name || 'Чат';
+                let subtitle = '';
+
+                if (chat.type === 'direct') {
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+                    const partner = participants[0];
+                    if (partner?.name) {
+                        title = partner.name;
+                    }
+                    const roleLabel = partner?.role ? getRoleDisplayName(partner.role) : '';
+                    subtitle = roleLabel ? `Личный чат • ${roleLabel}` : 'Личный чат';
+                } else if (chat.type === 'group') {
+                    subtitle = 'Групповой чат';
+                } else if (chat.type === 'department') {
+                    subtitle = 'Отдел';
+                } else if (chat.type) {
+                    subtitle = chat.type;
+                }
+
+                document.getElementById('chatTitle').textContent = title;
+                document.getElementById('chatSubtitle').textContent = subtitle;
             }
 
             await loadMessages(chatId);
@@ -2555,7 +2636,19 @@
                                 replyToId: replyToMessage?.id || null
                             })
                         });
-                        const data = await response.json();
+
+                        let data = {};
+                        try {
+                            data = await response.json();
+                        } catch (error) {
+                            console.warn('[sendMessage] Не удалось распарсить ответ сервера:', error);
+                        }
+
+                        if (!response.ok) {
+                            const message = data?.error || `Ошибка отправки сообщения (${response.status})`;
+                            throw new Error(message);
+                        }
+
                         if (data.message) {
                             appendMessage(data.message);
                             scrollToBottom(true); // Force scroll after sending
@@ -2577,7 +2670,17 @@
                         })
                     });
 
-                    const data = await response.json();
+                    let data = {};
+                    try {
+                        data = await response.json();
+                    } catch (error) {
+                        console.warn('[sendMessage] Не удалось распарсить ответ сервера:', error);
+                    }
+
+                    if (!response.ok) {
+                        const message = data?.error || `Ошибка отправки сообщения (${response.status})`;
+                        throw new Error(message);
+                    }
 
                     if (data.message) {
                         // Remove temp message and add real message
@@ -2606,7 +2709,8 @@
                     const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                     if (tempEl) tempEl.remove();
                 }
-                showToast('Ошибка отправки сообщения', 'error');
+                console.error('[sendMessage] Ошибка отправки сообщения:', err);
+                showToast(err.message || 'Ошибка отправки сообщения', 'error');
             } finally {
                 // Re-enable send button and input
                 sendBtn.disabled = false;
