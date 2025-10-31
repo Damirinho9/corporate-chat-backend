@@ -1369,6 +1369,11 @@
     </div>
 
     <script>
+        // ==================== VERSION INFO ====================
+        const APP_VERSION = 'v2.0.0-chat-fix'; // Версия с исправлением открытия чатов
+        console.log('%c🚀 Корпоративный чат ' + APP_VERSION, 'font-size: 16px; font-weight: bold; color: #2196f3;');
+        console.log('%c✅ Исправления: открытие существующих чатов, детальное логирование', 'color: #4caf50;');
+
         // ==================== GLOBAL VARIABLES ====================
         const API_URL = window.location.origin + '/api';
         let token = localStorage.getItem('token');
