@@ -73,41 +73,45 @@ const uploadFile = async (req, res) => {
 const getFile = async (req, res) => {
     try {
         const fileId = req.params.id;
-        const userId = req.user.id;
-        
+
         const result = await query('SELECT * FROM files WHERE id = $1', [fileId]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'File not found' });
         }
-        
+
         const fileRecord = result.rows[0];
-        
-        if (req.user.role !== 'admin' && fileRecord.uploaded_by !== userId) {
-            if (fileRecord.message_id) {
-                const chatAccess = await query(
-                    `SELECT 1 FROM messages m JOIN chat_participants cp ON m.chat_id = cp.chat_id
-                     WHERE m.id = $1 AND cp.user_id = $2`,
-                    [fileRecord.message_id, userId]
-                );
-                if (chatAccess.rows.length === 0) {
-                    return res.status(403).json({ error: 'Access denied' });
+
+        // Check access only if user is authenticated
+        if (req.user) {
+            const userId = req.user.id;
+            if (req.user.role !== 'admin' && fileRecord.uploaded_by !== userId) {
+                if (fileRecord.message_id) {
+                    const chatAccess = await query(
+                        `SELECT 1 FROM messages m JOIN chat_participants cp ON m.chat_id = cp.chat_id
+                         WHERE m.id = $1 AND cp.user_id = $2`,
+                        [fileRecord.message_id, userId]
+                    );
+                    if (chatAccess.rows.length === 0) {
+                        return res.status(403).json({ error: 'Access denied' });
+                    }
                 }
             }
         }
-        
+
         if (fileRecord.scan_status === 'infected') {
             return res.status(403).json({ error: 'File is infected' });
         }
-        
+
         const filePath = path.join(STORAGE_CONFIG.uploadDir, fileRecord.path);
         try {
             await fs.access(filePath);
         } catch (error) {
+            console.error('File not found on disk:', filePath, error);
             return res.status(404).json({ error: 'File not found on disk' });
         }
-        
+
         res.setHeader('Content-Type', fileRecord.mime_type);
-        res.setHeader('Content-Disposition', `attachment; filename="${fileRecord.original_filename}"`);
+        res.setHeader('Content-Disposition', `inline; filename="${fileRecord.original_filename}"`);
         res.sendFile(filePath);
     } catch (error) {
         console.error('Get file error:', error);
