@@ -48,7 +48,6 @@ class InMemoryDatabase {
             return { rows: [], rowCount: 0 };
         }
 
-        if (normalized.startsWith('TRUNCATE')) {
         if (normalized.startsWith('TRUNCATE admin_logs, messages, chat_participants, chats, users')) {
             this.reset();
             return { rows: [], rowCount: 0 };
