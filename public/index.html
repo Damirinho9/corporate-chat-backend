@@ -1369,6 +1369,11 @@
     </div>
 
     <script>
+        // ==================== VERSION INFO ====================
+        const APP_VERSION = 'v2.0.0-chat-fix'; // Версия с исправлением открытия чатов
+        console.log('%c🚀 Корпоративный чат ' + APP_VERSION, 'font-size: 16px; font-weight: bold; color: #2196f3;');
+        console.log('%c✅ Исправления: открытие существующих чатов, детальное логирование', 'color: #4caf50;');
+
         // ==================== GLOBAL VARIABLES ====================
         const API_URL = window.location.origin + '/api';
         let token = localStorage.getItem('token');
@@ -2386,26 +2391,26 @@
 
             currentChatId = Number(chatId);
 
-            // Save last active chat to localStorage
-            localStorage.setItem('lastActiveChatId', chatId);
+                // Save last active chat to localStorage
+                localStorage.setItem('lastActiveChatId', chatId);
 
             document.querySelectorAll('.chat-item').forEach(item => {
                 item.classList.remove('active');
             });
             document.querySelectorAll(`[data-chat-id="${chatId}"]`).forEach(item => item.classList.add('active'));
 
-            document.getElementById('chatHeader').classList.remove('hidden');
+                document.getElementById('chatHeader').classList.remove('hidden');
 
-            // Enable input field
-            const messageInput = document.getElementById('messageInput');
-            const sendBtn = document.getElementById('sendBtn');
-            const attachBtn = document.getElementById('attachBtn');
+                // Enable input field
+                const messageInput = document.getElementById('messageInput');
+                const sendBtn = document.getElementById('sendBtn');
+                const attachBtn = document.getElementById('attachBtn');
 
-            messageInput.disabled = false;
-            messageInput.placeholder = 'Напишите сообщение...';
-            sendBtn.disabled = false;
-            attachBtn.disabled = false;
-            messageInput.focus();
+                messageInput.disabled = false;
+                messageInput.placeholder = 'Напишите сообщение...';
+                sendBtn.disabled = false;
+                attachBtn.disabled = false;
+                messageInput.focus();
 
             const chat = chats.find(c => c.id === chatId);
             if (chat) {
@@ -2463,6 +2468,8 @@
             messagesContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;"><div style="text-align:center;color:var(--text-secondary);"><div style="font-size:32px;margin-bottom:10px;">⏳</div><div>Загрузка сообщений...</div></div></div>';
 
             try {
+                console.log('[loadMessages] Загрузка сообщений для chatId:', chatId);
+
                 const response = await fetch(`${API_URL}/chats/${chatId}/messages`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -2516,6 +2523,8 @@
                         </div>
                     `;
                 }
+
+                console.log('[loadMessages] Сообщения успешно загружены');
             } catch (err) {
                 console.error('[loadMessages] Критическая ошибка:', err);
                 messagesContainer.innerHTML = `
@@ -2655,12 +2664,21 @@
             const sendBtn = document.getElementById('sendBtn');
             const content = input.value.trim();
 
+            console.log('[sendMessage] Starting send:', {
+                content,
+                contentLength: content.length,
+                selectedFiles: selectedFiles.length,
+                currentChatId
+            });
+
             // Validation
             if (!content && selectedFiles.length === 0) {
+                console.warn('[sendMessage] Validation failed: no content and no files');
                 showToast('Введите сообщение или прикрепите файл', 'warning');
                 return;
             }
             if (!currentChatId) {
+                console.warn('[sendMessage] Validation failed: no chat selected');
                 showToast('Выберите чат', 'warning');
                 return;
             }
@@ -2690,17 +2708,20 @@
                 if (selectedFiles.length > 0) {
                     for (const fileObj of selectedFiles) {
                         const fileId = await uploadFile(fileObj);
+                        const requestBody = {
+                            content: content || null,
+                            fileId: fileId,
+                            replyToId: replyToMessage?.id || null
+                        };
+                        console.log('[sendMessage] Sending with file:', requestBody);
+
                         const response = await fetch(`${API_URL}/chats/${currentChatId}/messages`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${token}`,
                                 'Content-Type': 'application/json'
                             },
-                            body: JSON.stringify({
-                                content: content || null,
-                                fileId: fileId,
-                                replyToId: replyToMessage?.id || null
-                            })
+                            body: JSON.stringify(requestBody)
                         });
 
                         let data = {};
@@ -2724,16 +2745,19 @@
                     renderPreviews();
                     uploadContainer.classList.remove('active');
                 } else {
+                    const requestBody = {
+                        content,
+                        replyToId: replyToMessage?.id || null
+                    };
+                    console.log('[sendMessage] Request body:', requestBody);
+
                     const response = await fetch(`${API_URL}/chats/${currentChatId}/messages`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({
-                            content,
-                            replyToId: replyToMessage?.id || null
-                        })
+                        body: JSON.stringify(requestBody)
                     });
 
                     let data = {};
