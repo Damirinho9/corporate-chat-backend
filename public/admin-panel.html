@@ -780,6 +780,9 @@
 
                 <div class="form-group">
                     <label>Участники *</label>
+                    <input type="text" id="participantsSearch" placeholder="🔍 Поиск по имени или логину..."
+                           style="margin-bottom: 10px; padding: 8px 12px;"
+                           onkeyup="filterParticipants()">
                     <div id="participantsList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
                         <p style="text-align: center; color: #a0aec0;">Загрузка...</p>
                     </div>
@@ -1353,10 +1356,11 @@ async function loadUsersForChat() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         const container = document.getElementById('participantsList');
         container.innerHTML = data.users.map(user => `
-            <label style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; transition: background 0.2s;">
+            <label class="participant-item" data-name="${user.name.toLowerCase()}" data-username="${user.username.toLowerCase()}"
+                   style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; transition: background 0.2s;">
                 <input type="checkbox" value="${user.id}" onchange="toggleParticipant(${user.id})" style="margin-right: 10px;">
                 <div>
                     <div style="font-weight: 600;">${user.name}</div>
@@ -1376,6 +1380,22 @@ function toggleParticipant(userId) {
     } else {
         selectedParticipants.add(userId);
     }
+}
+
+function filterParticipants() {
+    const searchText = document.getElementById('participantsSearch').value.toLowerCase().trim();
+    const items = document.querySelectorAll('.participant-item');
+
+    items.forEach(item => {
+        const name = item.dataset.name || '';
+        const username = item.dataset.username || '';
+
+        if (name.includes(searchText) || username.includes(searchText)) {
+            item.style.display = 'flex';
+        } else {
+            item.style.display = 'none';
+        }
+    });
 }
 
 async function createNewChat() {
