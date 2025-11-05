@@ -137,6 +137,17 @@ const sendMessage = async (req, res) => {
         const { content, fileId, replyToId, forwardedFromId, mentions } = req.body;
         const userId = req.user.id;
 
+        console.log('[sendMessage] Received request:', {
+            chatId,
+            userId,
+            content: content,
+            contentType: typeof content,
+            contentLength: content?.length,
+            fileId,
+            replyToId,
+            body: req.body
+        });
+
         // Check access
         const accessCheck = await query(
             'SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
@@ -151,9 +162,19 @@ const sendMessage = async (req, res) => {
         }
 
         if (!content && !fileId) {
-            return res.status(400).json({ 
+            console.error('[sendMessage] Validation failed: no content and no fileId', {
+                content,
+                fileId,
+                bodyKeys: Object.keys(req.body)
+            });
+            return res.status(400).json({
                 error: 'Message content or file is required',
-                code: 'EMPTY_MESSAGE'
+                code: 'EMPTY_MESSAGE',
+                debug: {
+                    receivedContent: content,
+                    receivedFileId: fileId,
+                    bodyKeys: Object.keys(req.body)
+                }
             });
         }
 

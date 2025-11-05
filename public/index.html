@@ -2640,12 +2640,21 @@
             const sendBtn = document.getElementById('sendBtn');
             const content = input.value.trim();
 
+            console.log('[sendMessage] Starting send:', {
+                content,
+                contentLength: content.length,
+                selectedFiles: selectedFiles.length,
+                currentChatId
+            });
+
             // Validation
             if (!content && selectedFiles.length === 0) {
+                console.warn('[sendMessage] Validation failed: no content and no files');
                 showToast('Введите сообщение или прикрепите файл', 'warning');
                 return;
             }
             if (!currentChatId) {
+                console.warn('[sendMessage] Validation failed: no chat selected');
                 showToast('Выберите чат', 'warning');
                 return;
             }
@@ -2709,16 +2718,19 @@
                     renderPreviews();
                     uploadContainer.classList.remove('active');
                 } else {
+                    const requestBody = {
+                        content,
+                        replyToId: replyToMessage?.id || null
+                    };
+                    console.log('[sendMessage] Request body:', requestBody);
+
                     const response = await fetch(`${API_URL}/chats/${currentChatId}/messages`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({
-                            content,
-                            replyToId: replyToMessage?.id || null
-                        })
+                        body: JSON.stringify(requestBody)
                     });
 
                     let data = {};
