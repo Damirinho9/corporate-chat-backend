@@ -19,20 +19,21 @@ function singleUploadMiddleware(req, res, next) {
     });
 }
 
-// All file routes require authentication
-router.use(authenticateToken);
-
-// upload/download routes
+// Upload requires authentication
 router.post(
     '/upload',
+    authenticateToken,
     singleUploadMiddleware,
     validateUploadedFile,
     scanFile,
     fileController.uploadFile
 );
 
+// File viewing does not require authentication (files are already in chats user has access to)
 router.get('/:id/thumbnail', fileController.getFileThumbnail);
 router.get('/:id', fileController.getFile);
-router.delete('/:id', fileController.deleteFile);
+
+// Delete requires authentication
+router.delete('/:id', authenticateToken, fileController.deleteFile);
 
 module.exports = router;
