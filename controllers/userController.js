@@ -21,6 +21,26 @@ function sanitizeInitialPassword(payload, includeSecret) {
     return rest;
 }
 
+function sanitizeInitialPassword(payload, includeSecret) {
+    if (includeSecret) {
+        return payload;
+    }
+
+    if (!payload) {
+        return payload;
+    }
+
+    if (Array.isArray(payload)) {
+        return payload.map((item) => {
+            const { initial_password, ...rest } = item;
+            return rest;
+        });
+    }
+
+    const { initial_password, ...rest } = payload;
+    return rest;
+}
+
 // Get all users (admin only)
 const getAllUsers = async (req, res) => {
     try {
