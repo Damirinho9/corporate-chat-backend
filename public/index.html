@@ -2579,12 +2579,10 @@
             messageEl.innerHTML = `
                 <div class="message-avatar" style="background: ${avatarColor};">${initials}</div>
                 <div class="message-content">
-                    ${!isOwn ? `
-                        <div class="message-header">
-                            <span class="message-author">${message.user_name || 'Unknown'}</span>
-                            <span class="message-time">${time}</span>
-                        </div>
-                    ` : ''}
+                    <div class="message-header">
+                        <span class="message-author">${message.user_name || 'Unknown'}</span>
+                        <span class="message-time">${time}</span>
+                    </div>
                     ${forwardHtml}
                     ${replyHtml}
                     <div class="message-bubble">
@@ -2592,7 +2590,6 @@
                         ${renderMessageFile(message)}
                     </div>
                     ${reactionsHtml}
-                    ${isOwn ? `<span class="message-time" style="text-align: right; font-size: 11px; color: var(--text-tertiary);">${time}</span>` : ''}
                 </div>
                 ${!isTempSending && !message.isSending ? `
                 <div class="message-actions">
