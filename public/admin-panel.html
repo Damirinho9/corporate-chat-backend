@@ -558,6 +558,9 @@
                 <div class="nav-item" data-section="departments">
                     🏢 Departments
                 </div>
+                <div class="nav-item" data-section="permissions">
+                    🔐 Permissions
+                </div>
                 <div class="nav-item" data-section="logs">
                     📋 Logs
                 </div>
@@ -699,6 +702,31 @@
 
                 <div class="card">
                     <div id="departmentsList">
+                        <p style="text-align: center; color: #a0aec0;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Permissions -->
+            <div id="permissions" class="content-section">
+                <div class="header">
+                    <h2>🔐 Права доступа</h2>
+                    <div>
+                        <button class="btn btn-success" onclick="savePermissions()">
+                            💾 Сохранить
+                        </button>
+                        <button class="btn btn-danger" onclick="resetPermissions()">
+                            🔄 Сбросить
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Права отправки сообщений между ролями</h3>
+                    <p style="color: #718096; margin-bottom: 20px;">
+                        Установите галочки для разрешения отправки сообщений. Строки = отправитель, столбцы = получатель.
+                    </p>
+                    <div id="permissionsMatrix" style="overflow-x: auto;">
                         <p style="text-align: center; color: #a0aec0;">Loading...</p>
                     </div>
                 </div>
@@ -920,6 +948,9 @@
                     break;
                 case 'departments':
                     await loadDepartments();
+                    break;
+                case 'permissions':
+                    await loadPermissions();
                     break;
                 case 'logs':
                     await loadLogs();
@@ -2148,6 +2179,147 @@ async function createNewDepartment() {
                 }
             } catch (err) {
                 showToast('Ошибка', 'error');
+            }
+        }
+
+        // ========== PERMISSIONS MANAGEMENT ==========
+        let permissionsData = null;
+
+        async function loadPermissions() {
+            try {
+                const res = await fetch(`${API_URL}/permissions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) {
+                    throw new Error('Failed to load permissions');
+                }
+
+                permissionsData = await res.json();
+                renderPermissionsMatrix(permissionsData);
+            } catch (err) {
+                console.error('Load permissions error:', err);
+                document.getElementById('permissionsMatrix').innerHTML =
+                    '<p style="color: #f56565; text-align: center;">Ошибка загрузки прав доступа</p>';
+            }
+        }
+
+        function renderPermissionsMatrix(data) {
+            const { matrix, roles } = data;
+            const roleLabels = {
+                'admin': 'Админ',
+                'assistant': 'Ассистент',
+                'rop': 'РОП',
+                'operator': 'Оператор',
+                'employee': 'Сотрудник'
+            };
+
+            let html = '<table style="border-collapse: collapse; width: 100%;">';
+
+            // Header row
+            html += '<thead><tr><th style="padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0;">От \\ Кому</th>';
+            roles.forEach(role => {
+                html += `<th style="padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; text-align: center;">
+                    <span class="badge badge-${role}">${roleLabels[role]}</span>
+                </th>`;
+            });
+            html += '</tr></thead>';
+
+            // Data rows
+            html += '<tbody>';
+            roles.forEach(fromRole => {
+                html += `<tr><td style="padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; font-weight: 600;">
+                    <span class="badge badge-${fromRole}">${roleLabels[fromRole]}</span>
+                </td>`;
+
+                roles.forEach(toRole => {
+                    const canSend = matrix[fromRole] && matrix[fromRole][toRole] !== undefined
+                        ? matrix[fromRole][toRole]
+                        : true;
+
+                    html += `<td style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">
+                        <input type="checkbox"
+                               data-from="${fromRole}"
+                               data-to="${toRole}"
+                               ${canSend ? 'checked' : ''}
+                               style="width: 20px; height: 20px; cursor: pointer;"
+                               onchange="markPermissionChanged(this)">
+                    </td>`;
+                });
+
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            html += '</table>';
+
+            document.getElementById('permissionsMatrix').innerHTML = html;
+        }
+
+        function markPermissionChanged(checkbox) {
+            checkbox.style.outline = '2px solid #4299e1';
+        }
+
+        async function savePermissions() {
+            try {
+                const checkboxes = document.querySelectorAll('#permissionsMatrix input[type="checkbox"]');
+                const updates = [];
+
+                checkboxes.forEach(cb => {
+                    updates.push({
+                        fromRole: cb.dataset.from,
+                        toRole: cb.dataset.to,
+                        canSend: cb.checked
+                    });
+                });
+
+                const res = await fetch(`${API_URL}/permissions/batch`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ permissions: updates })
+                });
+
+                if (res.ok) {
+                    showToast('Права доступа сохранены успешно!', 'success');
+                    // Remove outlines
+                    checkboxes.forEach(cb => cb.style.outline = 'none');
+                    await loadPermissions();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка сохранения прав', 'error');
+                }
+            } catch (err) {
+                console.error('Save permissions error:', err);
+                showToast('Ошибка сохранения прав доступа', 'error');
+            }
+        }
+
+        async function resetPermissions() {
+            if (!confirm('Вы уверены, что хотите сбросить все права доступа к настройкам по умолчанию?')) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/permissions/reset`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (res.ok) {
+                    showToast('Права доступа сброшены к настройкам по умолчанию', 'success');
+                    await loadPermissions();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка сброса прав', 'error');
+                }
+            } catch (err) {
+                console.error('Reset permissions error:', err);
+                showToast('Ошибка сброса прав доступа', 'error');
             }
         }
 
