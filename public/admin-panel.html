@@ -275,6 +275,16 @@
             margin-bottom: 20px;
         }
 
+        .form-group.disabled {
+            opacity: 0.65;
+        }
+
+        .form-group.disabled select,
+        .form-group.disabled input {
+            background: #edf2f7;
+            cursor: not-allowed;
+        }
+
         .form-group label {
             display: block;
             margin-bottom: 8px;
@@ -323,6 +333,13 @@
             width: 90%;
             max-height: 90vh;
             overflow-y: auto;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 25px;
         }
 
         .modal-header {
@@ -469,6 +486,47 @@
         .btn-delete:hover {
             background: #dc2626;
         }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #2d3748;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5f5;
+        }
+
+        .password-inline {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .password-inline input {
+            flex: 1;
+        }
+
+        .form-hint {
+            display: block;
+            margin-top: 6px;
+            color: #718096;
+            font-size: 13px;
+        }
+
+        .password-chip {
+            display: inline-block;
+            background: #edf2f7;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 13px;
+            color: #2d3748;
+        }
+
+        .password-missing {
+            color: #c53030;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -586,6 +644,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Логин</th>
+                                <th>Пароль</th>
                                 <th>Name</th>
                                 <th>Роль</th>
                                 <th>Отдел</th>
@@ -595,7 +654,7 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td colspan="7" style="text-align: center; color: #a0aec0;">Loading...</td>
+                                <td colspan="8" style="text-align: center; color: #a0aec0;">Loading...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -719,20 +778,27 @@
             </div>
             <form id="createUserForm">
                 <div class="form-group">
-                    <label>Username *</label>
-                    <input type="text" name="username" required>
-                </div>
-                <div class="form-group">
-                    <label>Password *</label>
-                    <input type="password" name="password" required>
-                </div>
-                <div class="form-group">
                     <label>Full Name *</label>
-                    <input type="text" name="name" required>
+                    <input type="text" name="name" id="createFullName" required>
+                    <small class="form-hint">Введите ФИО — логин сформируется автоматически.</small>
+                </div>
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input type="text" name="username" id="createUsername" required>
+                    <small class="form-hint">Можно отредактировать вручную, если нужно.</small>
+                </div>
+                <div class="form-group">
+                    <label>Generated Password *</label>
+                    <div class="password-inline">
+                        <input type="text" name="password" id="createPassword" readonly required>
+                        <button type="button" class="btn btn-secondary" onclick="regeneratePassword()">Обновить</button>
+                        <button type="button" class="btn btn-secondary" onclick="copyGeneratedPassword()">Копировать</button>
+                    </div>
+                    <small class="form-hint">Сохраните пароль и передайте сотруднику.</small>
                 </div>
                 <div class="form-group">
                     <label>Role *</label>
-                    <select name="role" required onchange="toggleDepartmentField(this)">
+                    <select name="role" id="createRole" required onchange="toggleDepartmentField(this)">
                         <option value="">Select role</option>
                         <option value="admin">Админ</option>
                         <option value="assistant">Assistant</option>
@@ -741,9 +807,12 @@
                         <option value="employee">Сотрудник</option>
                     </select>
                 </div>
-                <div class="form-group" id="departmentField" style="display: none;">
+                <div class="form-group disabled" id="departmentField">
                     <label>Department *</label>
-                    <input type="text" name="department">
+                    <select name="department" id="departmentSelect" disabled>
+                        <option value="">Выберите отдел</option>
+                    </select>
+                    <small class="form-hint">Отдел обязателен для РОПов, операторов и сотрудников.</small>
                 </div>
                 <button type="submit" class="btn btn-primary" style="width: 100%;">
                     Create User
@@ -887,6 +956,28 @@
         const API_URL = window.location.origin + '/api';
         let token = localStorage.getItem('token') || '';
         let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+        let departmentsCache = [];
+        let manualUsernameOverride = false;
+        let usersCache = [];
+        let currentEditingUser = null;
+
+        const createUserForm = document.getElementById('createUserForm');
+        const usernameInput = document.getElementById('createUsername');
+        const fullNameInput = document.getElementById('createFullName');
+        const passwordInput = document.getElementById('createPassword');
+        const roleSelect = document.getElementById('createRole');
+        const departmentField = document.getElementById('departmentField');
+        const departmentSelect = document.getElementById('departmentSelect');
+        const editUserModal = document.getElementById('editUserModal');
+        const editUserForm = document.getElementById('editUserForm');
+        const editUserIdInput = document.getElementById('editUserId');
+        const editFullNameInput = document.getElementById('editFullName');
+        const editUsernameInput = document.getElementById('editUsername');
+        const editRoleSelect = document.getElementById('editRole');
+        const editDepartmentField = document.getElementById('editDepartmentField');
+        const editDepartmentSelect = document.getElementById('editDepartmentSelect');
+        const editStatusSelect = document.getElementById('editStatus');
+        const editPasswordInput = document.getElementById('editInitialPassword');
 
         // Check auth
         if (!token || !currentUser || currentUser.role !== 'admin') {
@@ -987,33 +1078,55 @@
                 const res = await fetch(`${API_URL}/users`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const data = await res.json();
-                
+
                 const tbody = document.querySelector('#usersTable tbody');
-                if (data.users && data.users.length > 0) {
-                    tbody.innerHTML = data.users.map(user => `
-                        <tr>
-                            <td>${user.id}</td>
-                            <td>${user.username}</td>
-                            <td>${user.name}</td>
-                            <td><span class="badge badge-${user.role}">${user.role}</span></td>
-                            <td>${user.department || '-'}</td>
-                            <td><span class="badge badge-${user.is_active ? 'active' : 'inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
-                            <td>
-                                <button class="btn btn-sm btn-primary" onclick="editUser(${user.id})">Редактировать</button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Удалить</button>
-                            </td>
-                        </tr>
-                    `).join('');
+
+                if (!res.ok) {
+                    const error = await res.json().catch(() => ({}));
+                    console.error('Load users error:', error);
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #f56565;">Не удалось загрузить пользователей</td></tr>';
+                    showToast(error.error || 'Ошибка загрузки пользователей', 'error');
+                    return;
+                }
+
+                const data = await res.json();
+                usersCache = Array.isArray(data.users) ? data.users : [];
+
+                if (usersCache.length > 0) {
+                    tbody.innerHTML = usersCache.map(user => {
+                        const passwordDisplay = user.initial_password
+                            ? `<span class="password-chip">${user.initial_password}</span>`
+                            : '<span class="password-missing">нет</span>';
+
+                        return `
+                            <tr>
+                                <td>${user.id}</td>
+                                <td>${user.username}</td>
+                                <td>${passwordDisplay}</td>
+                                <td>${user.name}</td>
+                                <td><span class="badge badge-${user.role}">${user.role}</span></td>
+                                <td>${user.department || '-'}</td>
+                                <td><span class="badge badge-${user.is_active ? 'active' : 'inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="editUser(${user.id})">Редактировать</button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Удалить</button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">No users found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #a0aec0;">Пользователи не найдены</td></tr>';
                 }
             } catch (err) {
                 console.error('Load users error:', err);
+                const tbody = document.querySelector('#usersTable tbody');
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #f56565;">Ошибка загрузки</td></tr>';
+                showToast('Ошибка загрузки пользователей', 'error');
             }
         }
 
-        async function loadChats() {
+
+async function loadChats() {
             try {
                 const res = await fetch(`${API_URL}/admin/chats`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -1053,6 +1166,7 @@
                 if (!res.ok) {
                     const error = await res.json();
                     console.error('[Departments] Ошибка API:', error);
+                    departmentsCache = [];
                     document.getElementById('departmentsList').innerHTML = `
                         <p style="text-align: center; color: #f56565;">
                             Ошибка загрузки: ${error.error || res.statusText}
@@ -1062,6 +1176,24 @@
                 }
 
                 const data = await res.json();
+                departmentsCache = Array.isArray(data.departments)
+                    ? data.departments
+                        .map(dept => (typeof dept?.department === 'string' ? dept.department.trim() : null))
+                        .filter(Boolean)
+                    : [];
+                populateDepartmentSelectOptions(departmentSelect, departmentSelect ? departmentSelect.value : null);
+                const editPreferredDepartment = currentEditingUser?.department || (editDepartmentSelect ? editDepartmentSelect.value : null);
+                populateDepartmentSelectOptions(editDepartmentSelect, editPreferredDepartment);
+                if (roleSelect) {
+                    updateDepartmentVisibility(roleSelect.value, departmentField, departmentSelect, { preserveValue: true });
+                }
+                if (editRoleSelect) {
+                    updateDepartmentVisibility(editRoleSelect.value, editDepartmentField, editDepartmentSelect, {
+                        preferredValue: editPreferredDepartment,
+                        preserveValue: true,
+                        autoSelectFirst: !editPreferredDepartment
+                    });
+                }
                 console.log('[Departments] Raw data received:', data);
                 console.log('[Departments] data.departments type:', typeof data.departments);
                 console.log('[Departments] data.departments is array:', Array.isArray(data.departments));
@@ -1282,27 +1414,344 @@
         }
 
         // ========== CREATE USER ==========
-        function showCreateUserModal() {
-            document.getElementById('createUserModal').classList.add('show');
+        async function showCreateUserModal() {
+            try {
+                if (!departmentsCache.length) {
+                    await loadDepartments();
+                } else {
+                    populateDepartmentSelectOptions(departmentSelect);
+                    populateDepartmentSelectOptions(editDepartmentSelect, currentEditingUser?.department || null);
+                }
+            } catch (error) {
+                console.warn('[showCreateUserModal] Не удалось обновить список отделов', error);
+            }
+
+            if (createUserForm) {
+                createUserForm.reset();
+            }
+            manualUsernameOverride = false;
+            regeneratePassword(true);
+            updateUsernameFromFullName();
+
+            if (roleSelect) {
+                roleSelect.value = '';
+                toggleDepartmentField(roleSelect);
+            }
+
+            const modal = document.getElementById('createUserModal');
+            if (modal) {
+                modal.classList.add('show');
+            }
+
+            if (fullNameInput) {
+                setTimeout(() => fullNameInput.focus(), 50);
+            }
         }
 
         function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('show');
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.remove('show');
+            }
+
+            if (modalId === 'createUserModal' && createUserForm) {
+                createUserForm.reset();
+                manualUsernameOverride = false;
+                if (departmentSelect) {
+                    departmentSelect.required = false;
+                    departmentSelect.value = '';
+                    departmentSelect.disabled = true;
+                }
+                if (departmentField) {
+                    departmentField.classList.add('disabled');
+                }
+                updateDepartmentVisibility('', departmentField, departmentSelect, { preserveValue: false });
+            }
+
+            if (modalId === 'editUserModal' && editUserForm) {
+                editUserForm.reset();
+                currentEditingUser = null;
+                if (editDepartmentSelect) {
+                    editDepartmentSelect.required = false;
+                    editDepartmentSelect.value = '';
+                    editDepartmentSelect.disabled = true;
+                    delete editDepartmentSelect.dataset.lastValue;
+                }
+                if (editDepartmentField) {
+                    editDepartmentField.classList.add('disabled');
+                }
+                if (editPasswordInput) {
+                    editPasswordInput.value = '';
+                }
+                updateDepartmentVisibility('', editDepartmentField, editDepartmentSelect, { preserveValue: false });
+            }
+        }
+
+        function shouldRequireDepartment(role) {
+            return ['rop', 'operator', 'employee'].includes(role);
+        }
+
+        function updateDepartmentVisibility(roleValue, fieldElement, selectElement, { preferredValue = null, autoSelectFirst = false, preserveValue = false } = {}) {
+            if (!fieldElement || !selectElement) return;
+
+            const needsDept = shouldRequireDepartment(roleValue);
+            selectElement.disabled = !needsDept;
+            selectElement.required = needsDept;
+            fieldElement.classList.toggle('disabled', !needsDept);
+
+            if (needsDept) {
+                populateDepartmentSelectOptions(selectElement, preferredValue);
+                if (preferredValue && selectElement.value !== preferredValue) {
+                    selectElement.value = preferredValue;
+                }
+                if (!selectElement.value && autoSelectFirst && selectElement.options.length > 1) {
+                    selectElement.selectedIndex = 1;
+                }
+            } else if (!preserveValue) {
+                selectElement.value = '';
+            }
         }
 
         function toggleDepartmentField(select) {
-            const field = document.getElementById('departmentField');
-            const needsDept = ['rop', 'operator', 'employee'].includes(select.value);
-            field.style.display = needsDept ? 'block' : 'none';
-            field.querySelector('input').required = needsDept;
+            updateDepartmentVisibility(select.value, departmentField, departmentSelect, { autoSelectFirst: true });
         }
 
-        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+        function populateDepartmentSelectOptions(targetSelect, preferredValue) {
+            if (!targetSelect) return;
+            const uniqueDepartments = Array.from(new Set(departmentsCache))
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b, 'ru'));
+            const currentValue = preferredValue ?? targetSelect.value ?? '';
+            const options = ['<option value="">Выберите отдел</option>'];
+
+            uniqueDepartments.forEach((dept) => {
+                options.push(`<option value="${dept}">${dept}</option>`);
+            });
+
+            if (currentValue && !uniqueDepartments.includes(currentValue)) {
+                options.push(`<option value="${currentValue}">${currentValue}</option>`);
+            }
+
+            targetSelect.innerHTML = options.join('');
+
+            if (currentValue) {
+                const hasMatch = Array.from(targetSelect.options).some(opt => opt.value === currentValue);
+                targetSelect.value = hasMatch ? currentValue : '';
+            } else {
+                targetSelect.value = '';
+            }
+        }
+
+        function generateStrongPassword(length = 12) {
+            const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()_+';
+            const chars = [];
+
+            if (window.crypto && window.crypto.getRandomValues) {
+                const buffer = new Uint32Array(length);
+                window.crypto.getRandomValues(buffer);
+                for (let i = 0; i < length; i++) {
+                    chars.push(alphabet[buffer[i] % alphabet.length]);
+                }
+            } else {
+                for (let i = 0; i < length; i++) {
+                    chars.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
+                }
+            }
+
+            return chars.join('');
+        }
+
+        function regeneratePassword(silent = false) {
+            if (!passwordInput) return '';
+            const password = generateStrongPassword();
+            passwordInput.value = password;
+
+            if (!silent) {
+                showToast('Новый пароль сгенерирован', 'success');
+            }
+
+            return password;
+        }
+
+        function copyGeneratedPassword(targetInput = passwordInput) {
+            if (!targetInput || !targetInput.value) {
+                showToast('Нет пароля для копирования', 'error');
+                return;
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(targetInput.value)
+                    .then(() => showToast('Пароль скопирован', 'success'))
+                    .catch(() => showToast('Не удалось скопировать пароль', 'error'));
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = targetInput.value;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+
+                try {
+                    const success = document.execCommand('copy');
+                    showToast(success ? 'Пароль скопирован' : 'Не удалось скопировать пароль', success ? 'success' : 'error');
+                } catch (error) {
+                    showToast('Не удалось скопировать пароль', 'error');
+                }
+
+                document.body.removeChild(textarea);
+            }
+        }
+
+        function copyEditPassword() {
+            copyGeneratedPassword(editPasswordInput);
+        }
+
+        async function resetUserPassword() {
+            const userId = Number(editUserIdInput?.value);
+            if (!userId) {
+                showToast('Пользователь не выбран', 'error');
+                return;
+            }
+
+            const newPassword = generateStrongPassword();
+
+            try {
+                const res = await fetch(`${API_URL}/users/${userId}/reset-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ newPassword })
+                });
+
+                const result = await res.json().catch(() => ({}));
+
+                if (res.ok) {
+                    if (editPasswordInput) {
+                        editPasswordInput.value = newPassword;
+                    }
+                    if (currentEditingUser) {
+                        currentEditingUser.initial_password = newPassword;
+                    }
+                    showToast('Пароль обновлен', 'success');
+                    await loadUsers();
+                    const updated = usersCache.find(u => u.id === userId);
+                    if (updated) {
+                        currentEditingUser = updated;
+                        if (editPasswordInput) {
+                            editPasswordInput.value = updated.initial_password || '';
+                        }
+                    }
+                } else {
+                    showToast(result.error || 'Не удалось сбросить пароль', 'error');
+                }
+            } catch (error) {
+                console.error('[resetUserPassword] error:', error);
+                showToast('Не удалось сбросить пароль', 'error');
+            }
+        }
+
+        function buildUsernameFromFullName(fullName) {
+            if (!fullName) {
+                return '';
+            }
+
+            const map = {
+                'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh', 'з': 'z',
+                'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r',
+                'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+                'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+            };
+
+            const lower = fullName.toLowerCase();
+            let converted = '';
+
+            for (const char of lower) {
+                if (map[char] !== undefined) {
+                    converted += map[char];
+                } else if (/[a-z0-9]/.test(char)) {
+                    converted += char;
+                } else if (/[\s._-]/.test(char)) {
+                    converted += '.';
+                } else {
+                    converted += '';
+                }
+            }
+
+            converted = converted.replace(/[^a-z0-9.]/g, '.');
+            converted = converted.replace(/\.+/g, '.').replace(/^\.+|\.+$/g, '');
+
+            if (!converted) {
+                return '';
+            }
+
+            if (/^[0-9]/.test(converted)) {
+                converted = `u${converted}`;
+            }
+
+            return converted.slice(0, 24);
+        }
+
+        function updateUsernameFromFullName() {
+            if (!fullNameInput || manualUsernameOverride) {
+                return;
+            }
+
+            usernameInput.value = buildUsernameFromFullName(fullNameInput.value);
+        }
+
+        if (fullNameInput) {
+            fullNameInput.addEventListener('input', () => {
+                updateUsernameFromFullName();
+            });
+        }
+
+        if (usernameInput) {
+            usernameInput.addEventListener('input', () => {
+                manualUsernameOverride = true;
+            });
+            usernameInput.addEventListener('focus', () => {
+                if (!usernameInput.value) {
+                    manualUsernameOverride = false;
+                    updateUsernameFromFullName();
+                }
+            });
+        }
+
+        if (roleSelect) {
+            roleSelect.addEventListener('change', (event) => toggleDepartmentField(event.target));
+        }
+
+        createUserForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData);
-            
+
+            const payload = {
+                username: usernameInput.value.trim(),
+                password: passwordInput.value.trim(),
+                name: fullNameInput.value.trim(),
+                role: roleSelect.value,
+                department: departmentSelect.value || null
+            };
+
+            if (!payload.username || !payload.name || !payload.role) {
+                showToast('Заполните обязательные поля', 'error');
+                return;
+            }
+
+            const needsDepartment = shouldRequireDepartment(payload.role);
+            if (!needsDepartment) {
+                payload.department = null;
+            } else if (!payload.department) {
+                showToast('Выберите отдел для выбранной роли', 'error');
+                return;
+            }
+
+            if (!payload.password) {
+                payload.password = regeneratePassword(true);
+            }
+
             try {
                 const res = await fetch(`${API_URL}/auth/register`, {
                     method: 'POST',
@@ -1310,16 +1759,19 @@
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(payload)
                 });
-                
+
                 const result = await res.json();
-                
-                if (result.success) {
-                    showToast('User created successfully!', 'success');
+
+                if (res.ok && result.success) {
+                    const displayPassword = result.password || payload.password;
+                    showToast(`Пользователь создан. Пароль: ${displayPassword}`, 'success');
                     closeModal('createUserModal');
-                    e.target.reset();
-                    loadUsers();
+                    await loadUsers();
+                    if (needsDepartment) {
+                        await loadDepartments();
+                    }
                 } else {
                     showToast(result.error || 'Failed to create user', 'error');
                 }
@@ -1328,6 +1780,110 @@
                 showToast('Failed to create user', 'error');
             }
         });
+
+        if (editDepartmentSelect) {
+            editDepartmentSelect.addEventListener('change', () => {
+                editDepartmentSelect.dataset.lastValue = editDepartmentSelect.value;
+            });
+        }
+
+        if (editRoleSelect) {
+            editRoleSelect.addEventListener('change', (event) => {
+                const preferred = shouldRequireDepartment(event.target.value)
+                    ? (editDepartmentSelect?.dataset.lastValue || editDepartmentSelect?.value || '')
+                    : null;
+                updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
+                    preferredValue: preferred,
+                    autoSelectFirst: true,
+                    preserveValue: false
+                });
+            });
+        }
+
+        if (editUserForm) {
+            editUserForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const userId = Number(editUserIdInput?.value);
+                if (!userId) {
+                    showToast('Пользователь не выбран', 'error');
+                    return;
+                }
+
+                const name = editFullNameInput?.value.trim() || '';
+                const usernameValue = editUsernameInput?.value.trim() || '';
+                const roleValue = editRoleSelect?.value || '';
+                const isActiveValue = editStatusSelect?.value === 'true';
+                const needsDept = shouldRequireDepartment(roleValue);
+                const departmentValue = needsDept ? (editDepartmentSelect?.value || '') : '';
+                const normalizedDepartment = needsDept ? (departmentValue || null) : null;
+
+                if (!name || !usernameValue || !roleValue) {
+                    showToast('Заполните обязательные поля', 'error');
+                    return;
+                }
+
+                if (needsDept && !normalizedDepartment) {
+                    showToast('Выберите отдел для выбранной роли', 'error');
+                    return;
+                }
+
+                const updates = {};
+                const original = currentEditingUser;
+                if (original) {
+                    if (name !== original.name) updates.name = name;
+                    if (usernameValue !== original.username) updates.username = usernameValue;
+                    if (roleValue !== original.role) updates.role = roleValue;
+                    const originalDepartment = original.department || null;
+                    if ((normalizedDepartment || null) !== originalDepartment) {
+                        updates.department = normalizedDepartment;
+                    }
+                    const originalActive = original.is_active !== false;
+                    if (isActiveValue !== originalActive) {
+                        updates.isActive = isActiveValue;
+                    }
+                } else {
+                    updates.name = name;
+                    updates.username = usernameValue;
+                    updates.role = roleValue;
+                    updates.department = normalizedDepartment;
+                    updates.isActive = isActiveValue;
+                }
+
+                if (Object.keys(updates).length === 0) {
+                    showToast('Нет изменений для сохранения', 'error');
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`${API_URL}/users/${userId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updates)
+                    });
+
+                    const result = await res.json().catch(() => ({}));
+
+                    if (res.ok) {
+                        showToast('Пользователь обновлен', 'success');
+                        closeModal('editUserModal');
+                        currentEditingUser = null;
+                        await loadUsers();
+                        if (updates.role !== undefined || updates.department !== undefined) {
+                            await loadDepartments();
+                        }
+                    } else {
+                        showToast(result.error || 'Ошибка обновления пользователя', 'error');
+                    }
+                } catch (error) {
+                    console.error('[editUserForm] error:', error);
+                    showToast('Ошибка обновления пользователя', 'error');
+                }
+            });
+        }
 
         // ========== DELETE USER ==========
         async function deleteUser(userId) {
@@ -1522,7 +2078,7 @@ async function loadHeadsForDepartment() {
         const data = await response.json();
         
         const select = document.getElementById('newDeptHead');
-        const heads = data.users.filter(u => u.role === 'head' || u.role === 'admin');
+        const heads = data.users.filter(u => u.role === 'rop' || u.role === 'admin');
         
         select.innerHTML = '<option value="">Выберите руководителя</option>' +
             heads.map(user => `<option value="${user.id}">${user.name} (${user.username})</option>`).join('');
@@ -1807,27 +2363,83 @@ async function createNewDepartment() {
     
         // Edit user
         async function editUser(userId) {
-            const newName = prompt('Новое имя пользователя:');
-            if (!newName) return;
-            
-            try {
-                const res = await fetch(`${API_URL}/admin/users/${userId}`, {
-                    method: 'PATCH',
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ name: newName })
-                });
-                
-                if (res.ok) {
-                    showToast('Пользователь обновлен', 'success');
-                    loadUsers();
-                } else {
-                    showToast('Ошибка обновления', 'error');
+            const numericId = Number(userId);
+            if (!numericId) {
+                showToast('Некорректный идентификатор пользователя', 'error');
+                return;
+            }
+
+            let user = usersCache.find(u => u.id === numericId);
+
+            if (!user) {
+                try {
+                    const res = await fetch(`${API_URL}/users/${numericId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        user = data.user;
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        console.error('[editUser] Failed to fetch user', err);
+                    }
+                } catch (error) {
+                    console.error('[editUser] Request error', error);
                 }
-            } catch (err) {
-                showToast('Ошибка обновления', 'error');
+            }
+
+            if (!user) {
+                showToast('Пользователь не найден', 'error');
+                return;
+            }
+
+            currentEditingUser = user;
+
+            if (editUserIdInput) editUserIdInput.value = user.id;
+            if (editFullNameInput) editFullNameInput.value = user.name || '';
+            if (editUsernameInput) editUsernameInput.value = user.username || '';
+            if (editRoleSelect) editRoleSelect.value = user.role || '';
+            if (editStatusSelect) editStatusSelect.value = (user.is_active !== false).toString();
+            if (editPasswordInput) editPasswordInput.value = user.initial_password || '';
+
+            try {
+                if (!departmentsCache.length) {
+                    await loadDepartments();
+                } else {
+                    populateDepartmentSelectOptions(departmentSelect, departmentSelect ? departmentSelect.value : null);
+                    populateDepartmentSelectOptions(editDepartmentSelect, user.department || null);
+                    if (roleSelect) {
+                        updateDepartmentVisibility(roleSelect.value, departmentField, departmentSelect, { preserveValue: true });
+                    }
+                    if (editRoleSelect) {
+                        updateDepartmentVisibility(editRoleSelect.value, editDepartmentField, editDepartmentSelect, {
+                            preferredValue: user.department || null,
+                            preserveValue: true,
+                            autoSelectFirst: !user.department
+                        });
+                    }
+                }
+            } catch (error) {
+                console.warn('[editUser] Не удалось обновить список отделов', error);
+            }
+
+            if (editDepartmentSelect) {
+                const deptValue = user.department || '';
+                editDepartmentSelect.value = deptValue;
+                editDepartmentSelect.dataset.lastValue = deptValue;
+            }
+
+            if (editRoleSelect) {
+                updateDepartmentVisibility(editRoleSelect.value, editDepartmentField, editDepartmentSelect, {
+                    preferredValue: user.department || null,
+                    preserveValue: true,
+                    autoSelectFirst: !user.department
+                });
+            }
+
+            if (editUserModal) {
+                editUserModal.classList.add('show');
             }
         }
 

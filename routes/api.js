@@ -45,10 +45,10 @@ router.post('/auth/register',
     requireAdmin,
     [
         body('username').trim().isLength({ min: 3, max: 50 }),
-        body('password').isLength({ min: 6 }),
+        body('password').optional({ nullable: true }).isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
         body('name').trim().isLength({ min: 2, max: 100 }),
-        body('role').isIn(['admin', 'head', 'employee']),
-        body('department').optional().trim()
+        body('role').isIn(['admin', 'assistant', 'rop', 'operator', 'employee']),
+        body('department').optional({ nullable: true }).trim().isLength({ min: 2, max: 100 })
     ],
     validate,
     authController.register
@@ -81,7 +81,7 @@ router.get('/users/stats', authenticateToken, requireAdmin, userController.getUs
 router.get('/users/role/:role',
     authenticateToken,
     requireHead,
-    [param('role').isIn(['admin', 'head', 'employee'])],
+    [param('role').isIn(['admin', 'assistant', 'rop', 'operator', 'employee'])],
     validate,
     userController.getUsersByRole
 );
@@ -104,9 +104,10 @@ router.put('/users/:userId',
     requireAdmin,
     [
         param('userId').isInt(),
+        body('username').optional().trim().isLength({ min: 3, max: 50 }),
         body('name').optional().trim().isLength({ min: 2, max: 100 }),
-        body('role').optional().isIn(['admin', 'head', 'employee']),
-        body('department').optional().trim(),
+        body('role').optional().isIn(['admin', 'assistant', 'rop', 'operator', 'employee']),
+        body('department').optional({ nullable: true }).trim().isLength({ min: 2, max: 100 }),
         body('isActive').optional().isBoolean()
     ],
     validate,
@@ -445,7 +446,24 @@ router.post('/chats/:chatId/messages',
     authenticateToken,
     [
         param('chatId').isInt(),
-        body('content').trim().isLength({ min: 1, max: 5000 })
+        body('content')
+            .optional({ nullable: true })
+            .trim()
+            .isLength({ min: 1, max: 5000 })
+            .withMessage('Message content must be between 1 and 5000 characters'),
+        body('fileId')
+            .optional({ nullable: true })
+            .toInt()
+            .isInt({ min: 1 })
+            .withMessage('fileId must be a positive integer'),
+        body()
+            .custom(({ content, fileId }) => {
+                const hasContent = typeof content === 'string' && content.trim().length > 0;
+                if (hasContent || fileId) {
+                    return true;
+                }
+                throw new Error('Message content or file is required');
+            })
     ],
     validate,
     canAccessChat,

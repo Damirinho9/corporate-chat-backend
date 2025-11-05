@@ -115,6 +115,11 @@ async function applyIncrementalSchemaUpdates() {
   try {
     logger.info('Applying incremental schema updates...');
 
+    await runOptionalQuery(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS initial_password VARCHAR(255)`,
+      'Ensured users.initial_password column'
+    );
+
     await runOptionalQuery(`
       CREATE TABLE IF NOT EXISTS files (
         id SERIAL PRIMARY KEY,

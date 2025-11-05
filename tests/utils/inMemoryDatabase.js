@@ -48,7 +48,7 @@ class InMemoryDatabase {
             return { rows: [], rowCount: 0 };
         }
 
-        if (normalized.startsWith('TRUNCATE admin_logs, messages, chat_participants, chats, users')) {
+        if (normalized.startsWith('TRUNCATE')) {
             this.reset();
             return { rows: [], rowCount: 0 };
         }
@@ -57,6 +57,21 @@ class InMemoryDatabase {
             const username = params[0];
             const user = this.data.users.find(u => u.username === username);
             return { rows: user ? [{ id: user.id }] : [], rowCount: user ? 1 : 0 };
+        }
+
+        if (normalized.startsWith("SELECT id FROM chats WHERE type = 'department' AND department =")) {
+            const department = params[0];
+            const chat = this.data.chats.find(c => c.type === 'department' && c.department === department);
+            return { rows: chat ? [{ id: chat.id }] : [], rowCount: chat ? 1 : 0 };
+        }
+
+        if (normalized.startsWith('SELECT id, initial_password, department FROM users WHERE username =')) {
+            const username = params[0];
+            const user = this.data.users.find(u => u.username === username);
+            return {
+                rows: user ? [{ id: user.id, initial_password: user.initial_password || null, department: user.department }] : [],
+                rowCount: user ? 1 : 0
+            };
         }
 
         if (normalized.startsWith('SELECT role FROM users WHERE id =')) {
@@ -69,6 +84,73 @@ class InMemoryDatabase {
             const id = toInt(params[0]);
             const user = this.data.users.find(u => u.id === id && u.is_active);
             return { rows: user ? [{ id: user.id, username: user.username, name: user.name }] : [], rowCount: user ? 1 : 0 };
+        }
+
+        if (normalized.startsWith('SELECT id, username, name, role, department, initial_password, is_active, created_at, last_seen FROM users WHERE id =')) {
+            const id = toInt(params[0]);
+            const user = this.data.users.find(u => u.id === id);
+            if (!user) {
+                return { rows: [], rowCount: 0 };
+            }
+
+            return {
+                rows: [{
+                    id: user.id,
+                    username: user.username,
+                    name: user.name,
+                    role: user.role,
+                    department: user.department,
+                    initial_password: user.initial_password || null,
+                    is_active: user.is_active !== false,
+                    created_at: user.created_at || null,
+                    last_seen: user.last_seen || null
+                }],
+                rowCount: 1
+            };
+        }
+
+        if (normalized.startsWith('SELECT id, username, name, role, department, initial_password, is_active, last_seen FROM users WHERE department =')) {
+            const department = params[0];
+            const users = this.data.users
+                .filter(u => u.department === department && u.is_active !== false)
+                .sort((a, b) => {
+                    const roleCompare = String(a.role || '').localeCompare(String(b.role || ''));
+                    if (roleCompare !== 0) {
+                        return roleCompare;
+                    }
+                    return String(a.name || '').localeCompare(String(b.name || ''));
+                })
+                .map(user => ({
+                    id: user.id,
+                    username: user.username,
+                    name: user.name,
+                    role: user.role,
+                    department: user.department,
+                    initial_password: user.initial_password || null,
+                    is_active: user.is_active !== false,
+                    last_seen: user.last_seen || null
+                }));
+
+            return { rows: users, rowCount: users.length };
+        }
+
+        if (normalized.startsWith('SELECT id, username, name, role, department, initial_password, is_active, last_seen FROM users WHERE role =')) {
+            const role = params[0];
+            const users = this.data.users
+                .filter(u => u.role === role && u.is_active !== false)
+                .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+                .map(user => ({
+                    id: user.id,
+                    username: user.username,
+                    name: user.name,
+                    role: user.role,
+                    department: user.department,
+                    initial_password: user.initial_password || null,
+                    is_active: user.is_active !== false,
+                    last_seen: user.last_seen || null
+                }));
+
+            return { rows: users, rowCount: users.length };
         }
 
         if (normalized.startsWith('SELECT cp.* FROM chat_participants cp JOIN chats c ON cp.chat_id = c.id WHERE cp.chat_id =')) {
@@ -100,12 +182,20 @@ class InMemoryDatabase {
             return this.handleInsert('chats', normalized, params);
         }
 
+        if (normalized.startsWith('INSERT INTO chat_participants (chat_id, user_id) SELECT')) {
+            return this.handleInsertChatParticipantsSelect(normalized, params);
+        }
+
         if (normalized.startsWith('INSERT INTO chat_participants')) {
             return this.handleInsert('chat_participants', normalized, params);
         }
 
         if (normalized.startsWith('INSERT INTO messages')) {
             return this.handleInsert('messages', normalized, params);
+        }
+
+        if (normalized.startsWith('INSERT INTO files')) {
+            return this.handleInsert('files', normalized, params);
         }
 
         if (normalized.startsWith('UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id =')) {
@@ -115,6 +205,16 @@ class InMemoryDatabase {
                 chat.updated_at = new Date().toISOString();
             }
             return { rows: [], rowCount: chat ? 1 : 0 };
+        }
+
+        if (normalized.startsWith('UPDATE files SET message_id =')) {
+            const messageId = toInt(params[0]);
+            const fileId = toInt(params[1]);
+            const file = this.data.files.find(f => f.id === fileId);
+            if (file) {
+                file.message_id = messageId;
+            }
+            return { rows: [], rowCount: file ? 1 : 0 };
         }
 
         if (normalized.startsWith('SELECT m.id, m.content, m.created_at, m.updated_at')) {
@@ -133,7 +233,7 @@ class InMemoryDatabase {
                 user_id: m.user_id,
                 user_name: this.userName(m.user_id),
                 username: this.userUsername(m.user_id),
-                file: null,
+                file: m.file_id ? this.buildFilePayload(m.file_id) : null,
                 reply_to: null,
                 forwarded_from: null,
                 reactions: null,
@@ -155,7 +255,7 @@ class InMemoryDatabase {
                 user_id: message.user_id,
                 user_name: this.userName(message.user_id),
                 username: this.userUsername(message.user_id),
-                file: null,
+                file: message.file_id ? this.buildFilePayload(message.file_id) : null,
                 reply_to: null,
                 mentions: null
             };
@@ -176,7 +276,7 @@ class InMemoryDatabase {
                 user_id: m.user_id,
                 user_name: this.userName(m.user_id),
                 username: this.userUsername(m.user_id),
-                file: null,
+                file: m.file_id ? this.buildFilePayload(m.file_id) : null,
                 reply_to: null,
                 forwarded_from: null,
                 reactions: null,
@@ -240,10 +340,22 @@ class InMemoryDatabase {
                 this.data.chat_participants.push({ ...entity });
             } else if (table === 'messages') {
                 entity.id = this.nextId('messages');
+                entity.chat_id = Number(entity.chat_id);
+                entity.user_id = Number(entity.user_id);
+                entity.file_id = entity.file_id === undefined || entity.file_id === null
+                    ? null
+                    : Number(entity.file_id);
                 const timestamp = new Date().toISOString();
                 entity.created_at = timestamp;
                 entity.updated_at = timestamp;
                 this.data.messages.push(entity);
+            } else if (table === 'files') {
+                entity.id = this.nextId('files');
+                entity.size_bytes = entity.size_bytes === undefined ? null : Number(entity.size_bytes);
+                entity.uploaded_by = Number(entity.uploaded_by);
+                entity.message_id = entity.message_id === undefined ? null : entity.message_id;
+                entity.created_at = entity.created_at || new Date().toISOString();
+                this.data.files.push(entity);
             } else if (table === 'admin_logs') {
                 entity.id = this.nextId('admin_logs');
                 this.data.admin_logs.push(entity);
@@ -263,6 +375,68 @@ class InMemoryDatabase {
         return {
             rows: returning.length > 0 ? insertedRows : [],
             rowCount: rowsToInsert.length
+        };
+    }
+
+    handleInsertChatParticipantsSelect(normalized, params) {
+        const insertedRows = [];
+
+        if (normalized.includes('FROM chats c')) {
+            const namesMatch = normalized.match(/WHERE c\.name IN \(([^)]+)\)/i);
+            let targetNames = [];
+
+            if (namesMatch) {
+                targetNames = namesMatch[1]
+                    .split(',')
+                    .map(name => name.trim().replace(/^'|'$/g, ''))
+                    .filter(Boolean);
+            } else {
+                const singleMatch = normalized.match(/WHERE c\.name = '([^']+)'/i);
+                if (singleMatch) {
+                    targetNames = [singleMatch[1]];
+                }
+            }
+
+            const userId = Number(params[0]);
+            targetNames.forEach(name => {
+                const chat = this.data.chats.find(c => c.name === name);
+                if (chat && !this.data.chat_participants.some(cp => cp.chat_id === chat.id && cp.user_id === userId)) {
+                    this.data.chat_participants.push({ chat_id: chat.id, user_id: userId });
+                    insertedRows.push({ chat_id: chat.id, user_id: userId });
+                }
+            });
+
+            return { rows: insertedRows, rowCount: insertedRows.length };
+        }
+
+        const chatId = Number(params[0]);
+        const userId = Number(params[1]);
+        const exists = this.data.chat_participants.some(cp => cp.chat_id === chatId && cp.user_id === userId);
+
+        if (!exists) {
+            this.data.chat_participants.push({ chat_id: chatId, user_id: userId });
+            return { rows: [], rowCount: 1 };
+        }
+
+        return { rows: [], rowCount: 0 };
+    }
+
+    buildFilePayload(fileId) {
+        const file = this.data.files.find(f => f.id === Number(fileId));
+        if (!file) {
+            return null;
+        }
+        const size = file.size_bytes !== undefined ? file.size_bytes : file.size;
+        return {
+            id: file.id,
+            filename: file.original_filename || file.filename,
+            size: size !== undefined ? size : null,
+            mimeType: file.mime_type || null,
+            type: file.mime_type || null,
+            url: `/api/files/${file.id}`,
+            thumbnailUrl: file.thumbnail_path ? `/api/files/${file.id}/thumbnail` : null,
+            width: file.width || null,
+            height: file.height || null
         };
     }
 

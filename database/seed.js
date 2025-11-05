@@ -38,21 +38,21 @@ async function seedDatabase() {
 
     // 1) Пользователи
     const userRows = [
-      // username, password_hash, name, role, department, is_active
-      ['admin',        adminPassword, 'Главный администратор',      'admin',     null,       true],
-      ['assistant1',   userPassword,  'Ассистент Анна',             'assistant', null,       true],
-      ['assistant2',   userPassword,  'Ассистент Борис',            'assistant', null,       true],
-      ['rop_sales',    userPassword,  'РОП Sales - Виктор',         'rop',       'Sales',    true],
-      ['rop_marketing',userPassword,  'РОП Marketing - Галина',     'rop',       'Marketing',true],
-      ['operator1',    userPassword,  'Оператор Sales - Дмитрий',   'operator',  'Sales',    true],
-      ['operator2',    userPassword,  'Оператор Sales - Елена',     'operator',  'Sales',    true],
-      ['operator3',    userPassword,  'Оператор Marketing - Жанна', 'operator',  'Marketing',true],
-      ['employee1',    userPassword,  'Сотрудник IT - Иван',        'employee',  'IT',       true],
-      ['employee2',    userPassword,  'Сотрудник IT - Мария',       'employee',  'IT',       true],
+      // username, password_hash, initial_password, name, role, department, is_active
+      ['admin',        adminPassword, 'admin123', 'Главный администратор',      'admin',     null,       true],
+      ['assistant1',   userPassword,  'pass123',  'Ассистент Анна',             'assistant', null,       true],
+      ['assistant2',   userPassword,  'pass123',  'Ассистент Борис',            'assistant', null,       true],
+      ['rop_sales',    userPassword,  'pass123',  'РОП Sales - Виктор',         'rop',       'Sales',    true],
+      ['rop_marketing',userPassword,  'pass123',  'РОП Marketing - Галина',     'rop',       'Marketing',true],
+      ['operator1',    userPassword,  'pass123',  'Оператор Sales - Дмитрий',   'operator',  'Sales',    true],
+      ['operator2',    userPassword,  'pass123',  'Оператор Sales - Елена',     'operator',  'Sales',    true],
+      ['operator3',    userPassword,  'pass123',  'Оператор Marketing - Жанна', 'operator',  'Marketing',true],
+      ['employee1',    userPassword,  'pass123',  'Сотрудник IT - Иван',        'employee',  'IT',       true],
+      ['employee2',    userPassword,  'pass123',  'Сотрудник IT - Мария',       'employee',  'IT',       true],
     ];
     const usersResult = await bulkInsert(
       'users',
-      ['username','password_hash','name','role','department','is_active'],
+      ['username','password_hash','initial_password','name','role','department','is_active'],
       userRows,
       'id, username'
     );

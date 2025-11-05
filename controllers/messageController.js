@@ -137,16 +137,20 @@ const sendMessage = async (req, res) => {
         const { content, fileId, replyToId, forwardedFromId, mentions } = req.body;
         const userId = req.user.id;
 
-        console.log('[sendMessage] Received request:', {
-            chatId,
-            userId,
-            content: content,
-            contentType: typeof content,
-            contentLength: content?.length,
-            fileId,
-            replyToId,
-            body: req.body
-        });
+        const trimmedContent = typeof content === 'string' ? content.trim() : '';
+        const normalizedContent = trimmedContent.length > 0 ? trimmedContent : null;
+        let normalizedFileId = null;
+
+        if (fileId !== undefined && fileId !== null && fileId !== '') {
+            const parsedFileId = Number(fileId);
+            if (Number.isNaN(parsedFileId)) {
+                return res.status(400).json({
+                    error: 'Invalid file identifier',
+                    code: 'INVALID_FILE_ID'
+                });
+            }
+            normalizedFileId = parsedFileId;
+        }
 
         // Check access
         const accessCheck = await query(
@@ -161,12 +165,7 @@ const sendMessage = async (req, res) => {
             });
         }
 
-        if (!content && !fileId) {
-            console.error('[sendMessage] Validation failed: no content and no fileId', {
-                content,
-                fileId,
-                bodyKeys: Object.keys(req.body)
-            });
+        if (!normalizedContent && !normalizedFileId) {
             return res.status(400).json({
                 error: 'Message content or file is required',
                 code: 'EMPTY_MESSAGE',
@@ -214,7 +213,7 @@ const sendMessage = async (req, res) => {
                 `INSERT INTO messages (chat_id, user_id, content, file_id, reply_to_id, forwarded_from_id)
                  VALUES ($1, $2, $3, $4, $5, $6)
                  RETURNING *`,
-                [chatId, userId, content || null, fileId || null, replyToId || null, forwardedFromId || null]
+                [chatId, userId, normalizedContent, normalizedFileId, replyToId || null, forwardedFromId || null]
             );
 
             const message = messageResult.rows[0];
@@ -234,10 +233,10 @@ const sendMessage = async (req, res) => {
             }
 
             // Update file message_id
-            if (fileId) {
+            if (normalizedFileId) {
                 await client.query(
                     'UPDATE files SET message_id = $1 WHERE id = $2',
-                    [message.id, fileId]
+                    [message.id, normalizedFileId]
                 );
             }
 

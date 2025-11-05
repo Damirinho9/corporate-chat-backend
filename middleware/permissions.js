@@ -133,8 +133,8 @@ const canSendToChat = async (req, res, next) => {
 
         // For department chats, allow heads and operators of same department
         if (chat.type === 'department') {
-            // Allow head or operator of the same department
-            if ((userRole === 'head' || userRole === 'operator') && userDept === chat.department) {
+            // Allow ROP/head or operator of the same department
+            if ((['rop', 'head'].includes(userRole) || userRole === 'operator') && userDept === chat.department) {
                 return next();
             }
             // Allow admin

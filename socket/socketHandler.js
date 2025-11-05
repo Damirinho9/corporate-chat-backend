@@ -442,9 +442,17 @@ const initializeSocket = (server) => {
                 return true;
             }
 
-            // For department chats, only heads can send
+            // For department chats, allow admins or department heads/operators of same department
             if (chat.type === 'department') {
-                return user.role === 'head' && user.department === chat.department;
+                if (user.role === 'admin') {
+                    return true;
+                }
+
+                if ((['rop', 'head', 'operator'].includes(user.role)) && user.department === chat.department) {
+                    return true;
+                }
+
+                return false;
             }
 
             return false;
