@@ -275,6 +275,16 @@
             margin-bottom: 20px;
         }
 
+        .form-group.disabled {
+            opacity: 0.65;
+        }
+
+        .form-group.disabled select,
+        .form-group.disabled input {
+            background: #edf2f7;
+            cursor: not-allowed;
+        }
+
         .form-group label {
             display: block;
             margin-bottom: 8px;
@@ -323,6 +333,13 @@
             width: 90%;
             max-height: 90vh;
             overflow-y: auto;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 25px;
         }
 
         .modal-header {
@@ -752,9 +769,9 @@
                         <option value="employee">Сотрудник</option>
                     </select>
                 </div>
-                <div class="form-group" id="departmentField" style="display: none;">
+                <div class="form-group disabled" id="departmentField">
                     <label>Department *</label>
-                    <select name="department" id="departmentSelect">
+                    <select name="department" id="departmentSelect" disabled>
                         <option value="">Выберите отдел</option>
                     </select>
                     <small class="form-hint">Отдел обязателен для РОПов, операторов и сотрудников.</small>
@@ -762,6 +779,72 @@
                 <button type="submit" class="btn btn-primary" style="width: 100%;">
                     Create User
                 </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Edit User -->
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>✏️ Edit User</h3>
+                <button class="close-btn" onclick="closeModal('editUserModal')">×</button>
+            </div>
+            <form id="editUserForm">
+                <input type="hidden" id="editUserId">
+
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" id="editFullName" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input type="text" id="editUsername" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Role *</label>
+                    <select id="editRole" required>
+                        <option value="">Select role</option>
+                        <option value="admin">Админ</option>
+                        <option value="assistant">Assistant</option>
+                        <option value="rop">ROP</option>
+                        <option value="operator">Operator</option>
+                        <option value="employee">Сотрудник</option>
+                    </select>
+                </div>
+
+                <div class="form-group disabled" id="editDepartmentField">
+                    <label>Department *</label>
+                    <select id="editDepartmentSelect" disabled>
+                        <option value="">Выберите отдел</option>
+                    </select>
+                    <small class="form-hint">Отдел обязателен для РОПов, операторов и сотрудников.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Status *</label>
+                    <select id="editStatus" required>
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Initial Password</label>
+                    <div class="password-inline">
+                        <input type="text" id="editInitialPassword" readonly>
+                        <button type="button" class="btn btn-secondary" onclick="copyEditPassword()">Копировать</button>
+                        <button type="button" class="btn btn-secondary" onclick="resetUserPassword()">Сбросить</button>
+                    </div>
+                    <small class="form-hint">Пароль показывается только администраторам. Сброс создаст новый случайный пароль и сохранит его.</small>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editUserModal')">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                </div>
             </form>
         </div>
     </div>
@@ -775,6 +858,8 @@
         let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
         let departmentsCache = [];
         let manualUsernameOverride = false;
+        let usersCache = [];
+        let currentEditingUser = null;
 
         const createUserForm = document.getElementById('createUserForm');
         const usernameInput = document.getElementById('createUsername');
@@ -783,6 +868,16 @@
         const roleSelect = document.getElementById('createRole');
         const departmentField = document.getElementById('departmentField');
         const departmentSelect = document.getElementById('departmentSelect');
+        const editUserModal = document.getElementById('editUserModal');
+        const editUserForm = document.getElementById('editUserForm');
+        const editUserIdInput = document.getElementById('editUserId');
+        const editFullNameInput = document.getElementById('editFullName');
+        const editUsernameInput = document.getElementById('editUsername');
+        const editRoleSelect = document.getElementById('editRole');
+        const editDepartmentField = document.getElementById('editDepartmentField');
+        const editDepartmentSelect = document.getElementById('editDepartmentSelect');
+        const editStatusSelect = document.getElementById('editStatus');
+        const editPasswordInput = document.getElementById('editInitialPassword');
 
         // Check auth
         if (!token || !currentUser || currentUser.role !== 'admin') {
@@ -892,9 +987,10 @@
                 }
 
                 const data = await res.json();
+                usersCache = Array.isArray(data.users) ? data.users : [];
 
-                if (Array.isArray(data.users) && data.users.length > 0) {
-                    tbody.innerHTML = data.users.map(user => {
+                if (usersCache.length > 0) {
+                    tbody.innerHTML = usersCache.map(user => {
                         const passwordDisplay = user.initial_password
                             ? `<span class="password-chip">${user.initial_password}</span>`
                             : '<span class="password-missing">нет</span>';
@@ -982,7 +1078,19 @@ async function loadChats() {
                         .map(dept => (typeof dept?.department === 'string' ? dept.department.trim() : null))
                         .filter(Boolean)
                     : [];
-                populateDepartmentSelectOptions();
+                populateDepartmentSelectOptions(departmentSelect, departmentSelect ? departmentSelect.value : null);
+                const editPreferredDepartment = currentEditingUser?.department || (editDepartmentSelect ? editDepartmentSelect.value : null);
+                populateDepartmentSelectOptions(editDepartmentSelect, editPreferredDepartment);
+                if (roleSelect) {
+                    updateDepartmentVisibility(roleSelect.value, departmentField, departmentSelect, { preserveValue: true });
+                }
+                if (editRoleSelect) {
+                    updateDepartmentVisibility(editRoleSelect.value, editDepartmentField, editDepartmentSelect, {
+                        preferredValue: editPreferredDepartment,
+                        preserveValue: true,
+                        autoSelectFirst: !editPreferredDepartment
+                    });
+                }
                 console.log('[Departments] Raw data received:', data);
                 console.log('[Departments] data.departments type:', typeof data.departments);
                 console.log('[Departments] data.departments is array:', Array.isArray(data.departments));
@@ -1208,7 +1316,8 @@ async function loadChats() {
                 if (!departmentsCache.length) {
                     await loadDepartments();
                 } else {
-                    populateDepartmentSelectOptions();
+                    populateDepartmentSelectOptions(departmentSelect);
+                    populateDepartmentSelectOptions(editDepartmentSelect, currentEditingUser?.department || null);
                 }
             } catch (error) {
                 console.warn('[showCreateUserModal] Не удалось обновить список отделов', error);
@@ -1248,10 +1357,30 @@ async function loadChats() {
                 if (departmentSelect) {
                     departmentSelect.required = false;
                     departmentSelect.value = '';
+                    departmentSelect.disabled = true;
                 }
                 if (departmentField) {
-                    departmentField.style.display = 'none';
+                    departmentField.classList.add('disabled');
                 }
+                updateDepartmentVisibility('', departmentField, departmentSelect, { preserveValue: false });
+            }
+
+            if (modalId === 'editUserModal' && editUserForm) {
+                editUserForm.reset();
+                currentEditingUser = null;
+                if (editDepartmentSelect) {
+                    editDepartmentSelect.required = false;
+                    editDepartmentSelect.value = '';
+                    editDepartmentSelect.disabled = true;
+                    delete editDepartmentSelect.dataset.lastValue;
+                }
+                if (editDepartmentField) {
+                    editDepartmentField.classList.add('disabled');
+                }
+                if (editPasswordInput) {
+                    editPasswordInput.value = '';
+                }
+                updateDepartmentVisibility('', editDepartmentField, editDepartmentSelect, { preserveValue: false });
             }
         }
 
@@ -1259,36 +1388,54 @@ async function loadChats() {
             return ['rop', 'operator', 'employee'].includes(role);
         }
 
-        function toggleDepartmentField(select) {
-            if (!departmentField || !departmentSelect) return;
-            const needsDept = shouldRequireDepartment(select.value);
-            departmentField.style.display = needsDept ? 'block' : 'none';
-            departmentSelect.required = needsDept;
+        function updateDepartmentVisibility(roleValue, fieldElement, selectElement, { preferredValue = null, autoSelectFirst = false, preserveValue = false } = {}) {
+            if (!fieldElement || !selectElement) return;
+
+            const needsDept = shouldRequireDepartment(roleValue);
+            selectElement.disabled = !needsDept;
+            selectElement.required = needsDept;
+            fieldElement.classList.toggle('disabled', !needsDept);
 
             if (needsDept) {
-                populateDepartmentSelectOptions();
-                if (!departmentSelect.value && departmentSelect.options.length > 1) {
-                    departmentSelect.selectedIndex = 1;
+                populateDepartmentSelectOptions(selectElement, preferredValue);
+                if (preferredValue && selectElement.value !== preferredValue) {
+                    selectElement.value = preferredValue;
                 }
-            } else {
-                departmentSelect.value = '';
+                if (!selectElement.value && autoSelectFirst && selectElement.options.length > 1) {
+                    selectElement.selectedIndex = 1;
+                }
+            } else if (!preserveValue) {
+                selectElement.value = '';
             }
         }
 
-        function populateDepartmentSelectOptions() {
-            if (!departmentSelect) return;
-            const uniqueDepartments = Array.from(new Set(departmentsCache)).filter(Boolean).sort((a, b) => a.localeCompare(b, 'ru'));
-            const currentValue = departmentSelect.value;
+        function toggleDepartmentField(select) {
+            updateDepartmentVisibility(select.value, departmentField, departmentSelect, { autoSelectFirst: true });
+        }
+
+        function populateDepartmentSelectOptions(targetSelect, preferredValue) {
+            if (!targetSelect) return;
+            const uniqueDepartments = Array.from(new Set(departmentsCache))
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b, 'ru'));
+            const currentValue = preferredValue ?? targetSelect.value ?? '';
             const options = ['<option value="">Выберите отдел</option>'];
 
             uniqueDepartments.forEach((dept) => {
                 options.push(`<option value="${dept}">${dept}</option>`);
             });
 
-            departmentSelect.innerHTML = options.join('');
+            if (currentValue && !uniqueDepartments.includes(currentValue)) {
+                options.push(`<option value="${currentValue}">${currentValue}</option>`);
+            }
 
-            if (currentValue && uniqueDepartments.includes(currentValue)) {
-                departmentSelect.value = currentValue;
+            targetSelect.innerHTML = options.join('');
+
+            if (currentValue) {
+                const hasMatch = Array.from(targetSelect.options).some(opt => opt.value === currentValue);
+                targetSelect.value = hasMatch ? currentValue : '';
+            } else {
+                targetSelect.value = '';
             }
         }
 
@@ -1323,19 +1470,19 @@ async function loadChats() {
             return password;
         }
 
-        function copyGeneratedPassword() {
-            if (!passwordInput || !passwordInput.value) {
+        function copyGeneratedPassword(targetInput = passwordInput) {
+            if (!targetInput || !targetInput.value) {
                 showToast('Нет пароля для копирования', 'error');
                 return;
             }
 
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(passwordInput.value)
+                navigator.clipboard.writeText(targetInput.value)
                     .then(() => showToast('Пароль скопирован', 'success'))
                     .catch(() => showToast('Не удалось скопировать пароль', 'error'));
             } else {
                 const textarea = document.createElement('textarea');
-                textarea.value = passwordInput.value;
+                textarea.value = targetInput.value;
                 textarea.style.position = 'fixed';
                 textarea.style.opacity = '0';
                 document.body.appendChild(textarea);
@@ -1350,6 +1497,56 @@ async function loadChats() {
                 }
 
                 document.body.removeChild(textarea);
+            }
+        }
+
+        function copyEditPassword() {
+            copyGeneratedPassword(editPasswordInput);
+        }
+
+        async function resetUserPassword() {
+            const userId = Number(editUserIdInput?.value);
+            if (!userId) {
+                showToast('Пользователь не выбран', 'error');
+                return;
+            }
+
+            const newPassword = generateStrongPassword();
+
+            try {
+                const res = await fetch(`${API_URL}/users/${userId}/reset-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ newPassword })
+                });
+
+                const result = await res.json().catch(() => ({}));
+
+                if (res.ok) {
+                    if (editPasswordInput) {
+                        editPasswordInput.value = newPassword;
+                    }
+                    if (currentEditingUser) {
+                        currentEditingUser.initial_password = newPassword;
+                    }
+                    showToast('Пароль обновлен', 'success');
+                    await loadUsers();
+                    const updated = usersCache.find(u => u.id === userId);
+                    if (updated) {
+                        currentEditingUser = updated;
+                        if (editPasswordInput) {
+                            editPasswordInput.value = updated.initial_password || '';
+                        }
+                    }
+                } else {
+                    showToast(result.error || 'Не удалось сбросить пароль', 'error');
+                }
+            } catch (error) {
+                console.error('[resetUserPassword] error:', error);
+                showToast('Не удалось сбросить пароль', 'error');
             }
         }
 
@@ -1480,6 +1677,110 @@ async function loadChats() {
                 showToast('Failed to create user', 'error');
             }
         });
+
+        if (editDepartmentSelect) {
+            editDepartmentSelect.addEventListener('change', () => {
+                editDepartmentSelect.dataset.lastValue = editDepartmentSelect.value;
+            });
+        }
+
+        if (editRoleSelect) {
+            editRoleSelect.addEventListener('change', (event) => {
+                const preferred = shouldRequireDepartment(event.target.value)
+                    ? (editDepartmentSelect?.dataset.lastValue || editDepartmentSelect?.value || '')
+                    : null;
+                updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
+                    preferredValue: preferred,
+                    autoSelectFirst: true,
+                    preserveValue: false
+                });
+            });
+        }
+
+        if (editUserForm) {
+            editUserForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const userId = Number(editUserIdInput?.value);
+                if (!userId) {
+                    showToast('Пользователь не выбран', 'error');
+                    return;
+                }
+
+                const name = editFullNameInput?.value.trim() || '';
+                const usernameValue = editUsernameInput?.value.trim() || '';
+                const roleValue = editRoleSelect?.value || '';
+                const isActiveValue = editStatusSelect?.value === 'true';
+                const needsDept = shouldRequireDepartment(roleValue);
+                const departmentValue = needsDept ? (editDepartmentSelect?.value || '') : '';
+                const normalizedDepartment = needsDept ? (departmentValue || null) : null;
+
+                if (!name || !usernameValue || !roleValue) {
+                    showToast('Заполните обязательные поля', 'error');
+                    return;
+                }
+
+                if (needsDept && !normalizedDepartment) {
+                    showToast('Выберите отдел для выбранной роли', 'error');
+                    return;
+                }
+
+                const updates = {};
+                const original = currentEditingUser;
+                if (original) {
+                    if (name !== original.name) updates.name = name;
+                    if (usernameValue !== original.username) updates.username = usernameValue;
+                    if (roleValue !== original.role) updates.role = roleValue;
+                    const originalDepartment = original.department || null;
+                    if ((normalizedDepartment || null) !== originalDepartment) {
+                        updates.department = normalizedDepartment;
+                    }
+                    const originalActive = original.is_active !== false;
+                    if (isActiveValue !== originalActive) {
+                        updates.isActive = isActiveValue;
+                    }
+                } else {
+                    updates.name = name;
+                    updates.username = usernameValue;
+                    updates.role = roleValue;
+                    updates.department = normalizedDepartment;
+                    updates.isActive = isActiveValue;
+                }
+
+                if (Object.keys(updates).length === 0) {
+                    showToast('Нет изменений для сохранения', 'error');
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`${API_URL}/users/${userId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updates)
+                    });
+
+                    const result = await res.json().catch(() => ({}));
+
+                    if (res.ok) {
+                        showToast('Пользователь обновлен', 'success');
+                        closeModal('editUserModal');
+                        currentEditingUser = null;
+                        await loadUsers();
+                        if (updates.role !== undefined || updates.department !== undefined) {
+                            await loadDepartments();
+                        }
+                    } else {
+                        showToast(result.error || 'Ошибка обновления пользователя', 'error');
+                    }
+                } catch (error) {
+                    console.error('[editUserForm] error:', error);
+                    showToast('Ошибка обновления пользователя', 'error');
+                }
+            });
+        }
 
         // ========== DELETE USER ==========
         async function deleteUser(userId) {
@@ -1749,27 +2050,83 @@ async function createNewDepartment() {
     
         // Edit user
         async function editUser(userId) {
-            const newName = prompt('Новое имя пользователя:');
-            if (!newName) return;
-            
-            try {
-                const res = await fetch(`${API_URL}/admin/users/${userId}`, {
-                    method: 'PATCH',
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ name: newName })
-                });
-                
-                if (res.ok) {
-                    showToast('Пользователь обновлен', 'success');
-                    loadUsers();
-                } else {
-                    showToast('Ошибка обновления', 'error');
+            const numericId = Number(userId);
+            if (!numericId) {
+                showToast('Некорректный идентификатор пользователя', 'error');
+                return;
+            }
+
+            let user = usersCache.find(u => u.id === numericId);
+
+            if (!user) {
+                try {
+                    const res = await fetch(`${API_URL}/users/${numericId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        user = data.user;
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        console.error('[editUser] Failed to fetch user', err);
+                    }
+                } catch (error) {
+                    console.error('[editUser] Request error', error);
                 }
-            } catch (err) {
-                showToast('Ошибка обновления', 'error');
+            }
+
+            if (!user) {
+                showToast('Пользователь не найден', 'error');
+                return;
+            }
+
+            currentEditingUser = user;
+
+            if (editUserIdInput) editUserIdInput.value = user.id;
+            if (editFullNameInput) editFullNameInput.value = user.name || '';
+            if (editUsernameInput) editUsernameInput.value = user.username || '';
+            if (editRoleSelect) editRoleSelect.value = user.role || '';
+            if (editStatusSelect) editStatusSelect.value = (user.is_active !== false).toString();
+            if (editPasswordInput) editPasswordInput.value = user.initial_password || '';
+
+            try {
+                if (!departmentsCache.length) {
+                    await loadDepartments();
+                } else {
+                    populateDepartmentSelectOptions(departmentSelect, departmentSelect ? departmentSelect.value : null);
+                    populateDepartmentSelectOptions(editDepartmentSelect, user.department || null);
+                    if (roleSelect) {
+                        updateDepartmentVisibility(roleSelect.value, departmentField, departmentSelect, { preserveValue: true });
+                    }
+                    if (editRoleSelect) {
+                        updateDepartmentVisibility(editRoleSelect.value, editDepartmentField, editDepartmentSelect, {
+                            preferredValue: user.department || null,
+                            preserveValue: true,
+                            autoSelectFirst: !user.department
+                        });
+                    }
+                }
+            } catch (error) {
+                console.warn('[editUser] Не удалось обновить список отделов', error);
+            }
+
+            if (editDepartmentSelect) {
+                const deptValue = user.department || '';
+                editDepartmentSelect.value = deptValue;
+                editDepartmentSelect.dataset.lastValue = deptValue;
+            }
+
+            if (editRoleSelect) {
+                updateDepartmentVisibility(editRoleSelect.value, editDepartmentField, editDepartmentSelect, {
+                    preferredValue: user.department || null,
+                    preserveValue: true,
+                    autoSelectFirst: !user.department
+                });
+            }
+
+            if (editUserModal) {
+                editUserModal.classList.add('show');
             }
         }
 

@@ -109,6 +109,7 @@ router.put('/users/:userId',
     requireAdmin,
     [
         param('userId').isInt(),
+        body('username').optional().trim().isLength({ min: 3, max: 50 }),
         body('name').optional().trim().isLength({ min: 2, max: 100 }),
         body('role').optional().isIn(['admin', 'assistant', 'rop', 'operator', 'employee']),
         body('department').optional({ nullable: true }).trim().isLength({ min: 2, max: 100 }),

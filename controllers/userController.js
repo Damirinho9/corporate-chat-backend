@@ -1,5 +1,25 @@
 const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to match seed.js
-const { query, transaction } = require('../config/database');
+const { query } = require('../config/database');
+
+function sanitizeInitialPassword(payload, includeSecret) {
+    if (includeSecret) {
+        return payload;
+    }
+
+    if (!payload) {
+        return payload;
+    }
+
+    if (Array.isArray(payload)) {
+        return payload.map((item) => {
+            const { initial_password, ...rest } = item;
+            return rest;
+        });
+    }
+
+    const { initial_password, ...rest } = payload;
+    return rest;
+}
 
 function sanitizeInitialPassword(payload, includeSecret) {
     if (includeSecret) {
@@ -30,7 +50,8 @@ const getAllUsers = async (req, res) => {
              ORDER BY created_at DESC`
         );
 
-        res.json({ users: result.rows });
+        const includeSecret = req.user?.role === 'admin';
+        res.json({ users: sanitizeInitialPassword(result.rows, includeSecret) });
     } catch (error) {
         console.error('Get all users error:', error);
         res.status(500).json({ 
@@ -73,47 +94,112 @@ const getUserById = async (req, res) => {
 const updateUser = async (req, res) => {
     try {
         const { userId } = req.params;
-        const { name, role, department, isActive } = req.body;
+        const { username, name, role, department, isActive } = req.body;
 
         // Check if user exists
         const userCheck = await query(
-            'SELECT id FROM users WHERE id = $1',
+            'SELECT id, username, role, department, is_active FROM users WHERE id = $1',
             [userId]
         );
 
         if (userCheck.rows.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 error: 'User not found',
                 code: 'USER_NOT_FOUND'
             });
         }
 
-        // Build update query dynamically
+        const currentUser = userCheck.rows[0];
         const updates = [];
         const values = [];
         let paramCount = 1;
 
+        let normalizedUsername;
+        if (username !== undefined) {
+            normalizedUsername = String(username).trim();
+            if (!normalizedUsername) {
+                return res.status(400).json({
+                    error: 'Username cannot be empty',
+                    code: 'INVALID_USERNAME'
+                });
+            }
+
+            if (normalizedUsername !== currentUser.username) {
+                const existing = await query(
+                    'SELECT id FROM users WHERE username = $1 AND id <> $2',
+                    [normalizedUsername, userId]
+                );
+
+                if (existing.rows.length > 0) {
+                    return res.status(409).json({
+                        error: 'Username already exists',
+                        code: 'USERNAME_EXISTS'
+                    });
+                }
+
+                updates.push(`username = $${paramCount}`);
+                values.push(normalizedUsername);
+                paramCount++;
+            }
+        }
+
+        let normalizedRole = currentUser.role;
+        if (role !== undefined) {
+            const allowedRoles = ['admin', 'assistant', 'rop', 'operator', 'employee'];
+            if (!allowedRoles.includes(role)) {
+                return res.status(400).json({
+                    error: 'Invalid role',
+                    code: 'INVALID_ROLE'
+                });
+            }
+
+            normalizedRole = role;
+            updates.push(`role = $${paramCount}`);
+            values.push(normalizedRole);
+            paramCount++;
+        }
+
+        let processedDepartment = currentUser.department;
+        if (department !== undefined) {
+            if (department === null || department === '') {
+                processedDepartment = null;
+            } else {
+                processedDepartment = String(department).trim();
+            }
+
+            updates.push(`department = $${paramCount}`);
+            values.push(processedDepartment);
+            paramCount++;
+        }
+
+        const finalDepartment = processedDepartment;
+        const requiresDepartment = ['rop', 'operator', 'employee'].includes(normalizedRole);
+        if (requiresDepartment && !finalDepartment) {
+            return res.status(400).json({
+                error: 'Department is required for this role',
+                code: 'DEPARTMENT_REQUIRED'
+            });
+        }
+
+        if (normalizedRole === 'admin' && finalDepartment) {
+            return res.status(400).json({
+                error: 'Admins should not have a department',
+                code: 'ADMIN_DEPARTMENT_ERROR'
+            });
+        }
+
+        // Build update query dynamically
         if (name !== undefined) {
             updates.push(`name = $${paramCount}`);
             values.push(name);
             paramCount++;
         }
 
-        if (role !== undefined) {
-            updates.push(`role = $${paramCount}`);
-            values.push(role);
-            paramCount++;
-        }
-
-        if (department !== undefined) {
-            updates.push(`department = $${paramCount}`);
-            values.push(department);
-            paramCount++;
-        }
-
         if (isActive !== undefined) {
+            const normalizedActive =
+                typeof isActive === 'string' ? isActive === 'true' : Boolean(isActive);
             updates.push(`is_active = $${paramCount}`);
-            values.push(isActive);
+            values.push(normalizedActive);
             paramCount++;
         }
 
