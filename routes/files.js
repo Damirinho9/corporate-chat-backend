@@ -19,17 +19,18 @@ function singleUploadMiddleware(req, res, next) {
     });
 }
 
-// Upload requires authentication
+// All file routes require authentication
+router.use(authenticateToken);
+
+// upload/download routes
 router.post(
     '/upload',
-    authenticateToken,
     singleUploadMiddleware,
     validateUploadedFile,
     scanFile,
     fileController.uploadFile
 );
 
-// File viewing does not require authentication (files are already in chats user has access to)
 router.get('/:id/thumbnail', fileController.getFileThumbnail);
 router.get('/:id', fileController.getFile);
 

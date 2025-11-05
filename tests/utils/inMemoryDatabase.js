@@ -48,7 +48,7 @@ class InMemoryDatabase {
             return { rows: [], rowCount: 0 };
         }
 
-        if (normalized.startsWith('TRUNCATE admin_logs, messages, chat_participants, chats, users')) {
+        if (normalized.startsWith('TRUNCATE')) {
             this.reset();
             return { rows: [], rowCount: 0 };
         }
@@ -108,6 +108,10 @@ class InMemoryDatabase {
             return this.handleInsert('messages', normalized, params);
         }
 
+        if (normalized.startsWith('INSERT INTO files')) {
+            return this.handleInsert('files', normalized, params);
+        }
+
         if (normalized.startsWith('UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id =')) {
             const chatId = toInt(params[0]);
             const chat = this.data.chats.find(c => c.id === chatId);
@@ -115,6 +119,16 @@ class InMemoryDatabase {
                 chat.updated_at = new Date().toISOString();
             }
             return { rows: [], rowCount: chat ? 1 : 0 };
+        }
+
+        if (normalized.startsWith('UPDATE files SET message_id =')) {
+            const messageId = toInt(params[0]);
+            const fileId = toInt(params[1]);
+            const file = this.data.files.find(f => f.id === fileId);
+            if (file) {
+                file.message_id = messageId;
+            }
+            return { rows: [], rowCount: file ? 1 : 0 };
         }
 
         if (normalized.startsWith('SELECT m.id, m.content, m.created_at, m.updated_at')) {
@@ -133,7 +147,7 @@ class InMemoryDatabase {
                 user_id: m.user_id,
                 user_name: this.userName(m.user_id),
                 username: this.userUsername(m.user_id),
-                file: null,
+                file: m.file_id ? this.buildFilePayload(m.file_id) : null,
                 reply_to: null,
                 forwarded_from: null,
                 reactions: null,
@@ -155,7 +169,7 @@ class InMemoryDatabase {
                 user_id: message.user_id,
                 user_name: this.userName(message.user_id),
                 username: this.userUsername(message.user_id),
-                file: null,
+                file: message.file_id ? this.buildFilePayload(message.file_id) : null,
                 reply_to: null,
                 mentions: null
             };
@@ -176,7 +190,7 @@ class InMemoryDatabase {
                 user_id: m.user_id,
                 user_name: this.userName(m.user_id),
                 username: this.userUsername(m.user_id),
-                file: null,
+                file: m.file_id ? this.buildFilePayload(m.file_id) : null,
                 reply_to: null,
                 forwarded_from: null,
                 reactions: null,
@@ -240,10 +254,22 @@ class InMemoryDatabase {
                 this.data.chat_participants.push({ ...entity });
             } else if (table === 'messages') {
                 entity.id = this.nextId('messages');
+                entity.chat_id = Number(entity.chat_id);
+                entity.user_id = Number(entity.user_id);
+                entity.file_id = entity.file_id === undefined || entity.file_id === null
+                    ? null
+                    : Number(entity.file_id);
                 const timestamp = new Date().toISOString();
                 entity.created_at = timestamp;
                 entity.updated_at = timestamp;
                 this.data.messages.push(entity);
+            } else if (table === 'files') {
+                entity.id = this.nextId('files');
+                entity.size_bytes = entity.size_bytes === undefined ? null : Number(entity.size_bytes);
+                entity.uploaded_by = Number(entity.uploaded_by);
+                entity.message_id = entity.message_id === undefined ? null : entity.message_id;
+                entity.created_at = entity.created_at || new Date().toISOString();
+                this.data.files.push(entity);
             } else if (table === 'admin_logs') {
                 entity.id = this.nextId('admin_logs');
                 this.data.admin_logs.push(entity);
@@ -263,6 +289,25 @@ class InMemoryDatabase {
         return {
             rows: returning.length > 0 ? insertedRows : [],
             rowCount: rowsToInsert.length
+        };
+    }
+
+    buildFilePayload(fileId) {
+        const file = this.data.files.find(f => f.id === Number(fileId));
+        if (!file) {
+            return null;
+        }
+        const size = file.size_bytes !== undefined ? file.size_bytes : file.size;
+        return {
+            id: file.id,
+            filename: file.original_filename || file.filename,
+            size: size !== undefined ? size : null,
+            mimeType: file.mime_type || null,
+            type: file.mime_type || null,
+            url: `/api/files/${file.id}`,
+            thumbnailUrl: file.thumbnail_path ? `/api/files/${file.id}/thumbnail` : null,
+            width: file.width || null,
+            height: file.height || null
         };
     }
 
