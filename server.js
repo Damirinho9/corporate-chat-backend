@@ -100,6 +100,198 @@ app.use((err, req, res, next) => {
 });
 
 // ==================== DATABASE INIT ====================
+async function runOptionalQuery(sql, description) {
+  try {
+    await query(sql);
+    if (description) {
+      logger.info(description);
+    }
+  } catch (error) {
+    logger.warn(`Optional migration skipped: ${error.message || error}`);
+  }
+}
+
+async function applyIncrementalSchemaUpdates() {
+  try {
+    logger.info('Applying incremental schema updates...');
+
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS files (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) NOT NULL,
+        original_filename VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(100) NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        path VARCHAR(500) NOT NULL,
+        thumbnail_path VARCHAR(500),
+        uploaded_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message_id INTEGER,
+        file_type VARCHAR(50) DEFAULT 'other',
+        scan_status VARCHAR(20) DEFAULT 'pending',
+        scan_result TEXT,
+        width INTEGER,
+        height INTEGER,
+        duration INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    const alterStatements = [
+      `ALTER TABLE files ADD COLUMN IF NOT EXISTS thumbnail_path VARCHAR(500)`,
+      `ALTER TABLE files ADD COLUMN IF NOT EXISTS uploaded_by INTEGER`,
+      `ALTER TABLE files ADD COLUMN IF NOT EXISTS message_id INTEGER`,
+      `ALTER TABLE files ADD COLUMN IF NOT EXISTS file_type VARCHAR(50) DEFAULT 'other'`,
+      `ALTER TABLE files ALTER COLUMN file_type SET DEFAULT 'other'`,
+      `ALTER TABLE files ADD COLUMN IF NOT EXISTS scan_status VARCHAR(20) DEFAULT 'pending'`,
+      `ALTER TABLE files ALTER COLUMN scan_status SET DEFAULT 'pending'`,
+      `ALTER TABLE files ADD COLUMN IF NOT EXISTS scan_result TEXT`,
+      `ALTER TABLE files ADD COLUMN IF NOT EXISTS width INTEGER`,
+      `ALTER TABLE files ADD COLUMN IF NOT EXISTS height INTEGER`,
+      `ALTER TABLE files ADD COLUMN IF NOT EXISTS duration INTEGER`
+    ];
+
+    for (const sql of alterStatements) {
+      await runOptionalQuery(sql);
+    }
+
+    const indexStatements = [
+      `CREATE INDEX IF NOT EXISTS idx_files_uploaded_by ON files(uploaded_by)`,
+      `CREATE INDEX IF NOT EXISTS idx_files_message_id ON files(message_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_files_file_type ON files(file_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_files_scan_status ON files(scan_status)`
+    ];
+
+    for (const sql of indexStatements) {
+      await runOptionalQuery(sql);
+    }
+
+    await runOptionalQuery(
+      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_id INTEGER`,
+      'Ensured messages.file_id column'
+    );
+    await runOptionalQuery(
+      `ALTER TABLE messages ALTER COLUMN content DROP NOT NULL`,
+      'Allowed NULL message content for file attachments'
+    );
+    await runOptionalQuery(
+      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES messages(id) ON DELETE SET NULL`,
+      'Ensured messages.reply_to_id column'
+    );
+    await runOptionalQuery(
+      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS forwarded_from_id INTEGER REFERENCES messages(id) ON DELETE SET NULL`,
+      'Ensured messages.forwarded_from_id column'
+    );
+    await runOptionalQuery(
+      `ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_edited BOOLEAN DEFAULT FALSE`,
+      'Ensured messages.is_edited column'
+    );
+
+    await runOptionalQuery(
+      `CREATE INDEX IF NOT EXISTS idx_messages_file_id ON messages(file_id)`,
+      'Ensured index on messages.file_id'
+    );
+    await runOptionalQuery(
+      `CREATE INDEX IF NOT EXISTS idx_messages_reply ON messages(reply_to_id)`,
+      'Ensured index on messages.reply_to_id'
+    );
+    await runOptionalQuery(
+      `CREATE INDEX IF NOT EXISTS idx_messages_forwarded ON messages(forwarded_from_id)`,
+      'Ensured index on messages.forwarded_from_id'
+    );
+
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS reactions (
+        id SERIAL PRIMARY KEY,
+        message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        emoji VARCHAR(10) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(message_id, user_id)
+      )
+    `);
+
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS mentions (
+        id SERIAL PRIMARY KEY,
+        message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(message_id, user_id)
+      )
+    `);
+
+    await runOptionalQuery(
+      `CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id)`
+    );
+    await runOptionalQuery(
+      `CREATE INDEX IF NOT EXISTS idx_reactions_user ON reactions(user_id)`
+    );
+    await runOptionalQuery(
+      `CREATE INDEX IF NOT EXISTS idx_mentions_message ON mentions(message_id)`
+    );
+    await runOptionalQuery(
+      `CREATE INDEX IF NOT EXISTS idx_mentions_user ON mentions(user_id)`
+    );
+
+    await runOptionalQuery(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid = 'files'::regclass AND conname = 'files_uploaded_by_fkey'
+        ) THEN
+          ALTER TABLE files
+            ADD CONSTRAINT files_uploaded_by_fkey
+            FOREIGN KEY (uploaded_by)
+            REFERENCES users(id)
+            ON DELETE CASCADE;
+        END IF;
+      END$$
+    `);
+
+    await runOptionalQuery(
+      `ALTER TABLE files ALTER COLUMN uploaded_by SET NOT NULL`
+    );
+
+    await runOptionalQuery(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid = 'files'::regclass AND conname = 'files_message_id_fkey'
+        ) THEN
+          ALTER TABLE files
+            ADD CONSTRAINT files_message_id_fkey
+            FOREIGN KEY (message_id)
+            REFERENCES messages(id)
+            ON DELETE CASCADE;
+        END IF;
+      END$$
+    `);
+
+    await runOptionalQuery(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid = 'messages'::regclass AND conname = 'messages_file_id_fkey'
+        ) THEN
+          ALTER TABLE messages
+            ADD CONSTRAINT messages_file_id_fkey
+            FOREIGN KEY (file_id)
+            REFERENCES files(id)
+            ON DELETE SET NULL;
+        END IF;
+      END$$
+    `);
+
+    logger.info('Incremental schema updates complete');
+  } catch (error) {
+    logger.error('Failed to apply incremental schema updates:', error.message || error);
+  }
+}
+
 const initDatabase = async () => {
   try {
     logger.info('Checking database state...');
@@ -140,8 +332,10 @@ const initDatabase = async () => {
           logger.warn('Seed error:', seedError.message || seedError);
         }
       }
+      await applyIncrementalSchemaUpdates();
     } else {
       logger.info('Database already initialized');
+      await applyIncrementalSchemaUpdates();
     }
   } catch (error) {
     logger.error('Database init error:', error.message || error);
@@ -160,6 +354,7 @@ const initDatabase = async () => {
             const seedModule = require(seedPath);
             if (typeof seedModule === 'function') await seedModule();
           }
+          await applyIncrementalSchemaUpdates();
         }
       } catch (retryError) {
         logger.error('Retry failed:', retryError.message || retryError);
@@ -230,6 +425,8 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-startServer();
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
 
-module.exports = { app, server, io };
+module.exports = { app, server, io, startServer };

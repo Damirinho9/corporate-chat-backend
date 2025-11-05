@@ -460,6 +460,95 @@
             font-weight: 600;
         }
 
+        .department-section {
+            border-bottom: 1px solid var(--border);
+        }
+
+        .department-wrapper .department-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .department-main-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .department-main {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 15px 20px;
+        }
+
+        .department-main.chat-item {
+            border-bottom: none;
+            position: relative;
+        }
+
+        .department-toggle {
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 14px;
+            cursor: pointer;
+            transform: rotate(0deg);
+            transition: transform 0.2s ease;
+            line-height: 1;
+            padding: 0;
+            margin-top: 4px;
+        }
+
+        .department-toggle:focus {
+            outline: none;
+        }
+
+        .department-toggle.expanded {
+            transform: rotate(90deg);
+        }
+
+        .department-info {
+            flex: 1;
+        }
+
+        .department-contacts {
+            list-style: none;
+            margin: 0;
+            padding: 0 0 10px 50px;
+            display: none;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+        }
+
+        .department-contacts.expanded {
+            display: block;
+        }
+
+        .department-contacts .contact-item {
+            border: none;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border);
+            background: transparent;
+        }
+
+        .department-contacts .contact-item:last-child {
+            border-bottom: none;
+        }
+
+        .department-contacts .chat-item-header {
+            margin-bottom: 0;
+        }
+
+        .chat-item.disabled {
+            cursor: default;
+            opacity: 0.6;
+        }
+
+        .chat-item.disabled:hover {
+            background: inherit;
+        }
+
         .mobile-back-btn {
             display: none;
             padding: 8px 16px;
@@ -1251,7 +1340,7 @@
                 
                 <div class="file-upload-container" id="fileUploadContainer">
                     <div class="file-upload-area" id="fileUploadArea">
-                        📎 Перетащите файлы или <input type="file" id="fileInput" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+                        📎 Перетащите файлы или <input type="file" id="fileInput" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.tar,.gz,.tgz,.bz2">
                         <button onclick="document.getElementById('fileInput').click()" style="margin-left:5px;padding:5px 10px;background:#2196f3;color:white;border:none;border-radius:4px;cursor:pointer">Выбрать</button>
                     </div>
                     <div class="file-preview-container" id="filePreviewContainer"></div>
@@ -1286,9 +1375,26 @@
         let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
         let socket = null;
         let currentChatId = null;
+        let currentDirectContactId = null;
         let chats = [];
+        const directChatByUser = new Map();
+        const expandedDepartments = new Set();
         let selectedFiles = [];
         let replyToMessage = null;
+
+        const ROLE_DISPLAY_NAMES = {
+            'rop': 'РОП',
+            'operator': 'Оператор',
+            'assistant': 'Ассистент',
+            'employee': 'Сотрудник',
+            'admin': 'Администратор',
+            'head': 'Руководитель'
+        };
+
+        function getRoleDisplayName(role) {
+            if (!role) return '';
+            return ROLE_DISPLAY_NAMES[role] || role;
+        }
 
         // ==================== REPLY FUNCTIONALITY ====================
         function setReplyTo(message) {
@@ -1379,13 +1485,31 @@
         async function uploadFile(fileObj) {
             const formData = new FormData();
             formData.append('file', fileObj.file);
-            const res = await fetch('/api/files/upload', {
+
+            const res = await fetch(`${API_URL}/files/upload`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
-            const data = await res.json();
-            return data.file.id;
+
+            let data = {};
+            try {
+                data = await res.json();
+            } catch (error) {
+                console.warn('[uploadFile] Не удалось распарсить ответ:', error);
+            }
+
+            if (!res.ok) {
+                const message = data?.error || `Не удалось загрузить файл (${res.status})`;
+                throw new Error(message);
+            }
+
+            const fileId = data?.file?.id;
+            if (!fileId) {
+                throw new Error('Сервер не вернул идентификатор файла');
+            }
+
+            return fileId;
         }
 
         function renderMessageFile(msg) {
@@ -1628,6 +1752,34 @@
         // ==================== LOAD CHATS ====================
         let contacts = { departments: [], assistants: { users: [] } };
 
+        function rebuildDirectChatLookup() {
+            directChatByUser.clear();
+
+            chats
+                .filter(chat => chat && chat.type === 'direct')
+                .forEach(chat => {
+                    const chatId = Number(chat.id);
+                    if (!chatId) {
+                        return;
+                    }
+
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+
+                    participants.forEach(participant => {
+                        if (participant && participant.id) {
+                            directChatByUser.set(participant.id, chatId);
+                        }
+                    });
+
+                    const rawName = typeof chat.name === 'string' ? chat.name.trim() : '';
+                    if (participants.length === 1) {
+                        if (!rawName || rawName.toLowerCase() === 'direct') {
+                            chat.name = participants[0].name || rawName || 'Личный чат';
+                        }
+                    }
+                });
+        }
+
         async function loadChats() {
             try {
                 console.log('[loadChats] Начало загрузки...');
@@ -1670,6 +1822,7 @@
                 });
 
                 chats = chatsData.chats || [];
+                rebuildDirectChatLookup();
                 contacts = contactsData || { departments: [], assistants: { users: [] } };
 
                 renderChats();
@@ -1684,7 +1837,8 @@
         async function openDirectChatWithUser(userId, userName) {
             try {
                 console.log('[openDirectChat] Создание чата с пользователем:', { userId, userName });
-                showToast('Создание чата...', 'info');
+
+                currentDirectContactId = userId;
 
                 const response = await fetch(`${API_URL}/chats/direct`, {
                     method: 'POST',
@@ -1697,25 +1851,80 @@
 
                 console.log('[openDirectChat] Статус ответа:', response.status);
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    console.error('[openDirectChat] Ошибка от API:', error);
-                    showToast(`Ошибка: ${error.error || response.statusText}`, 'error');
-                    throw new Error(error.error || 'Не удалось создать чат');
+                let data = {};
+                try {
+                    data = await response.json();
+                } catch (parseError) {
+                    console.warn('[openDirectChat] Не удалось распарсить ответ:', parseError);
                 }
 
-                const data = await response.json();
+                if (!response.ok) {
+                    console.error('[openDirectChat] Ошибка от API:', data);
+                    const message = data?.error || response.statusText || 'Не удалось создать чат';
+                    showToast(`Ошибка: ${message}`, 'error');
+                    throw new Error(message);
+                }
+
                 console.log('[openDirectChat] Ответ от API:', data);
 
-                // Перезагружаем чаты чтобы получить новый
-                await loadChats();
+                const chatId = Number(data.chatId);
+                if (!chatId) {
+                    throw new Error('Не удалось получить идентификатор чата');
+                }
 
-                // Открываем чат
-                setTimeout(() => {
-                    openChat(data.chatId);
-                    showToast(`Чат с ${userName} открыт`, 'success');
-                }, 300);
+                const isNew = Boolean(data.isNew);
+                let chatInCache = chats.find(chat => Number(chat.id) === chatId);
+
+                if (isNew) {
+                    console.log('[openDirectChat] Создан новый чат, обновляем список чатов');
+                    await loadChats();
+                    chatInCache = chats.find(chat => Number(chat.id) === chatId);
+                }
+
+                if (!chatInCache) {
+                    console.log('[openDirectChat] Чат не найден в списке, выполняем дополнительную загрузку');
+                    try {
+                        const chatResponse = await fetch(`${API_URL}/chats/${chatId}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+
+                        if (chatResponse.ok) {
+                            const chatPayload = await chatResponse.json();
+                            const chatData = chatPayload?.chat;
+                            if (chatData) {
+                                chats.push({
+                                    id: chatData.id,
+                                    name: chatData.name || userName,
+                                    type: chatData.type || 'direct',
+                                    department: chatData.department || null,
+                                    participants: chatData.participants || [],
+                                    unread_count: 0
+                                });
+                                rebuildDirectChatLookup();
+                                renderChats();
+                                chatInCache = chats.find(chat => Number(chat.id) === chatId);
+                                console.log('[openDirectChat] Чат добавлен из дополнительной загрузки');
+                            }
+                        } else {
+                            console.warn('[openDirectChat] Не удалось напрямую загрузить чат, выполняем полную перезагрузку списка');
+                            await loadChats();
+                            chatInCache = chats.find(chat => Number(chat.id) === chatId);
+                        }
+                    } catch (fetchError) {
+                        console.error('[openDirectChat] Ошибка при дополнительной загрузке чата:', fetchError);
+                        await loadChats();
+                        chatInCache = chats.find(chat => Number(chat.id) === chatId);
+                    }
+                }
+
+                if (!chatInCache) {
+                    throw new Error('Чат не найден среди доступных после обновления');
+                }
+
+                await openChat(chatId);
+                showToast(`Чат с ${userName} открыт`, 'success');
             } catch (err) {
+                currentDirectContactId = null;
                 console.error('[openDirectChat] Критическая ошибка:', err);
                 showToast(err.message || 'Ошибка создания чата', 'error');
             }
@@ -1754,6 +1963,38 @@
             document.querySelectorAll('.section-nav-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.section === section);
             });
+
+            renderChats();
+        }
+
+        function getDepartmentIdentifier(name = '') {
+            if (!name) return '';
+            const numberMatch = String(name).match(/\d+/);
+            if (numberMatch) {
+                return numberMatch[0];
+            }
+            return String(name).trim().toLowerCase();
+        }
+
+        function getDepartmentKey(name = '') {
+            return String(name)
+                .toLowerCase()
+                .trim()
+                .replace(/\s+/g, '-')
+                .replace(/[^a-z0-9а-яё-]/gi, '');
+        }
+
+        function toggleDepartment(event, deptKey) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+
+            if (expandedDepartments.has(deptKey)) {
+                expandedDepartments.delete(deptKey);
+            } else {
+                expandedDepartments.add(deptKey);
+            }
 
             renderChats();
         }
@@ -1799,7 +2040,8 @@
                         return;
                 }
 
-                const renderChatItem = (chat) => {
+                const renderChatItem = (chat, options = {}) => {
+                        const { withArrow = false, deptKey = '', expanded = false, extraClass = '' } = options;
                         let lastMessageText = '';
                         let timestamp = '';
 
@@ -1815,65 +2057,118 @@
                         if (!lastMessageText) lastMessageText = 'Пока тишина';
 
                         const chatName = escapeHtml(chat.name || 'Чат');
+                        const unreadBadge = chat.unread_count > 0
+                                ? `<span class="unread-badge">${chat.unread_count}</span>`
+                                : '';
+
+                        const isActive = Number(chat.id) === Number(currentChatId);
+
+                        const content = `
+                                <div class="chat-item-header">
+                                        <span class="chat-name">${chatName}</span>
+                                        ${unreadBadge}
+                                </div>
+                                <div class="chat-last-message">
+                                        <span class="chat-last-message-text">${lastMessageText}</span>
+                                        ${timestamp
+                                                ? `<span class="chat-timestamp">${timestamp}</span>`
+                                                : ''}
+                                </div>
+                        `;
+
+                        if (withArrow) {
+                                const arrowClass = expanded ? 'department-toggle expanded' : 'department-toggle';
+                                return `
+                                        <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
+                                            data-chat-id="${chat.id}"
+                                            onclick="openChat(${chat.id})">
+                                                <button class="${arrowClass}" onclick="toggleDepartment(event, '${deptKey}')">&#9656;</button>
+                                                <div class="department-info">
+                                                        ${content}
+                                                </div>
+                                        </li>
+                                `;
+                        }
+
                         return `
-                                <li class="chat-item ${chat.id === currentChatId ? 'active' : ''}"
+                                <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
                                     data-chat-id="${chat.id}"
                                     onclick="openChat(${chat.id})">
-                                        <div class="chat-item-header">
-                                                <span class="chat-name">${chatName}</span>
-                                                ${chat.unread_count > 0
-                                                        ? `<span class="unread-badge">${chat.unread_count}</span>`
-                                                        : ''}
-                                        </div>
-                                        <div class="chat-last-message">
-                                                <span class="chat-last-message-text">${lastMessageText}</span>
-                                                ${timestamp
-                                                        ? `<span class="chat-timestamp">${timestamp}</span>`
-                                                        : ''}
-                                        </div>
+                                        ${content}
                                 </li>
                         `;
                 };
 
-                // 3️⃣ Группировка по отделам с вложенными чатами пользователей
-                const departments = {};
+                // 3️⃣ Группировка по отделам и ролям
                 const assistants = [];
                 const directChats = [];
+                const usedChatIds = new Set();
 
                 filteredChats.forEach(chat => {
-                        // Ассистенты
+                        if (chat.type === 'direct') {
+                                directChats.push(chat);
+                                return;
+                        }
+
                         if (/ассист/i.test(chat.name || '')) {
                                 assistants.push(chat);
-                        }
-                        // Личные чаты (ЛС)
-                        else if (chat.type === 'direct') {
-                                directChats.push(chat);
-                        }
-                        // Отделы - группируем чаты операторов внутри отделов
-                        else if (/отдел/i.test(chat.name || '')) {
-                                const match = chat.name.match(/отдел\s*(\d+)/i);
-                                const deptNum = match ? match[1] : '?';
-                                const deptKey = `Отдел ${deptNum}`;
-
-                                if (!departments[deptKey]) {
-                                        departments[deptKey] = {
-                                                main: null,
-                                                users: []
-                                        };
-                                }
-
-                                // Главный чат отдела
-                                if (chat.name === deptKey) {
-                                        departments[deptKey].main = chat;
-                                } else {
-                                        // Чаты пользователей отдела (РОП, Оператор)
-                                        departments[deptKey].users.push(chat);
-                                }
+                                usedChatIds.add(chat.id);
                         }
                 });
 
+                const groupChats = filteredChats.filter(chat => chat.type !== 'direct');
+                const departmentSections = [];
+                const departmentContacts = Array.isArray(contacts.departments) ? contacts.departments : [];
+
+                departmentContacts.forEach(dept => {
+                        const deptName = dept.department || '';
+                        const deptKey = getDepartmentKey(deptName || `department-${dept.id || ''}`);
+                        let mainChat = null;
+
+                        const identifier = getDepartmentIdentifier(deptName);
+                        if (identifier) {
+                                mainChat = groupChats.find(chat => !usedChatIds.has(chat.id) && getDepartmentIdentifier(chat.name || '') === identifier);
+                        }
+
+                        if (!mainChat) {
+                                mainChat = groupChats.find(chat => !usedChatIds.has(chat.id) && (chat.name || '').toLowerCase() === (deptName || '').toLowerCase());
+                        }
+
+                        if (mainChat) {
+                                usedChatIds.add(mainChat.id);
+                        }
+
+                        departmentSections.push({
+                                dept,
+                                deptKey,
+                                mainChat,
+                                isExpanded: expandedDepartments.has(deptKey)
+                        });
+                });
+
+                groupChats
+                        .filter(chat => !usedChatIds.has(chat.id) && /отдел/i.test(chat.name || ''))
+                        .forEach(chat => {
+                                const deptName = chat.name || 'Отдел';
+                                const deptKey = getDepartmentKey(deptName);
+
+                                if (!departmentSections.some(section => section.deptKey === deptKey)) {
+                                        departmentSections.push({
+                                                dept: { department: deptName, users: [] },
+                                                deptKey,
+                                                mainChat: chat,
+                                                isExpanded: expandedDepartments.has(deptKey)
+                                        });
+                                }
+
+                                usedChatIds.add(chat.id);
+                        });
+
+                const otherGroupChats = groupChats.filter(chat => !usedChatIds.has(chat.id));
+
                 // Функция отрисовки контакта (пользователя для создания чата)
-                const renderContactItem = (user) => {
+                const renderContactItem = (user, options = {}) => {
+                        const { nested = false } = options;
                         const roleEmoji = {
                                 'rop': '👔',
                                 'operator': '👤',
@@ -1882,17 +2177,18 @@
                                 'admin': '⚙️'
                         };
                         const emoji = roleEmoji[user.role] || '👤';
-                        const roleName = {
-                                'rop': 'РОП',
-                                'operator': 'Оператор',
-                                'assistant': 'Ассистент',
-                                'employee': 'Сотрудник',
-                                'admin': 'Админ'
-                        };
-                        const role = roleName[user.role] || user.role;
+                        const role = getRoleDisplayName(user.role) || user.role || '';
+
+                        const contactNestingClass = nested ? ' nested-contact' : '';
+                        const directChatId = directChatByUser.get(user.id);
+                        const isActive =
+                                Number(directChatId) === Number(currentChatId) ||
+                                (!directChatId && currentDirectContactId && Number(user.id) === Number(currentDirectContactId));
+                        const chatAttr = directChatId ? ` data-chat-id="${directChatId}"` : '';
 
                         return `
-                                <li class="chat-item contact-item"
+                                <li class="chat-item contact-item${contactNestingClass}${isActive ? ' active' : ''}"
+                                    data-contact-id="${user.id}"${chatAttr}
                                     onclick="openDirectChatWithUser(${user.id}, '${escapeHtml(user.name)}')">
                                         <div class="chat-item-header">
                                                 <span class="chat-name">${emoji} ${escapeHtml(user.name)}</span>
@@ -1908,32 +2204,71 @@
                 let html = '';
 
                 if (activeSectionFilter === 'all' || activeSectionFilter === 'Отделы') {
-                        // Отображаем отделы из API контактов
-                        contacts.departments.forEach(dept => {
-                                if (dept.users && dept.users.length > 0) {
-                                        html += `<div class="chat-section">
-                                                <h4>${escapeHtml(dept.department)}</h4>
-                                                <ul>`;
+                        if (departmentSections.length > 0) {
+                                html += `<div class="chat-section department-wrapper">
+                                                <h4>Отделы</h4>
+                                                <div class="department-list">`;
 
-                                        // Отображаем пользователей отдела как контакты
-                                        dept.users.forEach(user => {
-                                                html += renderContactItem(user);
-                                        });
+                                departmentSections.forEach(section => {
+                                        const deptName = escapeHtml(section.dept?.department || section.mainChat?.name || 'Отдел');
+                                        const contactsList = Array.isArray(section.dept?.users) ? section.dept.users : [];
+                                        const hasContacts = contactsList.length > 0;
 
-                                        html += `</ul></div>`;
-                                }
-                        });
+                                        if (section.mainChat) {
+                                                html += `<div class="department-section" data-department="${section.deptKey}">
+                                                                <ul class="department-main-list">
+                                                                        ${renderChatItem(section.mainChat, {
+                                                                                withArrow: hasContacts,
+                                                                                deptKey: section.deptKey,
+                                                                                expanded: section.isExpanded,
+                                                                                extraClass: 'department-main'
+                                                                        })}
+                                                                </ul>`;
+                                        } else if (hasContacts) {
+                                                html += `<div class="department-section" data-department="${section.deptKey}">
+                                                                <div class="chat-item department-main disabled">
+                                                                        <button class="department-toggle ${section.isExpanded ? 'expanded' : ''}" onclick="toggleDepartment(event, '${section.deptKey}')">&#9656;</button>
+                                                                        <div class="department-info">
+                                                                                <div class="chat-item-header">
+                                                                                        <span class="chat-name">${deptName}</span>
+                                                                                </div>
+                                                                                <div class="chat-last-message">
+                                                                                        <span class="chat-last-message-text">Нет группового чата</span>
+                                                                                </div>
+                                                                        </div>
+                                                                </div>`;
+                                        } else {
+                                                html += `<div class="department-section" data-department="${section.deptKey}">
+                                                                <div class="chat-item department-main disabled">
+                                                                        <div class="department-info">
+                                                                                <div class="chat-item-header">
+                                                                                        <span class="chat-name">${deptName}</span>
+                                                                                </div>
+                                                                                <div class="chat-last-message">
+                                                                                        <span class="chat-last-message-text">Нет доступных чатов</span>
+                                                                                </div>
+                                                                        </div>
+                                                                </div>`;
+                                        }
 
-                        // Также показываем групповые чаты отделов если есть
-                        Object.entries(departments).forEach(([deptName, dept]) => {
-                                if (dept.main) {
-                                        html += `<div class="chat-section">
-                                                <h4>${deptName} (Групповой чат)</h4>
-                                                <ul>`;
-                                        html += renderChatItem(dept.main);
-                                        html += `</ul></div>`;
-                                }
-                        });
+                                        if (hasContacts) {
+                                                html += `<ul class="department-contacts ${section.isExpanded ? 'expanded' : ''}">
+                                                                ${contactsList.map(user => renderContactItem(user, { nested: true })).join('')}
+                                                        </ul>`;
+                                        }
+
+                                        html += `</div>`;
+                                });
+
+                                html += `</div></div>`;
+                        }
+
+                        if (otherGroupChats.length > 0) {
+                                html += `<div class="chat-section">
+                                                <h4>Групповые чаты</h4>
+                                                <ul>${otherGroupChats.map(chat => renderChatItem(chat)).join('')}</ul>
+                                        </div>`;
+                        }
                 }
 
                 if (activeSectionFilter === 'all' || activeSectionFilter === 'Ассистенты') {
@@ -1959,10 +2294,19 @@
                         }
                 }
 
+                if (activeSectionFilter === 'all' && directChats.length > 0) {
+                        html += `<div class="chat-section">
+                                        <h4>Личные чаты</h4>
+                                        <ul>${directChats.map(chat => renderChatItem(chat)).join('')}</ul>
+                                </div>`;
+                }
+
                 chatsList.innerHTML = html || `
                         <div style="padding:20px;text-align:center;color:var(--text-secondary);">
                                 Нет доступных чатов
                         </div>`;
+
+                syncContactHighlights();
         }
 
         function updateChatLastMessage(chatId, message) {
@@ -1971,6 +2315,32 @@
                 chat.last_message = message.content;
                 renderChats();
             }
+        }
+
+        function syncContactHighlights() {
+            const contactItems = document.querySelectorAll('.contact-item');
+            if (contactItems.length === 0) {
+                return;
+            }
+
+            if (!currentDirectContactId) {
+                contactItems.forEach(item => {
+                    const chatId = item.dataset.chatId;
+                    if (!chatId || Number(chatId) !== Number(currentChatId)) {
+                        item.classList.remove('active');
+                    }
+                });
+                return;
+            }
+
+            contactItems.forEach(item => {
+                const contactId = Number(item.dataset.contactId);
+                if (contactId === Number(currentDirectContactId)) {
+                    item.classList.add('active');
+                } else if (!item.dataset.chatId || Number(item.dataset.chatId) !== Number(currentChatId)) {
+                    item.classList.remove('active');
+                }
+            });
         }
 
         // ==================== MOBILE NAVIGATION ====================
@@ -1983,13 +2353,14 @@
 
         // ==================== OPEN CHAT ====================
         async function openChat(chatId) {
+            console.log('[openChat] Открытие чата:', chatId);
             // Mobile: hide sidebar, show chat
             if (window.innerWidth <= 768) {
                 document.querySelector('.sidebar')?.classList.add('hidden');
                 document.querySelector('.main-chat')?.classList.remove('hidden');
             }
 
-            currentChatId = chatId;
+            currentChatId = Number(chatId);
 
             // Save last active chat to localStorage
             localStorage.setItem('lastActiveChatId', chatId);
@@ -1997,7 +2368,7 @@
             document.querySelectorAll('.chat-item').forEach(item => {
                 item.classList.remove('active');
             });
-            document.querySelector(`[data-chat-id="${chatId}"]`)?.classList.add('active');
+            document.querySelectorAll(`[data-chat-id="${chatId}"]`).forEach(item => item.classList.add('active'));
 
             document.getElementById('chatHeader').classList.remove('hidden');
 
@@ -2014,11 +2385,40 @@
 
             const chat = chats.find(c => c.id === chatId);
             if (chat) {
-                document.getElementById('chatTitle').textContent = chat.name || 'Чат';
-                document.getElementById('chatSubtitle').textContent = chat.type || '';
+                let title = chat.name || 'Чат';
+                let subtitle = '';
+
+                if (chat.type === 'direct') {
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+                    const partner = participants.find(p => Number(p.id) !== Number(currentUser?.id)) || participants[0];
+                    currentDirectContactId = partner?.id || null;
+                    if (partner?.name) {
+                        title = partner.name;
+                    }
+                    const roleLabel = partner?.role ? getRoleDisplayName(partner.role) : '';
+                    subtitle = roleLabel ? `Личный чат • ${roleLabel}` : 'Личный чат';
+                } else if (chat.type === 'group') {
+                    currentDirectContactId = null;
+                    subtitle = 'Групповой чат';
+                } else if (chat.type === 'department') {
+                    currentDirectContactId = null;
+                    subtitle = 'Отдел';
+                } else if (chat.type) {
+                    currentDirectContactId = null;
+                    subtitle = chat.type;
+                } else {
+                    currentDirectContactId = null;
+                }
+
+                document.getElementById('chatTitle').textContent = title;
+                document.getElementById('chatSubtitle').textContent = subtitle;
             }
 
+            syncContactHighlights();
+
             await loadMessages(chatId);
+
+            console.log('[openChat] Чат успешно открыт:', chatId);
 
             if (socket) {
                 socket.emit('join_chat', { chatId });
@@ -2043,11 +2443,45 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                const data = await response.json();
+                let rawBody = '';
+                try {
+                    rawBody = await response.text();
+                } catch (readError) {
+                    console.error('[loadMessages] Ошибка чтения ответа:', readError);
+                }
+
+                let data = {};
+                if (rawBody) {
+                    try {
+                        data = JSON.parse(rawBody);
+                    } catch (parseError) {
+                        console.error('[loadMessages] Ошибка парсинга ответа:', parseError);
+                    }
+                }
+
+                if (!response.ok) {
+                    const message = data?.error || `Ошибка загрузки (${response.status})`;
+                    console.warn('[loadMessages] Ответ с ошибкой:', { status: response.status, body: data });
+                    messagesContainer.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⚠️</div>
+                            <h2>Нет доступа</h2>
+                            <p>${escapeHtml(message)}</p>
+                        </div>
+                    `;
+                    showToast(message, 'error');
+                    return;
+                }
+
+                console.log('[loadMessages] Статус ответа:', response.status);
+
                 messagesContainer.innerHTML = '';
 
-                if (data.messages && data.messages.length > 0) {
-                    data.messages.forEach(msg => appendMessage(msg));
+                const messageList = Array.isArray(data.messages) ? data.messages : [];
+                console.log('[loadMessages] Получено сообщений:', messageList.length);
+
+                if (messageList.length > 0) {
+                    messageList.forEach(msg => appendMessage(msg));
                     scrollToBottom(true);
                 } else {
                     messagesContainer.innerHTML = `
@@ -2059,6 +2493,7 @@
                     `;
                 }
             } catch (err) {
+                console.error('[loadMessages] Критическая ошибка:', err);
                 messagesContainer.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">❌</div>
@@ -2243,7 +2678,19 @@
                                 replyToId: replyToMessage?.id || null
                             })
                         });
-                        const data = await response.json();
+
+                        let data = {};
+                        try {
+                            data = await response.json();
+                        } catch (error) {
+                            console.warn('[sendMessage] Не удалось распарсить ответ сервера:', error);
+                        }
+
+                        if (!response.ok) {
+                            const message = data?.error || `Ошибка отправки сообщения (${response.status})`;
+                            throw new Error(message);
+                        }
+
                         if (data.message) {
                             appendMessage(data.message);
                             scrollToBottom(true); // Force scroll after sending
@@ -2265,7 +2712,17 @@
                         })
                     });
 
-                    const data = await response.json();
+                    let data = {};
+                    try {
+                        data = await response.json();
+                    } catch (error) {
+                        console.warn('[sendMessage] Не удалось распарсить ответ сервера:', error);
+                    }
+
+                    if (!response.ok) {
+                        const message = data?.error || `Ошибка отправки сообщения (${response.status})`;
+                        throw new Error(message);
+                    }
 
                     if (data.message) {
                         // Remove temp message and add real message
@@ -2294,7 +2751,8 @@
                     const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                     if (tempEl) tempEl.remove();
                 }
-                showToast('Ошибка отправки сообщения', 'error');
+                console.error('[sendMessage] Ошибка отправки сообщения:', err);
+                showToast(err.message || 'Ошибка отправки сообщения', 'error');
             } finally {
                 // Re-enable send button and input
                 sendBtn.disabled = false;

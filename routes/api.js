@@ -374,7 +374,24 @@ router.post('/chats/:chatId/messages',
     authenticateToken,
     [
         param('chatId').isInt(),
-        body('content').trim().isLength({ min: 1, max: 5000 })
+        body('content')
+            .optional({ nullable: true })
+            .trim()
+            .isLength({ min: 1, max: 5000 })
+            .withMessage('Message content must be between 1 and 5000 characters'),
+        body('fileId')
+            .optional({ nullable: true })
+            .toInt()
+            .isInt({ min: 1 })
+            .withMessage('fileId must be a positive integer'),
+        body()
+            .custom(({ content, fileId }) => {
+                const hasContent = typeof content === 'string' && content.trim().length > 0;
+                if (hasContent || fileId) {
+                    return true;
+                }
+                throw new Error('Message content or file is required');
+            })
     ],
     validate,
     canAccessChat,

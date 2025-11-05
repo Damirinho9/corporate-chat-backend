@@ -32,7 +32,7 @@ async function seedDatabase() {
     await query('BEGIN');
 
     // Чистим таблицы аккуратно и сбрасываем идентификаторы
-    await query('TRUNCATE admin_logs, messages, chat_participants, chats, users RESTART IDENTITY CASCADE');
+    await query('TRUNCATE admin_logs, reactions, mentions, files, messages, chat_participants, chats, users RESTART IDENTITY CASCADE');
     console.log('✅ Cleared existing data');
 
     // 1) Пользователи
@@ -177,7 +177,9 @@ async function seedDatabase() {
     console.error('❌ Error seeding database:', e);
     throw e;
   } finally {
-    try { await pool.end(); } catch {}
+    if (process.env.NODE_ENV !== 'test' && process.env.USE_IN_MEMORY_DB !== 'true') {
+      try { await pool.end(); } catch {}
+    }
   }
 }
 
