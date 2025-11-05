@@ -827,6 +827,59 @@
         </div>
     </div>
 
+    <!-- Modal for Edit Chat -->
+    <div id="editChatModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ Редактировать чат</h2>
+                <button class="close-btn" onclick="closeEditChatModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editChatId">
+
+                <div class="form-group">
+                    <label>Название чата *</label>
+                    <input type="text" id="editChatName" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Тип чата *</label>
+                    <select id="editChatType" onchange="handleEditChatTypeChange()">
+                        <option value="group">Групповой чат</option>
+                        <option value="department">Чат отдела</option>
+                        <option value="direct">Личный чат (DM)</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="editChatDepartmentGroup" style="display: none;">
+                    <label>Отдел</label>
+                    <input type="text" id="editChatDepartment" placeholder="Название отдела">
+                </div>
+
+                <div class="form-group">
+                    <label>Текущие участники</label>
+                    <div id="currentParticipantsList" style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; margin-bottom: 15px;">
+                        <p style="text-align: center; color: #a0aec0;">Загрузка...</p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Добавить участников</label>
+                    <input type="text" id="editParticipantsSearch" placeholder="🔍 Поиск по имени или логину..."
+                           style="margin-bottom: 10px; padding: 8px 12px;"
+                           onkeyup="filterEditParticipants()">
+                    <div id="availableParticipantsList" style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
+                        <p style="text-align: center; color: #a0aec0;">Загрузка...</p>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="saveEditedChat()">
+                    💾 Сохранить изменения
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast -->
     <div id="toast" class="toast"></div>
 
@@ -1535,18 +1588,211 @@ async function createNewDepartment() {
             } catch (err) { showToast('Ошибка', 'error'); }
         }
 
+        // ========== EDIT CHAT ==========
+        let currentEditChatId = null;
+        let currentChatParticipants = [];
+        let participantsToAdd = new Set();
+
         async function editChat(chatId) {
-            const newName = prompt('Новое название:');
-            if (!newName) return;
+            currentEditChatId = chatId;
+            document.getElementById('editChatModal').style.display = 'flex';
+            await loadChatForEdit(chatId);
+        }
+
+        async function loadChatForEdit(chatId) {
             try {
-                const res = await fetch(`${API_URL}/admin/chats/${chatId}`, {
-                    method: 'PATCH',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newName })
+                // Load chat details
+                const chatRes = await fetch(`${API_URL}/admin/chats/${chatId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (res.ok) { showToast('Обновлено', 'success'); loadChats(); }
-                else { showToast('Ошибка', 'error'); }
-            } catch (err) { showToast('Ошибка', 'error'); }
+                const chat = await chatRes.json();
+
+                document.getElementById('editChatId').value = chatId;
+                document.getElementById('editChatName').value = chat.name || '';
+                document.getElementById('editChatType').value = chat.type || 'group';
+                document.getElementById('editChatDepartment').value = chat.department || '';
+
+                // Show/hide department field
+                const deptGroup = document.getElementById('editChatDepartmentGroup');
+                deptGroup.style.display = chat.type === 'department' ? 'block' : 'none';
+
+                // Load participants
+                await loadEditChatParticipants(chatId);
+            } catch (err) {
+                console.error('Load chat error:', err);
+                showToast('Ошибка загрузки чата', 'error');
+            }
+        }
+
+        async function loadEditChatParticipants(chatId) {
+            try {
+                // Load current participants
+                const partRes = await fetch(`${API_URL}/chats/${chatId}/participants`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const participants = await partRes.json();
+                currentChatParticipants = participants.participants || [];
+
+                // Load all users
+                const usersRes = await fetch(`${API_URL}/users`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const usersData = await usersRes.json();
+                const allUsers = usersData.users || [];
+
+                // Render current participants
+                const currentContainer = document.getElementById('currentParticipantsList');
+                if (currentChatParticipants.length > 0) {
+                    currentContainer.innerHTML = currentChatParticipants.map(user => `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #e2e8f0;">
+                            <div>
+                                <div style="font-weight: 600;">${user.name || user.user_name}</div>
+                                <div style="font-size: 12px; color: #718096;">${user.username} • ${user.role}</div>
+                            </div>
+                            <button class="btn btn-sm btn-danger" onclick="removeParticipantFromChat(${user.id || user.user_id})">
+                                Удалить
+                            </button>
+                        </div>
+                    `).join('');
+                } else {
+                    currentContainer.innerHTML = '<p style="text-align: center; color: #a0aec0;">Нет участников</p>';
+                }
+
+                // Render available users (not in chat)
+                const participantIds = currentChatParticipants.map(p => p.id || p.user_id);
+                const availableUsers = allUsers.filter(user => !participantIds.includes(user.id));
+
+                const availableContainer = document.getElementById('availableParticipantsList');
+                if (availableUsers.length > 0) {
+                    availableContainer.innerHTML = availableUsers.map(user => `
+                        <label class="edit-participant-item" data-name="${user.name.toLowerCase()}" data-username="${user.username.toLowerCase()}"
+                               style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; transition: background 0.2s;">
+                            <input type="checkbox" value="${user.id}" onchange="toggleEditParticipant(${user.id})" style="margin-right: 10px;">
+                            <div>
+                                <div style="font-weight: 600;">${user.name}</div>
+                                <div style="font-size: 12px; color: #718096;">${user.username} • ${user.role}</div>
+                            </div>
+                        </label>
+                    `).join('');
+                } else {
+                    availableContainer.innerHTML = '<p style="text-align: center; color: #a0aec0;">Все пользователи уже в чате</p>';
+                }
+            } catch (err) {
+                console.error('Load participants error:', err);
+                showToast('Ошибка загрузки участников', 'error');
+            }
+        }
+
+        function handleEditChatTypeChange() {
+            const type = document.getElementById('editChatType').value;
+            const deptGroup = document.getElementById('editChatDepartmentGroup');
+            deptGroup.style.display = type === 'department' ? 'block' : 'none';
+        }
+
+        function toggleEditParticipant(userId) {
+            if (participantsToAdd.has(userId)) {
+                participantsToAdd.delete(userId);
+            } else {
+                participantsToAdd.add(userId);
+            }
+        }
+
+        function filterEditParticipants() {
+            const searchText = document.getElementById('editParticipantsSearch').value.toLowerCase().trim();
+            const items = document.querySelectorAll('.edit-participant-item');
+
+            items.forEach(item => {
+                const name = item.dataset.name || '';
+                const username = item.dataset.username || '';
+
+                if (name.includes(searchText) || username.includes(searchText)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        async function removeParticipantFromChat(userId) {
+            if (!confirm('Удалить участника из чата?')) return;
+
+            try {
+                const res = await fetch(`${API_URL}/chats/${currentEditChatId}/participants/${userId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.ok) {
+                    showToast('Участник удален', 'success');
+                    await loadEditChatParticipants(currentEditChatId);
+                } else {
+                    showToast('Ошибка удаления', 'error');
+                }
+            } catch (err) {
+                console.error('Remove participant error:', err);
+                showToast('Ошибка удаления участника', 'error');
+            }
+        }
+
+        async function saveEditedChat() {
+            const chatId = currentEditChatId;
+            const name = document.getElementById('editChatName').value.trim();
+            const type = document.getElementById('editChatType').value;
+            const department = document.getElementById('editChatDepartment').value.trim();
+
+            if (!name) {
+                alert('Введите название чата');
+                return;
+            }
+
+            try {
+                // Update chat details
+                const updateRes = await fetch(`${API_URL}/admin/chats/${chatId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        type: type,
+                        department: department || null
+                    })
+                });
+
+                if (!updateRes.ok) {
+                    throw new Error('Failed to update chat');
+                }
+
+                // Add new participants
+                if (participantsToAdd.size > 0) {
+                    for (const userId of participantsToAdd) {
+                        await fetch(`${API_URL}/chats/${chatId}/participants`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ userId: userId })
+                        });
+                    }
+                }
+
+                showToast('Чат успешно обновлен!', 'success');
+                closeEditChatModal();
+                loadChats();
+            } catch (err) {
+                console.error('Save chat error:', err);
+                showToast('Ошибка сохранения чата', 'error');
+            }
+        }
+
+        function closeEditChatModal() {
+            document.getElementById('editChatModal').style.display = 'none';
+            currentEditChatId = null;
+            currentChatParticipants = [];
+            participantsToAdd.clear();
+            document.getElementById('editParticipantsSearch').value = '';
         }
 
         function openCreateChatModal() {
