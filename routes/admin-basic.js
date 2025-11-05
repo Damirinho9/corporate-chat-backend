@@ -4,27 +4,41 @@
 
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to match seed.js
 const { query } = require('../config/database');
-const { authenticateToken } = require('../middleware/auth'); // FIXED!
+const authController = require('../controllers/authController');
+const {
+    authenticateToken,
+    requireAdmin,
+    requireAdminOrRop
+} = require('../middleware/auth'); // FIXED!
 
 // ==================== USER MANAGEMENT ====================
 
-// Get all users (admin/rop only)
-router.get('/users', authenticateToken, async (req, res) => {
-    try {
-        // Check permissions
-        if (req.user.role !== 'admin' && req.user.role !== 'rop') {
-            return res.status(403).json({ error: 'Access denied' });
-        }
+// helper to strip secrets for non-admins
+function stripInitialPassword(row) {
+    if (!row) {
+        return row;
+    }
 
+    const { initial_password, ...rest } = row;
+    return rest;
+}
+
+// Get all users (admin/rop only)
+router.get('/users', authenticateToken, requireAdminOrRop, async (req, res) => {
+    try {
         const result = await query(`
-            SELECT id, username, name, role, department, is_active, created_at
+            SELECT id, username, name, role, department, initial_password, is_active, created_at
             FROM users
             ORDER BY created_at DESC
         `);
 
-        res.json({ users: result.rows });
+        const includeSecrets = req.user.role === 'admin';
+        const users = includeSecrets
+            ? result.rows
+            : result.rows.map(stripInitialPassword);
+
+        res.json({ users });
     } catch (error) {
         console.error('Get users error:', error);
         res.status(500).json({ error: error.message });
@@ -32,48 +46,14 @@ router.get('/users', authenticateToken, async (req, res) => {
 });
 
 // Create user (admin only)
-router.post('/auth/register', authenticateToken, async (req, res) => {
+router.post('/auth/register', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        // Check admin
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Only admin can create users' });
-        }
-
-        const { username, password, name, role, department } = req.body;
-
-        // Validate
-        if (!username || !password || !name) {
-            return res.status(400).json({ error: 'Missing required fields' });
-        }
-
-        // Check if username exists
-        const existing = await query(
-            'SELECT id FROM users WHERE username = $1',
-            [username]
-        );
-
-        if (existing.rows.length > 0) {
-            return res.status(400).json({ error: 'Username already exists' });
-        }
-
-        // Hash password
-        const password_hash = await bcrypt.hash(password, 10);
-
-        // Insert user
-        const result = await query(`
-            INSERT INTO users (username, password_hash, name, role, department)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, username, name, role, department
-        `, [username, password_hash, name, role || 'employee', department]);
-
-        res.json({ 
-            success: true,
-            userId: result.rows[0].id, 
-            user: result.rows[0] 
-        });
+        await authController.register(req, res);
     } catch (error) {
         console.error('Create user error:', error);
-        res.status(500).json({ error: error.message });
+        if (!res.headersSent) {
+            res.status(500).json({ error: error.message });
+        }
     }
 });
 
