@@ -1340,7 +1340,7 @@
                 
                 <div class="file-upload-container" id="fileUploadContainer">
                     <div class="file-upload-area" id="fileUploadArea">
-                        📎 Перетащите файлы или <input type="file" id="fileInput" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+                        📎 Перетащите файлы или <input type="file" id="fileInput" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.tar,.gz,.tgz,.bz2">
                         <button onclick="document.getElementById('fileInput').click()" style="margin-left:5px;padding:5px 10px;background:#2196f3;color:white;border:none;border-radius:4px;cursor:pointer">Выбрать</button>
                     </div>
                     <div class="file-preview-container" id="filePreviewContainer"></div>
@@ -1369,16 +1369,37 @@
     </div>
 
     <script>
+        // ==================== VERSION INFO ====================
+        const APP_VERSION = 'v2.0.0-chat-fix'; // Версия с исправлением открытия чатов
+        console.log('%c🚀 Корпоративный чат ' + APP_VERSION, 'font-size: 16px; font-weight: bold; color: #2196f3;');
+        console.log('%c✅ Исправления: открытие существующих чатов, детальное логирование', 'color: #4caf50;');
+
         // ==================== GLOBAL VARIABLES ====================
         const API_URL = window.location.origin + '/api';
         let token = localStorage.getItem('token');
         let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
         let socket = null;
         let currentChatId = null;
+        let currentDirectContactId = null;
         let chats = [];
+        const directChatByUser = new Map();
         const expandedDepartments = new Set();
         let selectedFiles = [];
         let replyToMessage = null;
+
+        const ROLE_DISPLAY_NAMES = {
+            'rop': 'РОП',
+            'operator': 'Оператор',
+            'assistant': 'Ассистент',
+            'employee': 'Сотрудник',
+            'admin': 'Администратор',
+            'head': 'Руководитель'
+        };
+
+        function getRoleDisplayName(role) {
+            if (!role) return '';
+            return ROLE_DISPLAY_NAMES[role] || role;
+        }
 
         // ==================== REPLY FUNCTIONALITY ====================
         function setReplyTo(message) {
@@ -1469,13 +1490,31 @@
         async function uploadFile(fileObj) {
             const formData = new FormData();
             formData.append('file', fileObj.file);
-            const res = await fetch('/api/files/upload', {
+
+            const res = await fetch(`${API_URL}/files/upload`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
-            const data = await res.json();
-            return data.file.id;
+
+            let data = {};
+            try {
+                data = await res.json();
+            } catch (error) {
+                console.warn('[uploadFile] Не удалось распарсить ответ:', error);
+            }
+
+            if (!res.ok) {
+                const message = data?.error || `Не удалось загрузить файл (${res.status})`;
+                throw new Error(message);
+            }
+
+            const fileId = data?.file?.id;
+            if (!fileId) {
+                throw new Error('Сервер не вернул идентификатор файла');
+            }
+
+            return fileId;
         }
 
         function renderMessageFile(msg) {
@@ -1718,6 +1757,34 @@
         // ==================== LOAD CHATS ====================
         let contacts = { departments: [], assistants: { users: [] } };
 
+        function rebuildDirectChatLookup() {
+            directChatByUser.clear();
+
+            chats
+                .filter(chat => chat && chat.type === 'direct')
+                .forEach(chat => {
+                    const chatId = Number(chat.id);
+                    if (!chatId) {
+                        return;
+                    }
+
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+
+                    participants.forEach(participant => {
+                        if (participant && participant.id) {
+                            directChatByUser.set(participant.id, chatId);
+                        }
+                    });
+
+                    const rawName = typeof chat.name === 'string' ? chat.name.trim() : '';
+                    if (participants.length === 1) {
+                        if (!rawName || rawName.toLowerCase() === 'direct') {
+                            chat.name = participants[0].name || rawName || 'Личный чат';
+                        }
+                    }
+                });
+        }
+
         async function loadChats() {
             try {
                 console.log('[loadChats] Начало загрузки...');
@@ -1760,6 +1827,7 @@
                 });
 
                 chats = chatsData.chats || [];
+                rebuildDirectChatLookup();
                 contacts = contactsData || { departments: [], assistants: { users: [] } };
 
                 renderChats();
@@ -1774,6 +1842,8 @@
         async function openDirectChatWithUser(userId, userName) {
             try {
                 console.log('[openDirectChat] Создание чата с пользователем:', { userId, userName });
+
+                currentDirectContactId = userId;
 
                 const response = await fetch(`${API_URL}/chats/direct`, {
                     method: 'POST',
@@ -1835,6 +1905,7 @@
                                     participants: chatData.participants || [],
                                     unread_count: 0
                                 });
+                                rebuildDirectChatLookup();
                                 renderChats();
                                 chatInCache = chats.find(chat => Number(chat.id) === chatId);
                                 console.log('[openDirectChat] Чат добавлен из дополнительной загрузки');
@@ -1858,6 +1929,7 @@
                 await openChat(chatId);
                 showToast(`Чат с ${userName} открыт`, 'success');
             } catch (err) {
+                currentDirectContactId = null;
                 console.error('[openDirectChat] Критическая ошибка:', err);
                 showToast(err.message || 'Ошибка создания чата', 'error');
             }
@@ -1994,6 +2066,8 @@
                                 ? `<span class="unread-badge">${chat.unread_count}</span>`
                                 : '';
 
+                        const isActive = Number(chat.id) === Number(currentChatId);
+
                         const content = `
                                 <div class="chat-item-header">
                                         <span class="chat-name">${chatName}</span>
@@ -2010,7 +2084,7 @@
                         if (withArrow) {
                                 const arrowClass = expanded ? 'department-toggle expanded' : 'department-toggle';
                                 return `
-                                        <li class="chat-item ${extraClass} ${chat.id === currentChatId ? 'active' : ''}"
+                                        <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
                                             data-chat-id="${chat.id}"
                                             onclick="openChat(${chat.id})">
                                                 <button class="${arrowClass}" onclick="toggleDepartment(event, '${deptKey}')">&#9656;</button>
@@ -2022,7 +2096,7 @@
                         }
 
                         return `
-                                <li class="chat-item ${extraClass} ${chat.id === currentChatId ? 'active' : ''}"
+                                <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
                                     data-chat-id="${chat.id}"
                                     onclick="openChat(${chat.id})">
                                         ${content}
@@ -2108,19 +2182,18 @@
                                 'admin': '⚙️'
                         };
                         const emoji = roleEmoji[user.role] || '👤';
-                        const roleName = {
-                                'rop': 'РОП',
-                                'operator': 'Оператор',
-                                'assistant': 'Ассистент',
-                                'employee': 'Сотрудник',
-                                'admin': 'Админ'
-                        };
-                        const role = roleName[user.role] || user.role;
+                        const role = getRoleDisplayName(user.role) || user.role || '';
 
-                        const nestedClass = nested ? ' nested-contact' : '';
+                        const contactNestingClass = nested ? ' nested-contact' : '';
+                        const directChatId = directChatByUser.get(user.id);
+                        const isActive =
+                                Number(directChatId) === Number(currentChatId) ||
+                                (!directChatId && currentDirectContactId && Number(user.id) === Number(currentDirectContactId));
+                        const chatAttr = directChatId ? ` data-chat-id="${directChatId}"` : '';
 
                         return `
-                                <li class="chat-item contact-item${nestedClass}"
+                                <li class="chat-item contact-item${contactNestingClass}${isActive ? ' active' : ''}"
+                                    data-contact-id="${user.id}"${chatAttr}
                                     onclick="openDirectChatWithUser(${user.id}, '${escapeHtml(user.name)}')">
                                         <div class="chat-item-header">
                                                 <span class="chat-name">${emoji} ${escapeHtml(user.name)}</span>
@@ -2237,6 +2310,8 @@
                         <div style="padding:20px;text-align:center;color:var(--text-secondary);">
                                 Нет доступных чатов
                         </div>`;
+
+                syncContactHighlights();
         }
 
         function updateChatLastMessage(chatId, message) {
@@ -2245,6 +2320,32 @@
                 chat.last_message = message.content;
                 renderChats();
             }
+        }
+
+        function syncContactHighlights() {
+            const contactItems = document.querySelectorAll('.contact-item');
+            if (contactItems.length === 0) {
+                return;
+            }
+
+            if (!currentDirectContactId) {
+                contactItems.forEach(item => {
+                    const chatId = item.dataset.chatId;
+                    if (!chatId || Number(chatId) !== Number(currentChatId)) {
+                        item.classList.remove('active');
+                    }
+                });
+                return;
+            }
+
+            contactItems.forEach(item => {
+                const contactId = Number(item.dataset.contactId);
+                if (contactId === Number(currentDirectContactId)) {
+                    item.classList.add('active');
+                } else if (!item.dataset.chatId || Number(item.dataset.chatId) !== Number(currentChatId)) {
+                    item.classList.remove('active');
+                }
+            });
         }
 
         // ==================== MOBILE NAVIGATION ====================
@@ -2264,34 +2365,61 @@
                 document.querySelector('.main-chat')?.classList.remove('hidden');
             }
 
-            currentChatId = chatId;
+            currentChatId = Number(chatId);
 
-            // Save last active chat to localStorage
-            localStorage.setItem('lastActiveChatId', chatId);
+                // Save last active chat to localStorage
+                localStorage.setItem('lastActiveChatId', chatId);
 
             document.querySelectorAll('.chat-item').forEach(item => {
                 item.classList.remove('active');
             });
-            document.querySelector(`[data-chat-id="${chatId}"]`)?.classList.add('active');
+            document.querySelectorAll(`[data-chat-id="${chatId}"]`).forEach(item => item.classList.add('active'));
 
-            document.getElementById('chatHeader').classList.remove('hidden');
+                document.getElementById('chatHeader').classList.remove('hidden');
 
-            // Enable input field
-            const messageInput = document.getElementById('messageInput');
-            const sendBtn = document.getElementById('sendBtn');
-            const attachBtn = document.getElementById('attachBtn');
+                // Enable input field
+                const messageInput = document.getElementById('messageInput');
+                const sendBtn = document.getElementById('sendBtn');
+                const attachBtn = document.getElementById('attachBtn');
 
-            messageInput.disabled = false;
-            messageInput.placeholder = 'Напишите сообщение...';
-            sendBtn.disabled = false;
-            attachBtn.disabled = false;
-            messageInput.focus();
+                messageInput.disabled = false;
+                messageInput.placeholder = 'Напишите сообщение...';
+                sendBtn.disabled = false;
+                attachBtn.disabled = false;
+                messageInput.focus();
 
             const chat = chats.find(c => c.id === chatId);
             if (chat) {
-                document.getElementById('chatTitle').textContent = chat.name || 'Чат';
-                document.getElementById('chatSubtitle').textContent = chat.type || '';
+                let title = chat.name || 'Чат';
+                let subtitle = '';
+
+                if (chat.type === 'direct') {
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+                    const partner = participants.find(p => Number(p.id) !== Number(currentUser?.id)) || participants[0];
+                    currentDirectContactId = partner?.id || null;
+                    if (partner?.name) {
+                        title = partner.name;
+                    }
+                    const roleLabel = partner?.role ? getRoleDisplayName(partner.role) : '';
+                    subtitle = roleLabel ? `Личный чат • ${roleLabel}` : 'Личный чат';
+                } else if (chat.type === 'group') {
+                    currentDirectContactId = null;
+                    subtitle = 'Групповой чат';
+                } else if (chat.type === 'department') {
+                    currentDirectContactId = null;
+                    subtitle = 'Отдел';
+                } else if (chat.type) {
+                    currentDirectContactId = null;
+                    subtitle = chat.type;
+                } else {
+                    currentDirectContactId = null;
+                }
+
+                document.getElementById('chatTitle').textContent = title;
+                document.getElementById('chatSubtitle').textContent = subtitle;
             }
+
+            syncContactHighlights();
 
             await loadMessages(chatId);
 
@@ -2316,6 +2444,8 @@
             messagesContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;"><div style="text-align:center;color:var(--text-secondary);"><div style="font-size:32px;margin-bottom:10px;">⏳</div><div>Загрузка сообщений...</div></div></div>';
 
             try {
+                console.log('[loadMessages] Загрузка сообщений для chatId:', chatId);
+
                 const response = await fetch(`${API_URL}/chats/${chatId}/messages`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -2369,6 +2499,8 @@
                         </div>
                     `;
                 }
+
+                console.log('[loadMessages] Сообщения успешно загружены');
             } catch (err) {
                 console.error('[loadMessages] Критическая ошибка:', err);
                 messagesContainer.innerHTML = `
@@ -2508,12 +2640,21 @@
             const sendBtn = document.getElementById('sendBtn');
             const content = input.value.trim();
 
+            console.log('[sendMessage] Starting send:', {
+                content,
+                contentLength: content.length,
+                selectedFiles: selectedFiles.length,
+                currentChatId
+            });
+
             // Validation
             if (!content && selectedFiles.length === 0) {
+                console.warn('[sendMessage] Validation failed: no content and no files');
                 showToast('Введите сообщение или прикрепите файл', 'warning');
                 return;
             }
             if (!currentChatId) {
+                console.warn('[sendMessage] Validation failed: no chat selected');
                 showToast('Выберите чат', 'warning');
                 return;
             }
@@ -2543,19 +2684,34 @@
                 if (selectedFiles.length > 0) {
                     for (const fileObj of selectedFiles) {
                         const fileId = await uploadFile(fileObj);
+                        const requestBody = {
+                            content: content || null,
+                            fileId: fileId,
+                            replyToId: replyToMessage?.id || null
+                        };
+                        console.log('[sendMessage] Sending with file:', requestBody);
+
                         const response = await fetch(`${API_URL}/chats/${currentChatId}/messages`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${token}`,
                                 'Content-Type': 'application/json'
                             },
-                            body: JSON.stringify({
-                                content: content || null,
-                                fileId: fileId,
-                                replyToId: replyToMessage?.id || null
-                            })
+                            body: JSON.stringify(requestBody)
                         });
-                        const data = await response.json();
+
+                        let data = {};
+                        try {
+                            data = await response.json();
+                        } catch (error) {
+                            console.warn('[sendMessage] Не удалось распарсить ответ сервера:', error);
+                        }
+
+                        if (!response.ok) {
+                            const message = data?.error || `Ошибка отправки сообщения (${response.status})`;
+                            throw new Error(message);
+                        }
+
                         if (data.message) {
                             appendMessage(data.message);
                             scrollToBottom(true); // Force scroll after sending
@@ -2565,19 +2721,32 @@
                     renderPreviews();
                     uploadContainer.classList.remove('active');
                 } else {
+                    const requestBody = {
+                        content,
+                        replyToId: replyToMessage?.id || null
+                    };
+                    console.log('[sendMessage] Request body:', requestBody);
+
                     const response = await fetch(`${API_URL}/chats/${currentChatId}/messages`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({
-                            content,
-                            replyToId: replyToMessage?.id || null
-                        })
+                        body: JSON.stringify(requestBody)
                     });
 
-                    const data = await response.json();
+                    let data = {};
+                    try {
+                        data = await response.json();
+                    } catch (error) {
+                        console.warn('[sendMessage] Не удалось распарсить ответ сервера:', error);
+                    }
+
+                    if (!response.ok) {
+                        const message = data?.error || `Ошибка отправки сообщения (${response.status})`;
+                        throw new Error(message);
+                    }
 
                     if (data.message) {
                         // Remove temp message and add real message
@@ -2606,7 +2775,8 @@
                     const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                     if (tempEl) tempEl.remove();
                 }
-                showToast('Ошибка отправки сообщения', 'error');
+                console.error('[sendMessage] Ошибка отправки сообщения:', err);
+                showToast(err.message || 'Ошибка отправки сообщения', 'error');
             } finally {
                 // Re-enable send button and input
                 sendBtn.disabled = false;

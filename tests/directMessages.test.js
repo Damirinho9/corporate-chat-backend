@@ -96,16 +96,72 @@ function createMockResponse() {
         }
 
         console.log('🔄 Повторная загрузка сообщений...');
-        const finalMessagesRes = createMockResponse();
-        await messageController.getMessages(getMessagesReq, finalMessagesRes);
+        const afterTextMessagesRes = createMockResponse();
+        await messageController.getMessages(getMessagesReq, afterTextMessagesRes);
 
-        if (finalMessagesRes.statusCode !== 200 || !Array.isArray(finalMessagesRes.body?.messages)) {
-            throw new Error(`Не удалось получить сообщения после отправки (статус ${finalMessagesRes.statusCode})`);
+        if (afterTextMessagesRes.statusCode !== 200 || !Array.isArray(afterTextMessagesRes.body?.messages)) {
+            throw new Error(`Не удалось получить сообщения после отправки текста (статус ${afterTextMessagesRes.statusCode})`);
         }
 
-        const finalMessagesCount = finalMessagesRes.body.messages.length;
-        if (finalMessagesCount !== initialMessagesCount + 1) {
-            throw new Error(`Количество сообщений не увеличилось (ожидалось ${initialMessagesCount + 1}, получено ${finalMessagesCount})`);
+        const afterTextMessagesCount = afterTextMessagesRes.body.messages.length;
+        if (afterTextMessagesCount !== initialMessagesCount + 1) {
+            throw new Error(`Количество сообщений после текста не увеличилось (ожидалось ${initialMessagesCount + 1}, получено ${afterTextMessagesCount})`);
+        }
+
+        console.log('📎 Подготовка тестового файла для сообщения без текста...');
+        const fileInsert = await query(
+            `INSERT INTO files (filename, original_filename, mime_type, size_bytes, path, thumbnail_path, uploaded_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING id`,
+            [
+                'test-file-attachment.pdf',
+                'test-file-attachment.pdf',
+                'application/pdf',
+                2048,
+                '/tmp/test-file-attachment.pdf',
+                null,
+                admin.id
+            ]
+        );
+
+        const fileId = fileInsert.rows[0]?.id;
+        if (!fileId) {
+            throw new Error('Не удалось подготовить файл для тестового сообщения');
+        }
+
+        console.log('📨 Отправка сообщения только с файлом...');
+        const sendFileMessageReq = {
+            params: { chatId },
+            body: { content: null, fileId },
+            user: { id: admin.id, role: 'admin' }
+        };
+        const sendFileMessageRes = createMockResponse();
+        await messageController.sendMessage(sendFileMessageReq, sendFileMessageRes);
+
+        if (sendFileMessageRes.statusCode !== 201 || !sendFileMessageRes.body?.message) {
+            throw new Error(`Не удалось отправить сообщение с файлом (статус ${sendFileMessageRes.statusCode})`);
+        }
+
+        if (!sendFileMessageRes.body.message.file?.id) {
+            throw new Error('Ответ сервера не содержит информацию о прикреплённом файле');
+        }
+
+        console.log('🔄 Финальная проверка количества сообщений после отправки файла...');
+        const afterFileMessagesRes = createMockResponse();
+        await messageController.getMessages(getMessagesReq, afterFileMessagesRes);
+
+        if (afterFileMessagesRes.statusCode !== 200 || !Array.isArray(afterFileMessagesRes.body?.messages)) {
+            throw new Error(`Не удалось получить сообщения после отправки файла (статус ${afterFileMessagesRes.statusCode})`);
+        }
+
+        const afterFileMessagesCount = afterFileMessagesRes.body.messages.length;
+        if (afterFileMessagesCount !== initialMessagesCount + 2) {
+            throw new Error(`Количество сообщений после файла некорректно (ожидалось ${initialMessagesCount + 2}, получено ${afterFileMessagesCount})`);
+        }
+
+        const lastMessage = afterFileMessagesRes.body.messages[afterFileMessagesRes.body.messages.length - 1];
+        if (!lastMessage?.file?.id || lastMessage.file.id !== fileId) {
+            throw new Error('Последнее сообщение не содержит ожидаемый файл');
         }
 
         console.log('🎉 Автоматический тест прямых сообщений успешно пройден!');
