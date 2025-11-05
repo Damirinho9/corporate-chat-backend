@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const fileController = require('../controllers/fileController');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authenticateTokenAllowQuery } = require('../middleware/auth');
 const {
     uploadSingle,
     handleUploadError,
@@ -19,22 +19,18 @@ function singleUploadMiddleware(req, res, next) {
     });
 }
 
-// All file routes require authentication
-router.use(authenticateToken);
-
 // upload/download routes
 router.post(
     '/upload',
+    authenticateToken,
     singleUploadMiddleware,
     validateUploadedFile,
     scanFile,
     fileController.uploadFile
 );
 
-router.get('/:id/thumbnail', fileController.getFileThumbnail);
-router.get('/:id', fileController.getFile);
-
-// Delete requires authentication
+router.get('/:id/thumbnail', authenticateTokenAllowQuery, fileController.getFileThumbnail);
+router.get('/:id', authenticateTokenAllowQuery, fileController.getFile);
 router.delete('/:id', authenticateToken, fileController.deleteFile);
 
 module.exports = router;

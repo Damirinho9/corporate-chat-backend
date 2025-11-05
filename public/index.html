@@ -1520,17 +1520,41 @@
         function renderMessageFile(msg) {
             if (!msg.file) return '';
             const f = msg.file;
+
+            const toAbsoluteUrl = (url) => {
+                if (!url) return null;
+                if (/^https?:\/\//i.test(url)) {
+                    return url;
+                }
+                if (url.startsWith('/')) {
+                    return `${window.location.origin}${url}`;
+                }
+                return `${API_URL.replace(/\/$/, '')}/${url}`;
+            };
+
+            const appendToken = (url) => {
+                if (!url) return null;
+                if (!token) return url;
+                const separator = url.includes('?') ? '&' : '?';
+                return `${url}${separator}token=${encodeURIComponent(token)}`;
+            };
+
+            const fileUrl = appendToken(toAbsoluteUrl(f.url || `/files/${f.id}`));
+            const thumbnailUrl = appendToken(toAbsoluteUrl(f.thumbnailUrl));
+            const previewUrl = thumbnailUrl || fileUrl;
+
             if (f.type === 'image') {
                 return `<div class="message-file-attachment">
-                    <img src="${f.thumbnailUrl || f.url}" class="message-file-image" onclick="window.open('${f.url}','_blank')">
+                    <img src="${previewUrl}" class="message-file-image" onclick="window.open('${fileUrl}','_blank')">
                 </div>`;
             }
+            const sizeKb = typeof f.size === 'number' ? (f.size / 1024).toFixed(1) : '—';
             return `<div class="message-file-attachment">
-                <div class="message-file-doc" onclick="window.open('${f.url}','_blank')">
+                <div class="message-file-doc" onclick="window.open('${fileUrl}','_blank')">
                     <div class="message-file-icon">📄</div>
                     <div class="message-file-info">
                         <div class="message-file-name">${f.filename}</div>
-                        <div class="message-file-size">${(f.size/1024).toFixed(1)} KB</div>
+                        <div class="message-file-size">${sizeKb} KB</div>
                     </div>
                 </div>
             </div>`;
