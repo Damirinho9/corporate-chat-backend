@@ -33,6 +33,8 @@ router.post(
 
 router.get('/:id/thumbnail', fileController.getFileThumbnail);
 router.get('/:id', fileController.getFile);
-router.delete('/:id', fileController.deleteFile);
+
+// Delete requires authentication
+router.delete('/:id', authenticateToken, fileController.deleteFile);
 
 module.exports = router;

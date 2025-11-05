@@ -142,10 +142,56 @@ const verifyRefreshToken = (token) => {
     }
 };
 
+// Optional authentication - doesn't fail if no token, but attaches user if valid token provided
+const optionalAuth = async (req, res, next) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+
+        if (!token) {
+            // No token provided, continue without user
+            req.user = null;
+            return next();
+        }
+
+        // Verify token
+        jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+            if (err) {
+                // Invalid/expired token, continue without user
+                req.user = null;
+                return next();
+            }
+
+            try {
+                // Get user from database
+                const result = await query(
+                    'SELECT id, username, name, role, department, is_active FROM users WHERE id = $1',
+                    [decoded.userId]
+                );
+
+                if (result.rows.length > 0 && result.rows[0].is_active) {
+                    req.user = result.rows[0];
+                } else {
+                    req.user = null;
+                }
+            } catch (error) {
+                console.error('Optional auth error:', error);
+                req.user = null;
+            }
+            next();
+        });
+    } catch (error) {
+        console.error('Optional authentication error:', error);
+        req.user = null;
+        next();
+    }
+};
+
 module.exports = {
     generateToken,
     generateRefreshToken,
     authenticateToken,
+    optionalAuth,
     requireAdmin,
     requireHead,
     requireRop,
