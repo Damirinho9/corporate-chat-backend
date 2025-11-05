@@ -25,6 +25,8 @@ const { query } = require('../config/database');
 const seedDatabase = require('../database/seed');
 const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
+const authController = require('../controllers/authController');
+const userController = require('../controllers/userController');
 
 function createMockResponse() {
     const response = { statusCode: 200 };
@@ -45,7 +47,76 @@ function createMockResponse() {
         await seedDatabase();
 
         const admin = (await query('SELECT id FROM users WHERE username = $1', ['admin'])).rows[0];
+
+        console.log('🔐 Создание пользователя с автогенерацией пароля...');
+        const registerReq = {
+            body: {
+                username: 'ivan.petrov',
+                name: 'Иван Петров',
+                role: 'operator',
+                department: 'Sales'
+            },
+            user: { id: admin.id, role: 'admin' }
+        };
+        const registerRes = createMockResponse();
+        await authController.register(registerReq, registerRes);
+
+        if (registerRes.statusCode !== 201 || !registerRes.body?.password) {
+            throw new Error(`Автогенерация пароля не сработала (статус ${registerRes.statusCode})`);
+        }
+
+        const generatedPassword = registerRes.body.password;
+        if (generatedPassword.length < 8) {
+            throw new Error('Сгенерированный пароль слишком короткий');
+        }
+
+        const storedUser = (await query('SELECT id, initial_password, department FROM users WHERE username = $1', ['ivan.petrov'])).rows[0];
+        if (!storedUser) {
+            throw new Error('Созданный пользователь не найден в базе');
+        }
+
+        if (storedUser.initial_password !== generatedPassword) {
+            throw new Error('В таблице users не сохранён сгенерированный пароль');
+        }
+
+        if (storedUser.department !== 'Sales') {
+            throw new Error('Пользователь не привязан к ожидаемому отделу');
+        }
+
+        const salesChat = await query("SELECT id FROM chats WHERE type = 'department' AND department = $1", ['Sales']);
+        const salesChatId = salesChat.rows[0]?.id;
+        if (!salesChatId) {
+            throw new Error('Чат отдела Sales не найден');
+        }
+
+        const membership = await query('SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2', [salesChatId, storedUser.id]);
+        if (membership.rowCount === 0) {
+            throw new Error('Новый оператор не добавлен в чат отдела');
+        }
+
+        console.log(`✅ Пользователь создан с паролем ${generatedPassword}`);
+
         const operator = (await query('SELECT id FROM users WHERE username = $1', ['operator1'])).rows[0];
+        const ropSales = (await query('SELECT id FROM users WHERE username = $1', ['rop_sales'])).rows[0];
+
+        console.log('🔒 Проверка отсутствия выдачи исходных паролей для не-админов...');
+        const deptReq = {
+            params: { department: 'Sales' },
+            user: { id: ropSales.id, role: 'rop' }
+        };
+        const deptRes = createMockResponse();
+        await userController.getUsersByDepartment(deptReq, deptRes);
+
+        if (deptRes.statusCode !== 200) {
+            throw new Error(`getUsersByDepartment вернул статус ${deptRes.statusCode}`);
+        }
+
+        const leakedSecret = Array.isArray(deptRes.body?.users)
+            && deptRes.body.users.some(user => Object.prototype.hasOwnProperty.call(user, 'initial_password'));
+
+        if (leakedSecret) {
+            throw new Error('initial_password утёк в ответ для не-админа');
+        }
 
         if (!admin || !operator) {
             throw new Error('Не удалось получить идентификаторы пользователей для теста');

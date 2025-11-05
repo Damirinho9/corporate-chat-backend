@@ -142,9 +142,9 @@ const requireAdmin = (req, res, next) => {
 
 // Check if user is head or admin
 const requireHead = (req, res, next) => {
-    if (req.user.role !== 'admin' && req.user.role !== 'head') {
+    if (!['admin', 'head', 'rop'].includes(req.user.role)) {
         return res.status(403).json({
-            error: 'Head or admin access required',
+            error: 'Head/ROP or admin access required',
             code: 'HEAD_REQUIRED'
         });
     }

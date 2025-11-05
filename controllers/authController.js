@@ -1,130 +1,195 @@
 const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to match seed.js
+const crypto = require('crypto');
 const { query } = require('../config/database');
 const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../middleware/auth');
+
+const PASSWORD_LENGTH = 12;
+
+function generateSecurePassword() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()_+';
+    const bytes = crypto.randomBytes(PASSWORD_LENGTH);
+    let password = '';
+    for (let i = 0; i < PASSWORD_LENGTH; i++) {
+        password += alphabet[bytes[i] % alphabet.length];
+    }
+    return password;
+}
 
 // Register new user (admin only)
 const register = async (req, res) => {
     try {
         const { username, password, name, role, department } = req.body;
 
-        // Validate input
-        if (!username || !password || !name || !role) {
-            return res.status(400).json({ 
+        if (!username || !name || !role) {
+            return res.status(400).json({
                 error: 'Missing required fields',
                 code: 'MISSING_FIELDS'
             });
         }
 
-        // Check if role requires department
-        if ((role === 'head' || role === 'employee') && !department) {
-            return res.status(400).json({ 
-                error: 'Department is required for heads and employees',
+        const normalizedUsername = String(username).trim();
+        if (!normalizedUsername) {
+            return res.status(400).json({
+                error: 'Username cannot be empty',
+                code: 'INVALID_USERNAME'
+            });
+        }
+
+        const normalizedRole = String(role).toLowerCase();
+        const trimmedDepartment = department ? String(department).trim() : null;
+        const needsDepartment = ['rop', 'operator', 'employee'].includes(normalizedRole);
+
+        if (needsDepartment && !trimmedDepartment) {
+            return res.status(400).json({
+                error: 'Department is required for this role',
                 code: 'DEPARTMENT_REQUIRED'
             });
         }
 
-        // Check if admin shouldn't have department
-        if (role === 'admin' && department) {
-            return res.status(400).json({ 
+        if (normalizedRole === 'admin' && trimmedDepartment) {
+            return res.status(400).json({
                 error: 'Admins should not have a department',
                 code: 'ADMIN_DEPARTMENT_ERROR'
+            });
+        }
+
+        if (!['admin', 'assistant', 'rop', 'operator', 'employee'].includes(normalizedRole)) {
+            return res.status(400).json({
+                error: 'Unsupported role',
+                code: 'INVALID_ROLE'
             });
         }
 
         // Check if username already exists
         const existingUser = await query(
             'SELECT id FROM users WHERE username = $1',
-            [username]
+            [normalizedUsername]
         );
 
         if (existingUser.rows.length > 0) {
-            return res.status(409).json({ 
+            return res.status(409).json({
                 error: 'Username already exists',
                 code: 'USERNAME_EXISTS'
             });
         }
 
+        const generatedPassword = password && password.length >= 8 ? password : generateSecurePassword();
+
         // Hash password
         const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
-        const passwordHash = await bcrypt.hash(password, saltRounds);
+        const passwordHash = await bcrypt.hash(generatedPassword, saltRounds);
 
         // Insert user
         const result = await query(
-            `INSERT INTO users (username, password_hash, name, role, department)
-             VALUES ($1, $2, $3, $4, $5)
-             RETURNING id, username, name, role, department, created_at`,
-            [username, passwordHash, name, role, department || null]
+            `INSERT INTO users (username, password_hash, initial_password, name, role, department)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, username, name, role, department, created_at, initial_password`,
+            [normalizedUsername, passwordHash, generatedPassword, name.trim(), normalizedRole, trimmedDepartment || null]
         );
 
         const newUser = result.rows[0];
 
         // Add user to appropriate chats
-        if (role === 'admin') {
-            // Add to management and all heads chats
+        if (normalizedRole === 'admin') {
             await query(
                 `INSERT INTO chat_participants (chat_id, user_id)
-                 SELECT id, $1 FROM chats WHERE name IN ('Руководство', 'Руководители')`,
+                 SELECT c.id, $1
+                 FROM chats c
+                 WHERE c.name IN ('Руководство', 'Все ассистенты')
+                   AND NOT EXISTS (
+                       SELECT 1 FROM chat_participants cp
+                       WHERE cp.chat_id = c.id AND cp.user_id = $1
+                 )`,
                 [newUser.id]
             );
-        } else if (role === 'head') {
-            // Add to all heads chat
+        } else if (normalizedRole === 'assistant') {
             await query(
                 `INSERT INTO chat_participants (chat_id, user_id)
-                 SELECT id, $1 FROM chats WHERE name = 'Руководители'`,
+                 SELECT c.id, $1
+                 FROM chats c
+                 WHERE c.name = 'Все ассистенты'
+                   AND NOT EXISTS (
+                       SELECT 1 FROM chat_participants cp
+                       WHERE cp.chat_id = c.id AND cp.user_id = $1
+                 )`,
                 [newUser.id]
             );
-
-            // Add to department chat (create if not exists)
-            const deptChat = await query(
-                `INSERT INTO chats (name, type, department, created_by)
-                 VALUES ($1, 'department', $2, $3)
-                 ON CONFLICT DO NOTHING
-                 RETURNING id`,
-                [`${department} отдел`, department, newUser.id]
-            );
-
-            if (deptChat.rows.length > 0) {
-                await query(
-                    'INSERT INTO chat_participants (chat_id, user_id) VALUES ($1, $2)',
-                    [deptChat.rows[0].id, newUser.id]
+        } else if (normalizedRole === 'rop') {
+            if (trimmedDepartment) {
+                const deptChat = await query(
+                    `SELECT id FROM chats WHERE type = 'department' AND department = $1`,
+                    [trimmedDepartment]
                 );
-            } else {
-                // Chat already exists, just add user
-                const existingChat = await query(
-                    'SELECT id FROM chats WHERE type = $1 AND department = $2',
-                    ['department', department]
-                );
-                if (existingChat.rows.length > 0) {
+
+                let departmentChatId = deptChat.rows[0]?.id;
+
+                if (!departmentChatId) {
+                    const created = await query(
+                        `INSERT INTO chats (name, type, department, created_by)
+                         VALUES ($1, 'department', $2, $3)
+                         RETURNING id`,
+                        [trimmedDepartment, trimmedDepartment, newUser.id]
+                    );
+                    departmentChatId = created.rows[0].id;
+                }
+
+                if (departmentChatId) {
                     await query(
-                        'INSERT INTO chat_participants (chat_id, user_id) VALUES ($1, $2)',
-                        [existingChat.rows[0].id, newUser.id]
+                        `INSERT INTO chat_participants (chat_id, user_id)
+                         SELECT $1, $2
+                         WHERE NOT EXISTS (
+                             SELECT 1 FROM chat_participants
+                             WHERE chat_id = $1 AND user_id = $2
+                         )`,
+                        [departmentChatId, newUser.id]
                     );
                 }
             }
-        } else if (role === 'employee') {
-            // Add to department chat
-            const deptChat = await query(
-                'SELECT id FROM chats WHERE type = $1 AND department = $2',
-                ['department', department]
-            );
 
-            if (deptChat.rows.length > 0) {
-                await query(
-                    'INSERT INTO chat_participants (chat_id, user_id) VALUES ($1, $2)',
-                    [deptChat.rows[0].id, newUser.id]
+            await query(
+                `INSERT INTO chat_participants (chat_id, user_id)
+                 SELECT c.id, $1
+                 FROM chats c
+                 WHERE c.name = 'Руководство'
+                   AND NOT EXISTS (
+                       SELECT 1 FROM chat_participants cp
+                       WHERE cp.chat_id = c.id AND cp.user_id = $1
+                 )`,
+                [newUser.id]
+            );
+        } else if (normalizedRole === 'operator' || normalizedRole === 'employee') {
+            if (trimmedDepartment) {
+                const deptChat = await query(
+                    `SELECT id FROM chats WHERE type = 'department' AND department = $1`,
+                    [trimmedDepartment]
                 );
+
+                if (deptChat.rows.length > 0) {
+                    await query(
+                        `INSERT INTO chat_participants (chat_id, user_id)
+                         SELECT $1, $2
+                         WHERE NOT EXISTS (
+                             SELECT 1 FROM chat_participants
+                             WHERE chat_id = $1 AND user_id = $2
+                         )`,
+                        [deptChat.rows[0].id, newUser.id]
+                    );
+                }
             }
         }
 
         res.status(201).json({
+            success: true,
             message: 'User registered successfully',
             userId: newUser.id,
+            password: generatedPassword,
             user: {
                 id: newUser.id,
                 username: newUser.username,
                 name: newUser.name,
                 role: newUser.role,
-                department: newUser.department
+                department: newUser.department,
+                initial_password: generatedPassword
             }
         });
     } catch (error) {

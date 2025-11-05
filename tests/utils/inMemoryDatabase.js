@@ -59,6 +59,21 @@ class InMemoryDatabase {
             return { rows: user ? [{ id: user.id }] : [], rowCount: user ? 1 : 0 };
         }
 
+        if (normalized.startsWith("SELECT id FROM chats WHERE type = 'department' AND department =")) {
+            const department = params[0];
+            const chat = this.data.chats.find(c => c.type === 'department' && c.department === department);
+            return { rows: chat ? [{ id: chat.id }] : [], rowCount: chat ? 1 : 0 };
+        }
+
+        if (normalized.startsWith('SELECT id, initial_password, department FROM users WHERE username =')) {
+            const username = params[0];
+            const user = this.data.users.find(u => u.username === username);
+            return {
+                rows: user ? [{ id: user.id, initial_password: user.initial_password || null, department: user.department }] : [],
+                rowCount: user ? 1 : 0
+            };
+        }
+
         if (normalized.startsWith('SELECT role FROM users WHERE id =')) {
             const id = toInt(params[0]);
             const user = this.data.users.find(u => u.id === id);
@@ -69,6 +84,73 @@ class InMemoryDatabase {
             const id = toInt(params[0]);
             const user = this.data.users.find(u => u.id === id && u.is_active);
             return { rows: user ? [{ id: user.id, username: user.username, name: user.name }] : [], rowCount: user ? 1 : 0 };
+        }
+
+        if (normalized.startsWith('SELECT id, username, name, role, department, initial_password, is_active, created_at, last_seen FROM users WHERE id =')) {
+            const id = toInt(params[0]);
+            const user = this.data.users.find(u => u.id === id);
+            if (!user) {
+                return { rows: [], rowCount: 0 };
+            }
+
+            return {
+                rows: [{
+                    id: user.id,
+                    username: user.username,
+                    name: user.name,
+                    role: user.role,
+                    department: user.department,
+                    initial_password: user.initial_password || null,
+                    is_active: user.is_active !== false,
+                    created_at: user.created_at || null,
+                    last_seen: user.last_seen || null
+                }],
+                rowCount: 1
+            };
+        }
+
+        if (normalized.startsWith('SELECT id, username, name, role, department, initial_password, is_active, last_seen FROM users WHERE department =')) {
+            const department = params[0];
+            const users = this.data.users
+                .filter(u => u.department === department && u.is_active !== false)
+                .sort((a, b) => {
+                    const roleCompare = String(a.role || '').localeCompare(String(b.role || ''));
+                    if (roleCompare !== 0) {
+                        return roleCompare;
+                    }
+                    return String(a.name || '').localeCompare(String(b.name || ''));
+                })
+                .map(user => ({
+                    id: user.id,
+                    username: user.username,
+                    name: user.name,
+                    role: user.role,
+                    department: user.department,
+                    initial_password: user.initial_password || null,
+                    is_active: user.is_active !== false,
+                    last_seen: user.last_seen || null
+                }));
+
+            return { rows: users, rowCount: users.length };
+        }
+
+        if (normalized.startsWith('SELECT id, username, name, role, department, initial_password, is_active, last_seen FROM users WHERE role =')) {
+            const role = params[0];
+            const users = this.data.users
+                .filter(u => u.role === role && u.is_active !== false)
+                .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+                .map(user => ({
+                    id: user.id,
+                    username: user.username,
+                    name: user.name,
+                    role: user.role,
+                    department: user.department,
+                    initial_password: user.initial_password || null,
+                    is_active: user.is_active !== false,
+                    last_seen: user.last_seen || null
+                }));
+
+            return { rows: users, rowCount: users.length };
         }
 
         if (normalized.startsWith('SELECT cp.* FROM chat_participants cp JOIN chats c ON cp.chat_id = c.id WHERE cp.chat_id =')) {
@@ -98,6 +180,10 @@ class InMemoryDatabase {
 
         if (normalized.startsWith('INSERT INTO chats')) {
             return this.handleInsert('chats', normalized, params);
+        }
+
+        if (normalized.startsWith('INSERT INTO chat_participants (chat_id, user_id) SELECT')) {
+            return this.handleInsertChatParticipantsSelect(normalized, params);
         }
 
         if (normalized.startsWith('INSERT INTO chat_participants')) {
@@ -290,6 +376,49 @@ class InMemoryDatabase {
             rows: returning.length > 0 ? insertedRows : [],
             rowCount: rowsToInsert.length
         };
+    }
+
+    handleInsertChatParticipantsSelect(normalized, params) {
+        const insertedRows = [];
+
+        if (normalized.includes('FROM chats c')) {
+            const namesMatch = normalized.match(/WHERE c\.name IN \(([^)]+)\)/i);
+            let targetNames = [];
+
+            if (namesMatch) {
+                targetNames = namesMatch[1]
+                    .split(',')
+                    .map(name => name.trim().replace(/^'|'$/g, ''))
+                    .filter(Boolean);
+            } else {
+                const singleMatch = normalized.match(/WHERE c\.name = '([^']+)'/i);
+                if (singleMatch) {
+                    targetNames = [singleMatch[1]];
+                }
+            }
+
+            const userId = Number(params[0]);
+            targetNames.forEach(name => {
+                const chat = this.data.chats.find(c => c.name === name);
+                if (chat && !this.data.chat_participants.some(cp => cp.chat_id === chat.id && cp.user_id === userId)) {
+                    this.data.chat_participants.push({ chat_id: chat.id, user_id: userId });
+                    insertedRows.push({ chat_id: chat.id, user_id: userId });
+                }
+            });
+
+            return { rows: insertedRows, rowCount: insertedRows.length };
+        }
+
+        const chatId = Number(params[0]);
+        const userId = Number(params[1]);
+        const exists = this.data.chat_participants.some(cp => cp.chat_id === chatId && cp.user_id === userId);
+
+        if (!exists) {
+            this.data.chat_participants.push({ chat_id: chatId, user_id: userId });
+            return { rows: [], rowCount: 1 };
+        }
+
+        return { rows: [], rowCount: 0 };
     }
 
     buildFilePayload(fileId) {
