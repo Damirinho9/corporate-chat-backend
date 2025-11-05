@@ -69,15 +69,8 @@ router.post('/auth/refresh',
 
 router.get('/auth/profile', authenticateToken, authController.getProfile);
 
-router.put('/auth/change-password',
-    authenticateToken,
-    [
-        body('currentPassword').notEmpty(),
-        body('newPassword').isLength({ min: 6 })
-    ],
-    validate,
-    authController.changePassword
-);
+// NOTE: Users cannot change their own passwords
+// Only admins can reset passwords via POST /users/:userId/reset-password
 
 // ==================== USER ROUTES ====================
 router.get('/users', authenticateToken, requireAdmin, userController.getAllUsers);
