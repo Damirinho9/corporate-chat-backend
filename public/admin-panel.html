@@ -752,6 +752,78 @@
         </div>
     </div>
 
+    <!-- Modal for Create Chat -->
+    <div id="createChatModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Создать чат</h2>
+                <button class="close-btn" onclick="closeCreateChatModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Название чата *</label>
+                    <input type="text" id="newChatName" placeholder="Введите название чата" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Тип чата *</label>
+                    <select id="newChatType" onchange="handleChatTypeChange()">
+                        <option value="group">Групповой чат</option>
+                        <option value="department">Чат отдела</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="chatDepartmentGroup" style="display: none;">
+                    <label>Отдел</label>
+                    <input type="text" id="newChatDepartment" placeholder="Название отдела">
+                </div>
+
+                <div class="form-group">
+                    <label>Участники *</label>
+                    <div id="participantsList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
+                        <p style="text-align: center; color: #a0aec0;">Загрузка...</p>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="createNewChat()">
+                    Создать чат
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Create Department -->
+    <div id="createDepartmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Создать отдел</h2>
+                <button class="close-btn" onclick="closeCreateDepartmentModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Название отдела *</label>
+                    <input type="text" id="newDeptName" placeholder="Например: Отдел продаж" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Описание</label>
+                    <input type="text" id="newDeptDescription" placeholder="Краткое описание отдела">
+                </div>
+
+                <div class="form-group">
+                    <label>Руководитель (РОП)</label>
+                    <select id="newDeptHead">
+                        <option value="">Выберите руководителя</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="createNewDepartment()">
+                    Создать отдел
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast -->
     <div id="toast" class="toast"></div>
 
