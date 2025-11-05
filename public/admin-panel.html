@@ -671,6 +671,16 @@
                         <p style="text-align: center; color: #a0aec0;">Loading...</p>
                     </div>
                 </div>
+
+                <div class="card" style="margin-top: 30px;">
+                    <h3>Общие права доступа</h3>
+                    <p style="color: #718096; margin-bottom: 20px;">
+                        Настройте права доступа к различным функциям системы для каждой роли.
+                    </p>
+                    <div id="generalPermissionsMatrix">
+                        <p style="text-align: center; color: #a0aec0;">Loading...</p>
+                    </div>
+                </div>
             </div>
 
             <!-- Logs -->
@@ -1509,6 +1519,7 @@ async function createNewDepartment() {
 
         async function loadPermissions() {
             try {
+                // Load messaging permissions
                 const res = await fetch(`${API_URL}/permissions`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -1519,6 +1530,9 @@ async function createNewDepartment() {
 
                 permissionsData = await res.json();
                 renderPermissionsMatrix(permissionsData);
+
+                // Load general permissions
+                await loadGeneralPermissions();
             } catch (err) {
                 console.error('Load permissions error:', err);
                 document.getElementById('permissionsMatrix').innerHTML =
@@ -1581,43 +1595,6 @@ async function createNewDepartment() {
             checkbox.style.outline = '2px solid #4299e1';
         }
 
-        async function savePermissions() {
-            try {
-                const checkboxes = document.querySelectorAll('#permissionsMatrix input[type="checkbox"]');
-                const updates = [];
-
-                checkboxes.forEach(cb => {
-                    updates.push({
-                        fromRole: cb.dataset.from,
-                        toRole: cb.dataset.to,
-                        canSend: cb.checked
-                    });
-                });
-
-                const res = await fetch(`${API_URL}/permissions/batch`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ permissions: updates })
-                });
-
-                if (res.ok) {
-                    showToast('Права доступа сохранены успешно!', 'success');
-                    // Remove outlines
-                    checkboxes.forEach(cb => cb.style.outline = 'none');
-                    await loadPermissions();
-                } else {
-                    const err = await res.json();
-                    showToast(err.error || 'Ошибка сохранения прав', 'error');
-                }
-            } catch (err) {
-                console.error('Save permissions error:', err);
-                showToast('Ошибка сохранения прав доступа', 'error');
-            }
-        }
-
         async function resetPermissions() {
             if (!confirm('Вы уверены, что хотите сбросить все права доступа к настройкам по умолчанию?')) {
                 return;
@@ -1642,6 +1619,150 @@ async function createNewDepartment() {
             } catch (err) {
                 console.error('Reset permissions error:', err);
                 showToast('Ошибка сброса прав доступа', 'error');
+            }
+        }
+
+        // ========== GENERAL PERMISSIONS MANAGEMENT ==========
+        let generalPermissionsData = null;
+
+        async function loadGeneralPermissions() {
+            try {
+                const res = await fetch(`${API_URL}/permissions/general`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) {
+                    throw new Error('Failed to load general permissions');
+                }
+
+                generalPermissionsData = await res.json();
+                renderGeneralPermissionsMatrix(generalPermissionsData);
+            } catch (err) {
+                console.error('Load general permissions error:', err);
+                document.getElementById('generalPermissionsMatrix').innerHTML =
+                    '<p style="color: #f56565; text-align: center;">Ошибка загрузки общих прав</p>';
+            }
+        }
+
+        function renderGeneralPermissionsMatrix(data) {
+            const { permissions, categories, roles } = data;
+            const roleLabels = {
+                'admin': 'Админ',
+                'assistant': 'Ассистент',
+                'rop': 'РОП',
+                'operator': 'Оператор',
+                'employee': 'Сотрудник'
+            };
+
+            let html = '';
+
+            // Render each category
+            Object.keys(categories).forEach(categoryKey => {
+                const category = categories[categoryKey];
+
+                html += `<div style="margin-bottom: 30px;">`;
+                html += `<h4 style="margin-bottom: 15px; color: #2d3748; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0;">${category.label}</h4>`;
+                html += `<table style="border-collapse: collapse; width: 100%;">`;
+
+                // Header
+                html += '<thead><tr><th style="padding: 10px; background: #f7fafc; border: 1px solid #e2e8f0;">Право</th>';
+                roles.forEach(role => {
+                    html += `<th style="padding: 10px; background: #f7fafc; border: 1px solid #e2e8f0; text-align: center;">
+                        <span class="badge badge-${role}">${roleLabels[role]}</span>
+                    </th>`;
+                });
+                html += '</tr></thead>';
+
+                // Permission rows
+                html += '<tbody>';
+                category.permissions.forEach(perm => {
+                    html += `<tr><td style="padding: 10px; border: 1px solid #e2e8f0;">${perm.label}</td>`;
+
+                    roles.forEach(role => {
+                        const canPerform = permissions[role] && permissions[role][perm.key] !== undefined
+                            ? permissions[role][perm.key]
+                            : false;
+
+                        html += `<td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center;">
+                            <input type="checkbox"
+                                   data-role="${role}"
+                                   data-permission="${perm.key}"
+                                   ${canPerform ? 'checked' : ''}
+                                   style="width: 18px; height: 18px; cursor: pointer;"
+                                   onchange="markGeneralPermissionChanged(this)">
+                        </td>`;
+                    });
+
+                    html += '</tr>';
+                });
+                html += '</tbody>';
+                html += '</table>';
+                html += '</div>';
+            });
+
+            document.getElementById('generalPermissionsMatrix').innerHTML = html;
+        }
+
+        function markGeneralPermissionChanged(checkbox) {
+            checkbox.style.outline = '2px solid #4299e1';
+        }
+
+        async function savePermissions() {
+            try {
+                // Save messaging permissions
+                const msgCheckboxes = document.querySelectorAll('#permissionsMatrix input[type="checkbox"]');
+                const msgUpdates = [];
+
+                msgCheckboxes.forEach(cb => {
+                    msgUpdates.push({
+                        fromRole: cb.dataset.from,
+                        toRole: cb.dataset.to,
+                        canSend: cb.checked
+                    });
+                });
+
+                const msgRes = await fetch(`${API_URL}/permissions/batch`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ permissions: msgUpdates })
+                });
+
+                // Save general permissions
+                const genCheckboxes = document.querySelectorAll('#generalPermissionsMatrix input[type="checkbox"]');
+                const genUpdates = [];
+
+                genCheckboxes.forEach(cb => {
+                    genUpdates.push({
+                        role: cb.dataset.role,
+                        permission: cb.dataset.permission,
+                        canPerform: cb.checked
+                    });
+                });
+
+                const genRes = await fetch(`${API_URL}/permissions/general/batch`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ updates: genUpdates })
+                });
+
+                if (msgRes.ok && genRes.ok) {
+                    showToast('Все права доступа сохранены успешно!', 'success');
+                    // Remove outlines
+                    msgCheckboxes.forEach(cb => cb.style.outline = 'none');
+                    genCheckboxes.forEach(cb => cb.style.outline = 'none');
+                    await loadPermissions();
+                } else {
+                    showToast('Ошибка сохранения некоторых прав', 'error');
+                }
+            } catch (err) {
+                console.error('Save permissions error:', err);
+                showToast('Ошибка сохранения прав доступа', 'error');
             }
         }
 
