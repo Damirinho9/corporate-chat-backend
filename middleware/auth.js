@@ -19,75 +19,115 @@ const generateRefreshToken = (userId) => {
     );
 };
 
-// Verify JWT token middleware
-const authenticateToken = async (req, res, next) => {
-    try {
-        // Get token from header
-        const authHeader = req.headers['authorization'];
-        const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+function extractToken(req, { allowQueryToken = false } = {}) {
+    const authHeader = req.headers['authorization'];
+    if (authHeader && typeof authHeader === 'string') {
+        const [scheme, token] = authHeader.split(' ');
+        if (scheme?.toLowerCase() === 'bearer' && token) {
+            return token;
+        }
+    }
 
-        if (!token) {
-            return res.status(401).json({ 
-                error: 'Access token required',
-                code: 'NO_TOKEN'
+    if (allowQueryToken) {
+        const queryToken = req.query?.token || req.query?.access_token;
+        if (typeof queryToken === 'string' && queryToken.trim().length > 0) {
+            return queryToken.trim();
+        }
+    }
+
+    return null;
+}
+
+async function resolveUserFromToken(token, res) {
+    let decoded;
+    try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+        if (err.name === 'TokenExpiredError') {
+            res.status(401).json({
+                error: 'Token expired',
+                code: 'TOKEN_EXPIRED'
+            });
+            return null;
+        }
+        res.status(401).json({
+            error: 'Invalid token',
+            code: 'INVALID_TOKEN'
+        });
+        return null;
+    }
+
+    const result = await query(
+        'SELECT id, username, name, role, department, is_active FROM users WHERE id = $1',
+        [decoded.userId]
+    );
+
+    if (result.rows.length === 0) {
+        res.status(404).json({
+            error: 'User not found',
+            code: 'USER_NOT_FOUND'
+        });
+        return null;
+    }
+
+    const user = result.rows[0];
+
+    if (!user.is_active) {
+        res.status(403).json({
+            error: 'User account is deactivated',
+            code: 'USER_INACTIVE'
+        });
+        return null;
+    }
+
+    await query(
+        'UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE id = $1',
+        [user.id]
+    );
+
+    return user;
+}
+
+function createAuthenticateMiddleware(options = {}) {
+    const { allowQueryToken = false } = options;
+
+    return async function authenticateTokenMiddleware(req, res, next) {
+        try {
+            const token = extractToken(req, { allowQueryToken });
+
+            if (!token) {
+                return res.status(401).json({
+                    error: 'Access token required',
+                    code: 'NO_TOKEN'
+                });
+            }
+
+            const user = await resolveUserFromToken(token, res);
+            if (!user) {
+                return;
+            }
+
+            req.user = user;
+
+            if (allowQueryToken) {
+                delete req.query.token;
+                delete req.query.access_token;
+            }
+
+            next();
+        } catch (error) {
+            console.error('Authentication error:', error);
+            res.status(500).json({
+                error: 'Authentication failed',
+                code: 'AUTH_ERROR'
             });
         }
+    };
+}
 
-        // Verify token
-        jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-            if (err) {
-                if (err.name === 'TokenExpiredError') {
-                    return res.status(401).json({ 
-                        error: 'Token expired',
-                        code: 'TOKEN_EXPIRED'
-                    });
-                }
-                return res.status(401).json({ 
-                    error: 'Invalid token',
-                    code: 'INVALID_TOKEN'
-                });
-            }
-
-            // Get user from database
-            const result = await query(
-                'SELECT id, username, name, role, department, is_active FROM users WHERE id = $1',
-                [decoded.userId]
-            );
-
-            if (result.rows.length === 0) {
-                return res.status(404).json({ 
-                    error: 'User not found',
-                    code: 'USER_NOT_FOUND'
-                });
-            }
-
-            const user = result.rows[0];
-
-            if (!user.is_active) {
-                return res.status(403).json({ 
-                    error: 'User account is deactivated',
-                    code: 'USER_INACTIVE'
-                });
-            }
-
-            // Update last seen
-            await query(
-                'UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE id = $1',
-                [user.id]
-            );
-
-            // Attach user to request
-            req.user = user;
-            next();
-        });
-    } catch (error) {
-        console.error('Authentication error:', error);
-        res.status(500).json({ 
-            error: 'Authentication failed',
-            code: 'AUTH_ERROR'
-        });
-    }
-};
+// Verify JWT token middleware
+const authenticateToken = createAuthenticateMiddleware();
+const authenticateTokenAllowQuery = createAuthenticateMiddleware({ allowQueryToken: true });
 
 // Check if user is admin
 const requireAdmin = (req, res, next) => {
@@ -146,6 +186,7 @@ module.exports = {
     generateToken,
     generateRefreshToken,
     authenticateToken,
+    authenticateTokenAllowQuery,
     requireAdmin,
     requireHead,
     requireRop,
