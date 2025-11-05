@@ -15,6 +15,7 @@ const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
 const departmentController = require('../controllers/departmentController');
 const permissionsController = require('../controllers/permissionsController');
+const generalPermissionsController = require('../controllers/generalPermissionsController');
 
 const { authenticateToken, requireAdmin, requireHead, requireAdminOrRop } = require('../middleware/auth');
 const { canAccessChat, canSendToChat, canCreateDirectMessage } = require('../middleware/permissions');
@@ -387,6 +388,44 @@ router.post('/permissions/reset',
     authenticateToken,
     requireAdmin,
     permissionsController.resetPermissions
+);
+
+// ==================== GENERAL PERMISSIONS ROUTES (Admin Only) ====================
+
+// Get all general permissions
+router.get('/permissions/general',
+    authenticateToken,
+    requireAdmin,
+    generalPermissionsController.getGeneralPermissions
+);
+
+// Update single general permission
+router.put('/permissions/general',
+    authenticateToken,
+    requireAdmin,
+    [
+        body('role').isIn(['admin', 'assistant', 'rop', 'operator', 'employee']),
+        body('permission').isString().notEmpty(),
+        body('canPerform').isBoolean()
+    ],
+    validate,
+    generalPermissionsController.updateGeneralPermission
+);
+
+// Batch update general permissions
+router.post('/permissions/general/batch',
+    authenticateToken,
+    requireAdmin,
+    [body('updates').isArray()],
+    validate,
+    generalPermissionsController.batchUpdateGeneralPermissions
+);
+
+// Reset general permissions to defaults
+router.post('/permissions/general/reset',
+    authenticateToken,
+    requireAdmin,
+    generalPermissionsController.resetGeneralPermissions
 );
 
 // ==================== MESSAGE ROUTES ====================

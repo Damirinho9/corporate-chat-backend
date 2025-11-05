@@ -2,6 +2,8 @@ const { query } = require('../config/database');
 
 // Get all role permissions
 const getRolePermissions = async (req, res) => {
+    console.log('[Permissions] GET /api/permissions - Request received');
+    console.log('[Permissions] User:', req.user?.id, req.user?.username, req.user?.role);
     try {
         const result = await query(`
             SELECT from_role, to_role, can_send_message
@@ -38,16 +40,19 @@ const getRolePermissions = async (req, res) => {
             matrix[row.from_role][row.to_role] = row.can_send_message;
         });
 
+        console.log('[Permissions] Successfully retrieved', result.rows.length, 'permissions');
         res.json({
             permissions: result.rows,
             matrix: matrix,
             roles: roles
         });
     } catch (error) {
-        console.error('Get permissions error:', error);
+        console.error('[Permissions] ERROR in getRolePermissions:', error);
+        console.error('[Permissions] Stack:', error.stack);
         res.status(500).json({
             error: 'Failed to get permissions',
-            code: 'GET_PERMISSIONS_ERROR'
+            code: 'GET_PERMISSIONS_ERROR',
+            details: error.message
         });
     }
 };
