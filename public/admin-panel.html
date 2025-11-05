@@ -469,6 +469,47 @@
         .btn-delete:hover {
             background: #dc2626;
         }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #2d3748;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5f5;
+        }
+
+        .password-inline {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .password-inline input {
+            flex: 1;
+        }
+
+        .form-hint {
+            display: block;
+            margin-top: 6px;
+            color: #718096;
+            font-size: 13px;
+        }
+
+        .password-chip {
+            display: inline-block;
+            background: #edf2f7;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 13px;
+            color: #2d3748;
+        }
+
+        .password-missing {
+            color: #c53030;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -583,6 +624,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Логин</th>
+                                <th>Пароль</th>
                                 <th>Name</th>
                                 <th>Роль</th>
                                 <th>Отдел</th>
@@ -592,7 +634,7 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td colspan="7" style="text-align: center; color: #a0aec0;">Loading...</td>
+                                <td colspan="8" style="text-align: center; color: #a0aec0;">Loading...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -681,20 +723,27 @@
             </div>
             <form id="createUserForm">
                 <div class="form-group">
-                    <label>Username *</label>
-                    <input type="text" name="username" required>
-                </div>
-                <div class="form-group">
-                    <label>Password *</label>
-                    <input type="password" name="password" required>
-                </div>
-                <div class="form-group">
                     <label>Full Name *</label>
-                    <input type="text" name="name" required>
+                    <input type="text" name="name" id="createFullName" required>
+                    <small class="form-hint">Введите ФИО — логин сформируется автоматически.</small>
+                </div>
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input type="text" name="username" id="createUsername" required>
+                    <small class="form-hint">Можно отредактировать вручную, если нужно.</small>
+                </div>
+                <div class="form-group">
+                    <label>Generated Password *</label>
+                    <div class="password-inline">
+                        <input type="text" name="password" id="createPassword" readonly required>
+                        <button type="button" class="btn btn-secondary" onclick="regeneratePassword()">Обновить</button>
+                        <button type="button" class="btn btn-secondary" onclick="copyGeneratedPassword()">Копировать</button>
+                    </div>
+                    <small class="form-hint">Сохраните пароль и передайте сотруднику.</small>
                 </div>
                 <div class="form-group">
                     <label>Role *</label>
-                    <select name="role" required onchange="toggleDepartmentField(this)">
+                    <select name="role" id="createRole" required onchange="toggleDepartmentField(this)">
                         <option value="">Select role</option>
                         <option value="admin">Админ</option>
                         <option value="assistant">Assistant</option>
@@ -705,7 +754,10 @@
                 </div>
                 <div class="form-group" id="departmentField" style="display: none;">
                     <label>Department *</label>
-                    <input type="text" name="department">
+                    <select name="department" id="departmentSelect">
+                        <option value="">Выберите отдел</option>
+                    </select>
+                    <small class="form-hint">Отдел обязателен для РОПов, операторов и сотрудников.</small>
                 </div>
                 <button type="submit" class="btn btn-primary" style="width: 100%;">
                     Create User
@@ -721,6 +773,16 @@
         const API_URL = window.location.origin + '/api';
         let token = localStorage.getItem('token') || '';
         let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+        let departmentsCache = [];
+        let manualUsernameOverride = false;
+
+        const createUserForm = document.getElementById('createUserForm');
+        const usernameInput = document.getElementById('createUsername');
+        const fullNameInput = document.getElementById('createFullName');
+        const passwordInput = document.getElementById('createPassword');
+        const roleSelect = document.getElementById('createRole');
+        const departmentField = document.getElementById('departmentField');
+        const departmentSelect = document.getElementById('departmentSelect');
 
         // Check auth
         if (!token || !currentUser || currentUser.role !== 'admin') {
@@ -818,33 +880,54 @@
                 const res = await fetch(`${API_URL}/users`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const data = await res.json();
-                
+
                 const tbody = document.querySelector('#usersTable tbody');
-                if (data.users && data.users.length > 0) {
-                    tbody.innerHTML = data.users.map(user => `
-                        <tr>
-                            <td>${user.id}</td>
-                            <td>${user.username}</td>
-                            <td>${user.name}</td>
-                            <td><span class="badge badge-${user.role}">${user.role}</span></td>
-                            <td>${user.department || '-'}</td>
-                            <td><span class="badge badge-${user.is_active ? 'active' : 'inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
-                            <td>
-                                <button class="btn btn-sm btn-primary" onclick="editUser(${user.id})">Редактировать</button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Удалить</button>
-                            </td>
-                        </tr>
-                    `).join('');
+
+                if (!res.ok) {
+                    const error = await res.json().catch(() => ({}));
+                    console.error('Load users error:', error);
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #f56565;">Не удалось загрузить пользователей</td></tr>';
+                    showToast(error.error || 'Ошибка загрузки пользователей', 'error');
+                    return;
+                }
+
+                const data = await res.json();
+
+                if (Array.isArray(data.users) && data.users.length > 0) {
+                    tbody.innerHTML = data.users.map(user => {
+                        const passwordDisplay = user.initial_password
+                            ? `<span class="password-chip">${user.initial_password}</span>`
+                            : '<span class="password-missing">нет</span>';
+
+                        return `
+                            <tr>
+                                <td>${user.id}</td>
+                                <td>${user.username}</td>
+                                <td>${passwordDisplay}</td>
+                                <td>${user.name}</td>
+                                <td><span class="badge badge-${user.role}">${user.role}</span></td>
+                                <td>${user.department || '-'}</td>
+                                <td><span class="badge badge-${user.is_active ? 'active' : 'inactive'}">${user.is_active ? 'Active' : 'Inactive'}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="editUser(${user.id})">Редактировать</button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Удалить</button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">No users found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #a0aec0;">Пользователи не найдены</td></tr>';
                 }
             } catch (err) {
                 console.error('Load users error:', err);
+                const tbody = document.querySelector('#usersTable tbody');
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #f56565;">Ошибка загрузки</td></tr>';
+                showToast('Ошибка загрузки пользователей', 'error');
             }
         }
 
-        async function loadChats() {
+
+async function loadChats() {
             try {
                 const res = await fetch(`${API_URL}/admin/chats`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -884,6 +967,7 @@
                 if (!res.ok) {
                     const error = await res.json();
                     console.error('[Departments] Ошибка API:', error);
+                    departmentsCache = [];
                     document.getElementById('departmentsList').innerHTML = `
                         <p style="text-align: center; color: #f56565;">
                             Ошибка загрузки: ${error.error || res.statusText}
@@ -893,6 +977,12 @@
                 }
 
                 const data = await res.json();
+                departmentsCache = Array.isArray(data.departments)
+                    ? data.departments
+                        .map(dept => (typeof dept?.department === 'string' ? dept.department.trim() : null))
+                        .filter(Boolean)
+                    : [];
+                populateDepartmentSelectOptions();
                 console.log('[Departments] Raw data received:', data);
                 console.log('[Departments] data.departments type:', typeof data.departments);
                 console.log('[Departments] data.departments is array:', Array.isArray(data.departments));
@@ -1113,27 +1203,255 @@
         }
 
         // ========== CREATE USER ==========
-        function showCreateUserModal() {
-            document.getElementById('createUserModal').classList.add('show');
+        async function showCreateUserModal() {
+            try {
+                if (!departmentsCache.length) {
+                    await loadDepartments();
+                } else {
+                    populateDepartmentSelectOptions();
+                }
+            } catch (error) {
+                console.warn('[showCreateUserModal] Не удалось обновить список отделов', error);
+            }
+
+            if (createUserForm) {
+                createUserForm.reset();
+            }
+            manualUsernameOverride = false;
+            regeneratePassword(true);
+            updateUsernameFromFullName();
+
+            if (roleSelect) {
+                roleSelect.value = '';
+                toggleDepartmentField(roleSelect);
+            }
+
+            const modal = document.getElementById('createUserModal');
+            if (modal) {
+                modal.classList.add('show');
+            }
+
+            if (fullNameInput) {
+                setTimeout(() => fullNameInput.focus(), 50);
+            }
         }
 
         function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('show');
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.remove('show');
+            }
+
+            if (modalId === 'createUserModal' && createUserForm) {
+                createUserForm.reset();
+                manualUsernameOverride = false;
+                if (departmentSelect) {
+                    departmentSelect.required = false;
+                    departmentSelect.value = '';
+                }
+                if (departmentField) {
+                    departmentField.style.display = 'none';
+                }
+            }
+        }
+
+        function shouldRequireDepartment(role) {
+            return ['rop', 'operator', 'employee'].includes(role);
         }
 
         function toggleDepartmentField(select) {
-            const field = document.getElementById('departmentField');
-            const needsDept = ['rop', 'operator', 'employee'].includes(select.value);
-            field.style.display = needsDept ? 'block' : 'none';
-            field.querySelector('input').required = needsDept;
+            if (!departmentField || !departmentSelect) return;
+            const needsDept = shouldRequireDepartment(select.value);
+            departmentField.style.display = needsDept ? 'block' : 'none';
+            departmentSelect.required = needsDept;
+
+            if (needsDept) {
+                populateDepartmentSelectOptions();
+                if (!departmentSelect.value && departmentSelect.options.length > 1) {
+                    departmentSelect.selectedIndex = 1;
+                }
+            } else {
+                departmentSelect.value = '';
+            }
         }
 
-        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+        function populateDepartmentSelectOptions() {
+            if (!departmentSelect) return;
+            const uniqueDepartments = Array.from(new Set(departmentsCache)).filter(Boolean).sort((a, b) => a.localeCompare(b, 'ru'));
+            const currentValue = departmentSelect.value;
+            const options = ['<option value="">Выберите отдел</option>'];
+
+            uniqueDepartments.forEach((dept) => {
+                options.push(`<option value="${dept}">${dept}</option>`);
+            });
+
+            departmentSelect.innerHTML = options.join('');
+
+            if (currentValue && uniqueDepartments.includes(currentValue)) {
+                departmentSelect.value = currentValue;
+            }
+        }
+
+        function generateStrongPassword(length = 12) {
+            const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()_+';
+            const chars = [];
+
+            if (window.crypto && window.crypto.getRandomValues) {
+                const buffer = new Uint32Array(length);
+                window.crypto.getRandomValues(buffer);
+                for (let i = 0; i < length; i++) {
+                    chars.push(alphabet[buffer[i] % alphabet.length]);
+                }
+            } else {
+                for (let i = 0; i < length; i++) {
+                    chars.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
+                }
+            }
+
+            return chars.join('');
+        }
+
+        function regeneratePassword(silent = false) {
+            if (!passwordInput) return '';
+            const password = generateStrongPassword();
+            passwordInput.value = password;
+
+            if (!silent) {
+                showToast('Новый пароль сгенерирован', 'success');
+            }
+
+            return password;
+        }
+
+        function copyGeneratedPassword() {
+            if (!passwordInput || !passwordInput.value) {
+                showToast('Нет пароля для копирования', 'error');
+                return;
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(passwordInput.value)
+                    .then(() => showToast('Пароль скопирован', 'success'))
+                    .catch(() => showToast('Не удалось скопировать пароль', 'error'));
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = passwordInput.value;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+
+                try {
+                    const success = document.execCommand('copy');
+                    showToast(success ? 'Пароль скопирован' : 'Не удалось скопировать пароль', success ? 'success' : 'error');
+                } catch (error) {
+                    showToast('Не удалось скопировать пароль', 'error');
+                }
+
+                document.body.removeChild(textarea);
+            }
+        }
+
+        function buildUsernameFromFullName(fullName) {
+            if (!fullName) {
+                return '';
+            }
+
+            const map = {
+                'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh', 'з': 'z',
+                'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r',
+                'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+                'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+            };
+
+            const lower = fullName.toLowerCase();
+            let converted = '';
+
+            for (const char of lower) {
+                if (map[char] !== undefined) {
+                    converted += map[char];
+                } else if (/[a-z0-9]/.test(char)) {
+                    converted += char;
+                } else if (/[\s._-]/.test(char)) {
+                    converted += '.';
+                } else {
+                    converted += '';
+                }
+            }
+
+            converted = converted.replace(/[^a-z0-9.]/g, '.');
+            converted = converted.replace(/\.+/g, '.').replace(/^\.+|\.+$/g, '');
+
+            if (!converted) {
+                return '';
+            }
+
+            if (/^[0-9]/.test(converted)) {
+                converted = `u${converted}`;
+            }
+
+            return converted.slice(0, 24);
+        }
+
+        function updateUsernameFromFullName() {
+            if (!fullNameInput || manualUsernameOverride) {
+                return;
+            }
+
+            usernameInput.value = buildUsernameFromFullName(fullNameInput.value);
+        }
+
+        if (fullNameInput) {
+            fullNameInput.addEventListener('input', () => {
+                updateUsernameFromFullName();
+            });
+        }
+
+        if (usernameInput) {
+            usernameInput.addEventListener('input', () => {
+                manualUsernameOverride = true;
+            });
+            usernameInput.addEventListener('focus', () => {
+                if (!usernameInput.value) {
+                    manualUsernameOverride = false;
+                    updateUsernameFromFullName();
+                }
+            });
+        }
+
+        if (roleSelect) {
+            roleSelect.addEventListener('change', (event) => toggleDepartmentField(event.target));
+        }
+
+        createUserForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData);
-            
+
+            const payload = {
+                username: usernameInput.value.trim(),
+                password: passwordInput.value.trim(),
+                name: fullNameInput.value.trim(),
+                role: roleSelect.value,
+                department: departmentSelect.value || null
+            };
+
+            if (!payload.username || !payload.name || !payload.role) {
+                showToast('Заполните обязательные поля', 'error');
+                return;
+            }
+
+            const needsDepartment = shouldRequireDepartment(payload.role);
+            if (!needsDepartment) {
+                payload.department = null;
+            } else if (!payload.department) {
+                showToast('Выберите отдел для выбранной роли', 'error');
+                return;
+            }
+
+            if (!payload.password) {
+                payload.password = regeneratePassword(true);
+            }
+
             try {
                 const res = await fetch(`${API_URL}/auth/register`, {
                     method: 'POST',
@@ -1141,16 +1459,19 @@
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(payload)
                 });
-                
+
                 const result = await res.json();
-                
-                if (result.success) {
-                    showToast('User created successfully!', 'success');
+
+                if (res.ok && result.success) {
+                    const displayPassword = result.password || payload.password;
+                    showToast(`Пользователь создан. Пароль: ${displayPassword}`, 'success');
                     closeModal('createUserModal');
-                    e.target.reset();
-                    loadUsers();
+                    await loadUsers();
+                    if (needsDepartment) {
+                        await loadDepartments();
+                    }
                 } else {
                     showToast(result.error || 'Failed to create user', 'error');
                 }
@@ -1336,7 +1657,7 @@ async function loadHeadsForDepartment() {
         const data = await response.json();
         
         const select = document.getElementById('newDeptHead');
-        const heads = data.users.filter(u => u.role === 'head' || u.role === 'admin');
+        const heads = data.users.filter(u => u.role === 'rop' || u.role === 'admin');
         
         select.innerHTML = '<option value="">Выберите руководителя</option>' +
             heads.map(user => `<option value="${user.id}">${user.name} (${user.username})</option>`).join('');
