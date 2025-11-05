@@ -78,15 +78,34 @@ const canSendToChat = async (req, res, next) => {
                 });
             }
 
-            // Check if user can send DM based on hierarchy
+            // Check if user can send DM based on role permissions
             const otherUserId = participants.rows.find(p => p.user_id !== userId).user_id;
-            const canSend = await query(
-                'SELECT can_send_direct_message($1, $2) as can_send',
-                [userId, otherUserId]
+
+            // Get receiver's role
+            const receiverResult = await query(
+                'SELECT role FROM users WHERE id = $1',
+                [otherUserId]
             );
 
-            if (!canSend.rows[0].can_send) {
-                return res.status(403).json({ 
+            if (receiverResult.rows.length === 0) {
+                return res.status(404).json({
+                    error: 'Receiver not found',
+                    code: 'RECEIVER_NOT_FOUND'
+                });
+            }
+
+            const receiverRole = receiverResult.rows[0].role;
+
+            // Check role_permissions table
+            const permCheck = await query(
+                'SELECT can_send_message FROM role_permissions WHERE from_role = $1 AND to_role = $2',
+                [userRole, receiverRole]
+            );
+
+            const canSend = permCheck.rows.length > 0 ? permCheck.rows[0].can_send_message : true;
+
+            if (!canSend) {
+                return res.status(403).json({
                     error: 'You cannot send direct messages to this user',
                     code: 'DM_NOT_ALLOWED'
                 });
@@ -160,13 +179,31 @@ const canCreateDirectMessage = async (req, res, next) => {
             return next();
         }
 
-        // Check if DM is allowed
-        const result = await query(
-            'SELECT can_send_direct_message($1, $2) as can_send',
-            [senderId, receiverId]
+        // Get receiver's role
+        const receiverResult = await query(
+            'SELECT role FROM users WHERE id = $1',
+            [receiverId]
         );
 
-        if (!result.rows[0].can_send) {
+        if (receiverResult.rows.length === 0) {
+            return res.status(404).json({
+                error: 'Receiver not found',
+                code: 'RECEIVER_NOT_FOUND'
+            });
+        }
+
+        const receiverRole = receiverResult.rows[0].role;
+        const senderRole = req.user.role;
+
+        // Check role_permissions table
+        const permCheck = await query(
+            'SELECT can_send_message FROM role_permissions WHERE from_role = $1 AND to_role = $2',
+            [senderRole, receiverRole]
+        );
+
+        const canSend = permCheck.rows.length > 0 ? permCheck.rows[0].can_send_message : true;
+
+        if (!canSend) {
             return res.status(403).json({
                 error: 'You cannot create a direct message with this user',
                 code: 'DM_CREATION_NOT_ALLOWED'
