@@ -1,11 +1,31 @@
 const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to match seed.js
 const { query, transaction } = require('../config/database');
 
+function sanitizeInitialPassword(payload, includeSecret) {
+    if (includeSecret) {
+        return payload;
+    }
+
+    if (!payload) {
+        return payload;
+    }
+
+    if (Array.isArray(payload)) {
+        return payload.map((item) => {
+            const { initial_password, ...rest } = item;
+            return rest;
+        });
+    }
+
+    const { initial_password, ...rest } = payload;
+    return rest;
+}
+
 // Get all users (admin only)
 const getAllUsers = async (req, res) => {
     try {
         const result = await query(
-            `SELECT id, username, name, role, department, is_active, created_at, last_seen
+            `SELECT id, username, name, role, department, initial_password, is_active, created_at, last_seen
              FROM users
              ORDER BY created_at DESC`
         );
@@ -26,7 +46,7 @@ const getUserById = async (req, res) => {
         const { userId } = req.params;
 
         const result = await query(
-            `SELECT id, username, name, role, department, is_active, created_at, last_seen
+            `SELECT id, username, name, role, department, initial_password, is_active, created_at, last_seen
              FROM users WHERE id = $1`,
             [userId]
         );
@@ -38,7 +58,8 @@ const getUserById = async (req, res) => {
             });
         }
 
-        res.json({ user: result.rows[0] });
+        const includeSecret = req.user?.role === 'admin';
+        res.json({ user: sanitizeInitialPassword(result.rows[0], includeSecret) });
     } catch (error) {
         console.error('Get user error:', error);
         res.status(500).json({ 
@@ -108,7 +129,7 @@ const updateUser = async (req, res) => {
         const result = await query(
             `UPDATE users SET ${updates.join(', ')}
              WHERE id = $${paramCount}
-             RETURNING id, username, name, role, department, is_active`,
+             RETURNING id, username, name, role, department, initial_password, is_active`,
             values
         );
 
@@ -196,8 +217,8 @@ const resetPassword = async (req, res) => {
 
         // Update password
         await query(
-            'UPDATE users SET password_hash = $1 WHERE id = $2',
-            [passwordHash, userId]
+            'UPDATE users SET password_hash = $1, initial_password = $2 WHERE id = $3',
+            [passwordHash, newPassword, userId]
         );
 
         res.json({ message: 'Password reset successfully' });
@@ -216,14 +237,15 @@ const getUsersByDepartment = async (req, res) => {
         const { department } = req.params;
 
         const result = await query(
-            `SELECT id, username, name, role, department, is_active, last_seen
+            `SELECT id, username, name, role, department, initial_password, is_active, last_seen
              FROM users
              WHERE department = $1 AND is_active = true
              ORDER BY role, name`,
             [department]
         );
 
-        res.json({ users: result.rows });
+        const includeSecret = req.user?.role === 'admin';
+        res.json({ users: sanitizeInitialPassword(result.rows, includeSecret) });
     } catch (error) {
         console.error('Get department users error:', error);
         res.status(500).json({ 
@@ -238,22 +260,23 @@ const getUsersByRole = async (req, res) => {
     try {
         const { role } = req.params;
 
-        if (!['admin', 'rop', 'employee'].includes(role)) {
-            return res.status(400).json({ 
+        if (!['admin', 'assistant', 'rop', 'operator', 'employee'].includes(role)) {
+            return res.status(400).json({
                 error: 'Invalid role',
                 code: 'INVALID_ROLE'
             });
         }
 
         const result = await query(
-            `SELECT id, username, name, role, department, is_active, last_seen
+            `SELECT id, username, name, role, department, initial_password, is_active, last_seen
              FROM users
              WHERE role = $1 AND is_active = true
              ORDER BY name`,
             [role]
         );
 
-        res.json({ users: result.rows });
+        const includeSecret = req.user?.role === 'admin';
+        res.json({ users: sanitizeInitialPassword(result.rows, includeSecret) });
     } catch (error) {
         console.error('Get role users error:', error);
         res.status(500).json({ 
