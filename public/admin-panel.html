@@ -3290,16 +3290,23 @@ setupModalAccessibility();
                 await loadGeneralPermissions();
             } catch (err) {
                 console.error('Load permissions error:', err);
-                document.getElementById('permissionsMatrix').innerHTML =
-                    '<p style="color: #f56565; text-align: center;">Ошибка загрузки прав доступа</p>';
+                const tbody = document.getElementById('permissionsMatrixBody');
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #f56565;">Ошибка загрузки прав доступа</td></tr>';
+                }
             }
         }
 
         function renderPermissionsMatrix(data) {
+            const tbody = document.getElementById('permissionsMatrixBody');
+            if (!tbody) {
+                console.error('[renderPermissionsMatrix] Element permissionsMatrixBody not found');
+                return;
+            }
+
             if (!data || !data.matrix || !data.roles) {
                 console.error('[renderPermissionsMatrix] Invalid data:', data);
-                document.getElementById('permissionsMatrix').innerHTML =
-                    '<p style="color: #f56565; text-align: center;">Ошибка: данные не получены</p>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #f56565;">Ошибка: данные не получены</td></tr>';
                 return;
             }
 
@@ -3312,19 +3319,9 @@ setupModalAccessibility();
                 'employee': 'Сотрудник'
             };
 
-            let html = '<table style="border-collapse: collapse; width: 100%;">';
-
-            // Header row
-            html += '<thead><tr><th style="padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0;">От \\ Кому</th>';
-            roles.forEach(role => {
-                html += `<th style="padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; text-align: center;">
-                    <span class="badge badge-${role}">${roleLabels[role]}</span>
-                </th>`;
-            });
-            html += '</tr></thead>';
+            let html = '';
 
             // Data rows
-            html += '<tbody>';
             roles.forEach(fromRole => {
                 html += `<tr><td style="padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; font-weight: 600;">
                     <span class="badge badge-${fromRole}">${roleLabels[fromRole]}</span>
@@ -3347,10 +3344,8 @@ setupModalAccessibility();
 
                 html += '</tr>';
             });
-            html += '</tbody>';
-            html += '</table>';
 
-            document.getElementById('permissionsMatrix').innerHTML = html;
+            tbody.innerHTML = html;
         }
 
         function markPermissionChanged(checkbox) {
