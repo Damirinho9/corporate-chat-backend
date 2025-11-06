@@ -358,7 +358,7 @@ function createMockResponse() {
             throw new Error(`РОП смог удалить сотрудника чужого отдела (статус ${ropDeleteForeignRes.statusCode})`);
         }
 
-        const operator = (await query('SELECT id FROM users WHERE username = $1', ['operator1'])).rows[0];
+        const operator = (await query('SELECT id, department FROM users WHERE username = $1', ['operator1'])).rows[0];
         const ropSales = ropSalesRow;
 
         console.log('🔒 Проверка отсутствия выдачи исходных паролей для не-админов...');
@@ -382,6 +382,48 @@ function createMockResponse() {
 
         if (!admin || !operator) {
             throw new Error('Не удалось получить идентификаторы пользователей для теста');
+        }
+
+        console.log('🔭 Проверка видимости чатов для администратора и оператора...');
+        const totalChatsResult = await query('SELECT COUNT(*)::int AS count FROM chats');
+        const totalChats = totalChatsResult.rows[0]?.count ?? 0;
+
+        const adminChatsReq = { user: { id: admin.id, role: 'admin' }, query: {} };
+        const adminChatsRes = createMockResponse();
+        await chatController.getUserChats(adminChatsReq, adminChatsRes);
+
+        if (!Array.isArray(adminChatsRes.body?.chats)) {
+            throw new Error('Администратор не получил список чатов');
+        }
+
+        if (adminChatsRes.body.chats.length !== totalChats) {
+            throw new Error(`Администратор увидел ${adminChatsRes.body.chats.length} чатов вместо ${totalChats}`);
+        }
+
+        const uniqueAdminChatIds = new Set(adminChatsRes.body.chats.map(chat => chat.id));
+        if (uniqueAdminChatIds.size !== totalChats) {
+            throw new Error('В списке чатов администратора есть дубликаты или отсутствуют чаты');
+        }
+
+        const operatorChatsReq = { user: { id: operator.id, role: 'operator', department: operator.department }, query: {} };
+        const operatorChatsRes = createMockResponse();
+        await chatController.getUserChats(operatorChatsReq, operatorChatsRes);
+
+        if (!Array.isArray(operatorChatsRes.body?.chats)) {
+            throw new Error('Оператор не получил список своих чатов');
+        }
+
+        const operatorChatCountResult = await query('SELECT COUNT(DISTINCT chat_id)::int AS count FROM chat_participants WHERE user_id = $1', [operator.id]);
+        const expectedOperatorChats = operatorChatCountResult.rows[0]?.count ?? 0;
+
+        if (operatorChatsRes.body.chats.length !== expectedOperatorChats) {
+            throw new Error(`Оператор увидел ${operatorChatsRes.body.chats.length} чатов вместо ${expectedOperatorChats}`);
+        }
+
+        const marketingChatLookup = await query("SELECT id FROM chats WHERE department = 'Marketing' LIMIT 1");
+        const marketingChatId = marketingChatLookup.rows[0]?.id;
+        if (marketingChatId && operatorChatsRes.body.chats.some(chat => chat.id === marketingChatId)) {
+            throw new Error('Оператор получил доступ к чату чужого отдела');
         }
 
         console.log('💬 Создание/открытие личного чата через chatController.createDirectChat...');

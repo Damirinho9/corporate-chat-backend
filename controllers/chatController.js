@@ -9,9 +9,11 @@ const getUserChats = async (req, res) => {
     const isAdmin = me.rows[0]?.role === 'admin';
 
     const { limit = 50, offset = 0 } = req.query;
+    const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100);
+    const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
 
     const baseSelect = `
-      SELECT 
+      SELECT
         c.id, c.name, c.type, c.department, cp.last_read_at, c.updated_at,
         (
           SELECT COUNT(*) FROM messages m
@@ -37,14 +39,14 @@ const getUserChats = async (req, res) => {
            WHERE cp2.chat_id = c.id AND u.id <> $1
         ) AS participants
       FROM chats c
-      JOIN chat_participants cp ON c.id = cp.chat_id
+      LEFT JOIN chat_participants cp ON c.id = cp.chat_id AND cp.user_id = $1
     `;
 
     const sql = isAdmin
-      ? baseSelect + ` WHERE 1=1 ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`
+      ? baseSelect + ` ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`
       : baseSelect + ` WHERE cp.user_id = $1 ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`;
 
-    const result = await query(sql, [userId, limit, offset]);
+    const result = await query(sql, [userId, parsedLimit, parsedOffset]);
 
     res.json({ chats: result.rows });
   } catch (error) {

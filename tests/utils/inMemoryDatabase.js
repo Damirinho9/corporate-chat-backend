@@ -85,6 +85,23 @@ class InMemoryDatabase {
             return { rows: chat ? [{ id: chat.id }] : [], rowCount: chat ? 1 : 0 };
         }
 
+        if (normalized.startsWith('SELECT COUNT(*)::int AS count FROM chats')) {
+            return { rows: [{ count: this.data.chats.length }], rowCount: 1 };
+        }
+
+        if (normalized.startsWith('SELECT COUNT(DISTINCT chat_id)::int AS count FROM chat_participants WHERE user_id =')) {
+            const userId = toInt(params[0]);
+            const count = new Set(this.data.chat_participants.filter(cp => cp.user_id === userId).map(cp => cp.chat_id)).size;
+            return { rows: [{ count }], rowCount: 1 };
+        }
+
+        if (normalized.startsWith("SELECT id FROM chats WHERE department = '")) {
+            const match = normalized.match(/SELECT id FROM chats WHERE department = '([^']+)'(?: LIMIT 1)?/i);
+            const department = match ? match[1] : null;
+            const chat = department ? this.data.chats.find(c => c.department === department) : null;
+            return { rows: chat ? [{ id: chat.id }] : [], rowCount: chat ? 1 : 0 };
+        }
+
         if (normalized.startsWith('SELECT id, initial_password, department FROM users WHERE username =')) {
             const username = params[0];
             const user = this.data.users.find(u => u.username === username);
@@ -94,7 +111,7 @@ class InMemoryDatabase {
             };
         }
 
-        if (normalized.startsWith('SELECT role FROM users WHERE id =')) {
+        if (normalized.startsWith('SELECT role FROM users WHERE id =') || normalized.startsWith('SELECT role FROM users WHERE id=$')) {
             const id = toInt(params[0]);
             const user = this.data.users.find(u => u.id === id);
             return { rows: user ? [{ role: user.role }] : [], rowCount: user ? 1 : 0 };
@@ -177,6 +194,10 @@ class InMemoryDatabase {
                 }],
                 rowCount: 1
             };
+        }
+
+        if (normalized.startsWith('SELECT c.id, c.name, c.type, c.department, cp.last_read_at, c.updated_at')) {
+            return this.handleGetUserChats(normalized, params);
         }
 
         if (normalized.startsWith('SELECT id, username, name, role, department, initial_password, is_active, last_seen FROM users WHERE department =')) {
@@ -866,6 +887,83 @@ class InMemoryDatabase {
         }
 
         return { rows: [], rowCount: 0 };
+    }
+
+    handleGetUserChats(normalized, params) {
+        const userId = Number(params[0]);
+        const limit = params[1] !== undefined ? Number(params[1]) : 50;
+        const offset = params[2] !== undefined ? Number(params[2]) : 0;
+        const restrictedToParticipant = normalized.includes('WHERE cp.user_id = $1');
+
+        const chats = restrictedToParticipant
+            ? this.data.chats.filter(chat => this.isParticipant(chat.id, userId))
+            : [...this.data.chats];
+
+        const sorted = chats
+            .slice()
+            .sort((a, b) => {
+                const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+                const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
+                return dateB - dateA;
+            });
+
+        const paginated = sorted.slice(offset, offset + limit);
+        const rows = paginated.map(chat => this.buildChatSummary(chat, userId));
+        return { rows, rowCount: rows.length };
+    }
+
+    buildChatSummary(chat, currentUserId) {
+        const participantRecord = this.data.chat_participants.find(cp => cp.chat_id === chat.id && cp.user_id === currentUserId);
+        const lastReadAt = participantRecord?.last_read_at || null;
+
+        const chatMessages = this.data.messages
+            .filter(message => message.chat_id === chat.id)
+            .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+
+        const lastMessage = chatMessages.length ? chatMessages[chatMessages.length - 1] : null;
+        const lastMessageAuthor = lastMessage
+            ? this.data.users.find(user => user.id === lastMessage.user_id)
+            : null;
+
+        const unreadCount = chatMessages.filter(message => {
+            if (message.user_id === currentUserId) {
+                return false;
+            }
+
+            if (!lastReadAt) {
+                return true;
+            }
+
+            return new Date(message.created_at || 0).getTime() > new Date(lastReadAt).getTime();
+        }).length;
+
+        const participants = this.data.chat_participants
+            .filter(cp => cp.chat_id === chat.id && cp.user_id !== currentUserId)
+            .map(cp => {
+                const user = this.data.users.find(u => u.id === cp.user_id);
+                return user ? { id: user.id, name: user.name, role: user.role } : null;
+            })
+            .filter(Boolean);
+
+        return {
+            id: chat.id,
+            name: chat.name || null,
+            type: chat.type || null,
+            department: chat.department || null,
+            last_read_at: lastReadAt,
+            updated_at: chat.updated_at || chat.created_at || null,
+            unread_count: unreadCount,
+            last_message: lastMessage
+                ? {
+                    id: lastMessage.id,
+                    content: lastMessage.content || null,
+                    created_at: lastMessage.created_at || null,
+                    user_id: lastMessage.user_id,
+                    username: lastMessageAuthor ? lastMessageAuthor.name : null
+                }
+                : null,
+            participants
+        };
     }
 
     buildFilePayload(fileId) {
