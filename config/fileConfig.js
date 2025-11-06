@@ -23,9 +23,11 @@ const ALLOWED_FILE_TYPES = {
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'application/vnd.ms-excel',
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
             'text/plain', 'text/csv'
         ],
-        extensions: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv']
+        extensions: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv']
     },
     video: {
         mimeTypes: ['video/mp4', 'video/mpeg', 'video/webm'],
@@ -34,6 +36,22 @@ const ALLOWED_FILE_TYPES = {
     audio: {
         mimeTypes: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/webm', 'audio/ogg'],
         extensions: ['.mp3', '.wav', '.webm', '.ogg']
+    },
+    archive: {
+        mimeTypes: [
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/x-rar-compressed',
+            'application/x-7z-compressed',
+            'application/x-tar',
+            'application/gzip',
+            'application/x-bzip2'
+        ],
+        extensions: ['.zip', '.rar', '.7z', '.tar', '.gz', '.tgz', '.bz2']
+    },
+    other: {
+        mimeTypes: ['application/octet-stream', 'binary/octet-stream'],
+        extensions: ['.bin']
     }
 };
 
