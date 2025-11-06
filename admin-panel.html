@@ -1282,6 +1282,8 @@
             }
         ];
 
+        window.PERMISSIONS_MATRIX = PERMISSIONS_MATRIX;
+
         const createUserForm = document.getElementById('createUserForm');
         const usernameInput = document.getElementById('createUsername');
         const fullNameInput = document.getElementById('createFullName');
@@ -1412,7 +1414,7 @@
                     await loadDepartments();
                     break;
                 case 'permissions':
-                    renderPermissionsMatrix();
+                    renderPermissionsMatrix(window.PERMISSIONS_MATRIX);
                     break;
                 case 'deletions':
                     await loadDeletionHistory();
@@ -1423,16 +1425,20 @@
             }
         }
 
-        function renderPermissionsMatrix() {
+        function renderPermissionsMatrix(matrixData) {
             const tbody = document.getElementById('permissionsMatrixBody');
             if (!tbody) return;
 
-            if (!Array.isArray(PERMISSIONS_MATRIX) || PERMISSIONS_MATRIX.length === 0) {
+            const matrix = Array.isArray(matrixData)
+                ? matrixData
+                : (Array.isArray(window.PERMISSIONS_MATRIX) ? window.PERMISSIONS_MATRIX : []);
+
+            if (!matrix.length) {
                 tbody.innerHTML = '<tr><td colspan="6" class="permissions-empty">Данные о правах недоступны</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = PERMISSIONS_MATRIX.map(row => {
+            tbody.innerHTML = matrix.map(row => {
                 const columns = ROLE_ORDER.map(role => {
                     const value = row.roles[role];
 
@@ -2472,6 +2478,14 @@ async function loadChats() {
             setTimeout(() => {
                 toast.classList.remove('show');
             }, 3000);
+        }
+
+        const initialisePermissionsMatrix = () => renderPermissionsMatrix(window.PERMISSIONS_MATRIX);
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initialisePermissionsMatrix, { once: true });
+        } else {
+            initialisePermissionsMatrix();
         }
 
         // ========== LOGOUT ==========
