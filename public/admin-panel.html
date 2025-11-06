@@ -2450,312 +2450,313 @@ async function loadChats() {
             }
         }
 
-async function showCreateChatModal() {
-    selectedParticipants.clear();
-    const typeSelect = document.getElementById('newChatType');
-    if (typeSelect) {
-        typeSelect.value = 'group';
-        handleChatTypeChange();
-    }
+        // ========== CREATE CHAT MODAL ==========
+        async function showCreateChatModal() {
+            selectedParticipants.clear();
+            const typeSelect = document.getElementById('newChatType');
+            if (typeSelect) {
+                typeSelect.value = 'group';
+                handleChatTypeChange();
+            }
 
-    const searchInput = document.getElementById('participantsSearch');
-    if (searchInput) {
-        searchInput.value = '';
-    }
+            const searchInput = document.getElementById('participantsSearch');
+            if (searchInput) {
+                searchInput.value = '';
+            }
 
-    openModalElement(document.getElementById('createChatModal'), { focusSelector: '#participantsSearch' });
+            openModalElement(document.getElementById('createChatModal'), { focusSelector: '#participantsSearch' });
 
-    await loadUsersForChat();
+            await loadUsersForChat();
+        }
+
+        function closeCreateChatModal() {
+            const modal = document.getElementById('createChatModal');
+            if (modal) {
+                modal.classList.remove('show');
+                modal.style.display = 'none';
+                restoreModalFocus(modal);
+            }
+
+            const form = document.getElementById('createChatForm');
+            if (form) {
+                form.reset();
+            }
+
+            const participantList = document.getElementById('participantsList');
+            if (participantList) {
+                participantList.innerHTML = '<p class="chat-participants-empty">Выберите участников</p>';
+            }
+
+            selectedParticipants.clear();
+        }
+
+        function handleChatTypeChange() {
+            const typeSelect = document.getElementById('newChatType');
+            const deptGroup = document.getElementById('chatDepartmentGroup');
+
+            if (!typeSelect || !deptGroup) {
+                return;
+            }
+
+            const type = typeSelect.value;
+
+            if (type === 'department') {
+                deptGroup.style.display = 'block';
+            } else {
+                deptGroup.style.display = 'none';
+            }
+        }
+
+        async function loadUsersForChat() {
+        try {
+            const response = await fetch(`${API_URL}/users`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            
+            const container = document.getElementById('participantsList');
+            if (!container) {
+                return;
+            }
+
+            container.innerHTML = data.users.map(user => {
+                const descriptor = `${(user.name || '').toLowerCase()} ${(user.username || '').toLowerCase()}`.trim();
+                const checked = selectedParticipants.has(user.id) ? 'checked' : '';
+                return `
+                    <label class="chat-participant-select" data-filter-value="${escapeHtml(descriptor)}">
+                        <input type="checkbox" value="${user.id}" ${checked} onchange="toggleParticipant(${user.id}, this.checked)">
+                        <div class="chat-participant-details">
+                            <span class="chat-participant-name">${escapeHtml(user.name || user.username || 'Без имени')}</span>
+                            <span class="chat-participant-meta">${escapeHtml(`${user.username} • ${ROLE_LABELS[user.role] || user.role || '—'}`)}</span>
+                        </div>
+                    </label>
+                `;
+            }).join('');
+        } catch (error) {
+            console.error('Load users error:', error);
+            document.getElementById('participantsList').innerHTML = '<p style="color: #e53e3e;">Ошибка загрузки пользователей</p>';
+        }
 }
 
-function closeCreateChatModal() {
-    const modal = document.getElementById('createChatModal');
-    if (modal) {
-        modal.classList.remove('show');
-        modal.style.display = 'none';
-        restoreModalFocus(modal);
-    }
-
-    const form = document.getElementById('createChatForm');
-    if (form) {
-        form.reset();
-    }
-
-    const participantList = document.getElementById('participantsList');
-    if (participantList) {
-        participantList.innerHTML = '<p class="chat-participants-empty">Выберите участников</p>';
-    }
-
-    selectedParticipants.clear();
+function toggleParticipant(userId, isSelected) {
+        if (isSelected) {
+            selectedParticipants.add(userId);
+        } else {
+            selectedParticipants.delete(userId);
+        }
 }
 
-function handleChatTypeChange() {
-    const typeSelect = document.getElementById('newChatType');
-    const deptGroup = document.getElementById('chatDepartmentGroup');
-
-    if (!typeSelect || !deptGroup) {
-        return;
-    }
-
-    const type = typeSelect.value;
-
-    if (type === 'department') {
-        deptGroup.style.display = 'block';
-    } else {
-        deptGroup.style.display = 'none';
-    }
-}
-
-async function loadUsersForChat() {
-    try {
-        const response = await fetch(`${API_URL}/users`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        
+function filterParticipants() {
+        const searchInput = document.getElementById('participantsSearch');
         const container = document.getElementById('participantsList');
+
         if (!container) {
             return;
         }
 
-        container.innerHTML = data.users.map(user => {
-            const descriptor = `${(user.name || '').toLowerCase()} ${(user.username || '').toLowerCase()}`.trim();
-            const checked = selectedParticipants.has(user.id) ? 'checked' : '';
-            return `
-                <label class="chat-participant-select" data-filter-value="${escapeHtml(descriptor)}">
-                    <input type="checkbox" value="${user.id}" ${checked} onchange="toggleParticipant(${user.id}, this.checked)">
-                    <div class="chat-participant-details">
-                        <span class="chat-participant-name">${escapeHtml(user.name || user.username || 'Без имени')}</span>
-                        <span class="chat-participant-meta">${escapeHtml(`${user.username} • ${ROLE_LABELS[user.role] || user.role || '—'}`)}</span>
-                    </div>
-                </label>
-            `;
-        }).join('');
-    } catch (error) {
-        console.error('Load users error:', error);
-        document.getElementById('participantsList').innerHTML = '<p style="color: #e53e3e;">Ошибка загрузки пользователей</p>';
-    }
-}
+        const searchValue = searchInput && typeof searchInput.value === 'string' ? searchInput.value : '';
+        const term = searchValue.trim().toLowerCase();
+        const items = container.querySelectorAll('[data-filter-value]');
 
-function toggleParticipant(userId, isSelected) {
-    if (isSelected) {
-        selectedParticipants.add(userId);
-    } else {
-        selectedParticipants.delete(userId);
-    }
-}
-
-function filterParticipants() {
-    const searchInput = document.getElementById('participantsSearch');
-    const container = document.getElementById('participantsList');
-
-    if (!container) {
-        return;
-    }
-
-    const searchValue = searchInput && typeof searchInput.value === 'string' ? searchInput.value : '';
-    const term = searchValue.trim().toLowerCase();
-    const items = container.querySelectorAll('[data-filter-value]');
-
-    items.forEach((item) => {
-        const value = item.getAttribute('data-filter-value') || '';
-        item.style.display = !term || value.includes(term) ? '' : 'none';
-    });
+        items.forEach((item) => {
+            const value = item.getAttribute('data-filter-value') || '';
+            item.style.display = !term || value.includes(term) ? '' : 'none';
+        });
 }
 
 async function createNewChat() {
-    const name = document.getElementById('newChatName').value.trim();
-    const type = document.getElementById('newChatType').value;
-    const department = type === 'department' ? document.getElementById('newChatDepartment').value : null;
-    
-    if (!name) {
-        alert('Введите название чата');
-        return;
-    }
-    
-    if (selectedParticipants.size === 0) {
-        alert('Выберите хотя бы одного участника');
-        return;
-    }
-    
-    if (type === 'department' && !department) {
-        alert('Выберите отдел');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_URL}/chats/group`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                name: name,
-                type: type,
-                department: department,
-                participantIds: Array.from(selectedParticipants)
-            })
-        });
+        const name = document.getElementById('newChatName').value.trim();
+        const type = document.getElementById('newChatType').value;
+        const department = type === 'department' ? document.getElementById('newChatDepartment').value : null;
         
-        const data = await response.json();
-        
-        if (response.ok) {
-            alert('Чат успешно создан!');
-            closeCreateChatModal();
-            loadChats();
-        } else {
-            alert('Ошибка: ' + (data.error || 'Не удалось создать чат'));
+        if (!name) {
+            alert('Введите название чата');
+            return;
         }
-    } catch (error) {
-        console.error('Create chat error:', error);
-        alert('Ошибка создания чата');
-    }
+        
+        if (selectedParticipants.size === 0) {
+            alert('Выберите хотя бы одного участника');
+            return;
+        }
+        
+        if (type === 'department' && !department) {
+            alert('Выберите отдел');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${API_URL}/chats/group`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: name,
+                    type: type,
+                    department: department,
+                    participantIds: Array.from(selectedParticipants)
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                alert('Чат успешно создан!');
+                closeCreateChatModal();
+                loadChats();
+            } else {
+                alert('Ошибка: ' + (data.error || 'Не удалось создать чат'));
+            }
+        } catch (error) {
+            console.error('Create chat error:', error);
+            alert('Ошибка создания чата');
+        }
 }
 
 // ========== МОДАЛЬНОЕ ОКНО: СОЗДАТЬ ОТДЕЛ ==========
 async function showCreateDepartmentModal() {
-    openModalElement(document.getElementById('createDepartmentModal'), { focusSelector: '#newDeptName' });
-    await loadHeadsForDepartment();
+        openModalElement(document.getElementById('createDepartmentModal'), { focusSelector: '#newDeptName' });
+        await loadHeadsForDepartment();
 }
 
 function closeCreateDepartmentModal() {
-    const modal = document.getElementById('createDepartmentModal');
-    if (modal) {
-        modal.classList.remove('show');
-        modal.style.display = 'none';
-        restoreModalFocus(modal);
-    }
-    document.getElementById('newDeptName').value = '';
-    document.getElementById('newDeptDescription').value = '';
-    document.getElementById('newDeptHead').value = '';
-}
-
-async function loadHeadsForDepartment() {
-    try {
-        const response = await fetch(`${API_URL}/users`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        
-        const select = document.getElementById('newDeptHead');
-        const heads = data.users.filter(u => u.role === 'rop' || u.role === 'admin');
-        
-        select.innerHTML = '<option value="">Выберите руководителя</option>' +
-            heads.map(user => `<option value="${user.id}">${user.name} (${user.username})</option>`).join('');
-    } catch (error) {
-        console.error('Load heads error:', error);
-    }
-}
-
-async function createNewDepartment() {
-    const name = document.getElementById('newDeptName').value.trim();
-    const description = document.getElementById('newDeptDescription').value.trim();
-    const headId = document.getElementById('newDeptHead').value;
-
-    if (!name) {
-        alert('Введите название отдела');
-        return;
-    }
-    
-    try {
-        // Создаем чат отдела
-        const response = await fetch(`${API_URL}/chats/group`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                name: `${name} отдел`,
-                type: 'department',
-                department: name,
-                participantIds: headId ? [parseInt(headId)] : []
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            alert(`Отдел "${name}" успешно создан!`);
-            closeCreateDepartmentModal();
-            loadDepartments();
-        } else {
-            alert('Ошибка: ' + (data.error || 'Не удалось создать отдел'));
-        }
-    } catch (error) {
-        console.error('Create department error:', error);
-        alert('Ошибка создания отдела');
-    }
-}
-
-function isModalVisible(modal) {
-    if (!modal) {
-        return false;
-    }
-
-    if (modal.classList.contains('show')) {
-        return true;
-    }
-
-    const display = modal.style.display || '';
-    return display !== '' && display !== 'none';
-}
-
-function closeModalElement(modal) {
-    if (!modal) {
-        return;
-    }
-
-    switch (modal.id) {
-        case 'createUserModal':
-        case 'editUserModal':
-            closeModal(modal.id);
-            break;
-        case 'createChatModal':
-            closeCreateChatModal();
-            break;
-        case 'editChatModal':
-            closeEditChatModal();
-            break;
-        case 'createDepartmentModal':
-            closeCreateDepartmentModal();
-            break;
-        default:
+        const modal = document.getElementById('createDepartmentModal');
+        if (modal) {
             modal.classList.remove('show');
             modal.style.display = 'none';
             restoreModalFocus(modal);
-            break;
-    }
+        }
+        document.getElementById('newDeptName').value = '';
+        document.getElementById('newDeptDescription').value = '';
+        document.getElementById('newDeptHead').value = '';
+}
+
+async function loadHeadsForDepartment() {
+        try {
+            const response = await fetch(`${API_URL}/users`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            
+            const select = document.getElementById('newDeptHead');
+            const heads = data.users.filter(u => u.role === 'rop' || u.role === 'admin');
+            
+            select.innerHTML = '<option value="">Выберите руководителя</option>' +
+                heads.map(user => `<option value="${user.id}">${user.name} (${user.username})</option>`).join('');
+        } catch (error) {
+            console.error('Load heads error:', error);
+        }
+}
+
+async function createNewDepartment() {
+        const name = document.getElementById('newDeptName').value.trim();
+        const description = document.getElementById('newDeptDescription').value.trim();
+        const headId = document.getElementById('newDeptHead').value;
+
+        if (!name) {
+            alert('Введите название отдела');
+            return;
+        }
+        
+        try {
+            // Создаем чат отдела
+            const response = await fetch(`${API_URL}/chats/group`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: `${name} отдел`,
+                    type: 'department',
+                    department: name,
+                    participantIds: headId ? [parseInt(headId)] : []
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                alert(`Отдел "${name}" успешно создан!`);
+                closeCreateDepartmentModal();
+                loadDepartments();
+            } else {
+                alert('Ошибка: ' + (data.error || 'Не удалось создать отдел'));
+            }
+        } catch (error) {
+            console.error('Create department error:', error);
+            alert('Ошибка создания отдела');
+        }
+}
+
+function isModalVisible(modal) {
+        if (!modal) {
+            return false;
+        }
+
+        if (modal.classList.contains('show')) {
+            return true;
+        }
+
+        const display = modal.style.display || '';
+        return display !== '' && display !== 'none';
+}
+
+function closeModalElement(modal) {
+        if (!modal) {
+            return;
+        }
+
+        switch (modal.id) {
+            case 'createUserModal':
+            case 'editUserModal':
+                closeModal(modal.id);
+                break;
+            case 'createChatModal':
+                closeCreateChatModal();
+                break;
+            case 'editChatModal':
+                closeEditChatModal();
+                break;
+            case 'createDepartmentModal':
+                closeCreateDepartmentModal();
+                break;
+            default:
+                modal.classList.remove('show');
+                modal.style.display = 'none';
+                restoreModalFocus(modal);
+                break;
+        }
 }
 
 function setupModalAccessibility() {
-    const modals = Array.from(document.querySelectorAll('.modal'));
+        const modals = Array.from(document.querySelectorAll('.modal'));
 
-    modals.forEach((modal) => {
-        modal.setAttribute('role', modal.getAttribute('role') || 'dialog');
-        modal.setAttribute('aria-modal', 'true');
-        modal.addEventListener('click', (event) => {
-            if (event.target === modal) {
-                closeModalElement(modal);
-            }
+        modals.forEach((modal) => {
+            modal.setAttribute('role', modal.getAttribute('role') || 'dialog');
+            modal.setAttribute('aria-modal', 'true');
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    closeModalElement(modal);
+                }
+            });
         });
-    });
 
-    document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape') {
-            return;
-        }
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') {
+                return;
+            }
 
-        const openModals = Array.from(document.querySelectorAll('.modal')).filter(isModalVisible);
-        if (!openModals.length) {
-            return;
-        }
+            const openModals = Array.from(document.querySelectorAll('.modal')).filter(isModalVisible);
+            if (!openModals.length) {
+                return;
+            }
 
-        event.preventDefault();
-        const topModal = openModals[openModals.length - 1];
-        closeModalElement(topModal);
-    });
+            event.preventDefault();
+            const topModal = openModals[openModals.length - 1];
+            closeModalElement(topModal);
+        });
 }
 
 setupModalAccessibility();
@@ -2763,150 +2764,150 @@ setupModalAccessibility();
 
 
 
-        // ========== CHAT MANAGEMENT ==========
-        async function deleteChat(chatId) {
-            if (!confirm('Удалить чат?')) return;
-            try {
-                const res = await fetch(`${API_URL}/admin/chats/${chatId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    showToast('Чат удалён', 'success');
-                    await loadChats();
-                } else {
-                    const err = await res.json().catch(() => ({}));
-                    showToast(err.error || 'Ошибка удаления чата', 'error');
+            // ========== CHAT MANAGEMENT ==========
+            async function deleteChat(chatId) {
+                if (!confirm('Удалить чат?')) return;
+                try {
+                    const res = await fetch(`${API_URL}/admin/chats/${chatId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.ok) {
+                        showToast('Чат удалён', 'success');
+                        await loadChats();
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        showToast(err.error || 'Ошибка удаления чата', 'error');
+                    }
+                } catch (err) {
+                    console.error('[deleteChat] error:', err);
+                    showToast('Ошибка удаления чата', 'error');
                 }
-            } catch (err) {
-                console.error('[deleteChat] error:', err);
-                showToast('Ошибка удаления чата', 'error');
-            }
-        }
-
-        function resetEditChatState() {
-            editChatState = {
-                chatId: null,
-                chat: null,
-                participants: [],
-                availableUsers: [],
-                pendingAdditions: new Set(),
-                filter: ''
-            };
-
-            if (currentParticipantsList) {
-                currentParticipantsList.innerHTML = '<p class="chat-participants-empty">Выберите чат для редактирования</p>';
             }
 
-            if (availableParticipantsList) {
-                availableParticipantsList.innerHTML = '<p class="chat-participants-empty">Нет доступных пользователей</p>';
+            function resetEditChatState() {
+                editChatState = {
+                    chatId: null,
+                    chat: null,
+                    participants: [],
+                    availableUsers: [],
+                    pendingAdditions: new Set(),
+                    filter: ''
+                };
+
+                if (currentParticipantsList) {
+                    currentParticipantsList.innerHTML = '<p class="chat-participants-empty">Выберите чат для редактирования</p>';
+                }
+
+                if (availableParticipantsList) {
+                    availableParticipantsList.innerHTML = '<p class="chat-participants-empty">Нет доступных пользователей</p>';
+                }
+
+                if (editParticipantsSearchInput) {
+                    editParticipantsSearchInput.value = '';
+                }
+
+                if (editChatNameInput) {
+                    editChatNameInput.value = '';
+                }
+
+                if (editChatIdInput) {
+                    editChatIdInput.value = '';
+                }
             }
 
-            if (editParticipantsSearchInput) {
-                editParticipantsSearchInput.value = '';
+            function closeEditChatModal() {
+                if (editChatModal) {
+                    editChatModal.classList.remove('show');
+                    editChatModal.style.display = 'none';
+                    restoreModalFocus(editChatModal);
+                }
+                resetEditChatState();
             }
 
-            if (editChatNameInput) {
-                editChatNameInput.value = '';
-            }
+            async function ensureUsersCacheLoaded() {
+                if (usersCache.length > 0) {
+                    return usersCache;
+                }
 
-            if (editChatIdInput) {
-                editChatIdInput.value = '';
-            }
-        }
+                try {
+                    const res = await fetch(`${API_URL}/users`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!res.ok) {
+                        throw new Error(`Status ${res.status}`);
+                    }
+                    const data = await res.json();
+                    usersCache = Array.isArray(data.users) ? data.users : [];
+                } catch (error) {
+                    console.error('[ensureUsersCacheLoaded] error:', error);
+                    usersCache = [];
+                }
 
-        function closeEditChatModal() {
-            if (editChatModal) {
-                editChatModal.classList.remove('show');
-                editChatModal.style.display = 'none';
-                restoreModalFocus(editChatModal);
-            }
-            resetEditChatState();
-        }
-
-        async function ensureUsersCacheLoaded() {
-            if (usersCache.length > 0) {
                 return usersCache;
             }
 
-            try {
-                const res = await fetch(`${API_URL}/users`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!res.ok) {
-                    throw new Error(`Status ${res.status}`);
+            function applyChatHeaderState() {
+                const chat = editChatState.chat || null;
+                if (editChatNameInput) {
+                    editChatNameInput.value = chat && chat.name ? chat.name : '';
                 }
-                const data = await res.json();
-                usersCache = Array.isArray(data.users) ? data.users : [];
-            } catch (error) {
-                console.error('[ensureUsersCacheLoaded] error:', error);
-                usersCache = [];
-            }
 
-            return usersCache;
-        }
+                if (editChatTypeSelect) {
+                    const type = chat && chat.type ? chat.type : 'group';
+                    editChatTypeSelect.value = type;
+                }
 
-        function applyChatHeaderState() {
-            const chat = editChatState.chat || null;
-            if (editChatNameInput) {
-                editChatNameInput.value = chat && chat.name ? chat.name : '';
-            }
-
-            if (editChatTypeSelect) {
-                const type = chat && chat.type ? chat.type : 'group';
-                editChatTypeSelect.value = type;
-            }
-
-            if (editChatDepartmentGroup) {
-                if (chat && chat.type === 'department') {
-                    editChatDepartmentGroup.style.display = '';
-                    if (editChatDepartmentInput) {
-                        editChatDepartmentInput.value = chat && chat.department ? chat.department : '';
-                    }
-                } else {
-                    editChatDepartmentGroup.style.display = 'none';
-                    if (editChatDepartmentInput) {
-                        editChatDepartmentInput.value = '';
+                if (editChatDepartmentGroup) {
+                    if (chat && chat.type === 'department') {
+                        editChatDepartmentGroup.style.display = '';
+                        if (editChatDepartmentInput) {
+                            editChatDepartmentInput.value = chat && chat.department ? chat.department : '';
+                        }
+                    } else {
+                        editChatDepartmentGroup.style.display = 'none';
+                        if (editChatDepartmentInput) {
+                            editChatDepartmentInput.value = '';
+                        }
                     }
                 }
             }
-        }
 
-        function refreshEditChatAvailableUsers() {
-            const participantIds = new Set(editChatState.participants.map(p => p.id));
-            editChatState.availableUsers = usersCache.filter(user => !participantIds.has(user.id));
-        }
-
-        function renderCurrentParticipants() {
-            if (!currentParticipantsList) {
-                return;
+            function refreshEditChatAvailableUsers() {
+                const participantIds = new Set(editChatState.participants.map(p => p.id));
+                editChatState.availableUsers = usersCache.filter(user => !participantIds.has(user.id));
             }
 
-            if (!editChatState.participants.length) {
-                currentParticipantsList.innerHTML = '<p class="chat-participants-empty">Нет участников</p>';
-                return;
-            }
+            function renderCurrentParticipants() {
+                if (!currentParticipantsList) {
+                    return;
+                }
 
-            const currentUserId = currentUser ? currentUser.id : undefined;
+                if (!editChatState.participants.length) {
+                    currentParticipantsList.innerHTML = '<p class="chat-participants-empty">Нет участников</p>';
+                    return;
+                }
 
-            currentParticipantsList.innerHTML = editChatState.participants.map(participant => {
-                const roleLabel = ROLE_LABELS[participant.user_role] || participant.user_role || '—';
-                const info = [participant.username, roleLabel].filter(Boolean).join(' • ');
-                const disableRemoval = participant.id === currentUserId;
-                const actions = disableRemoval
-                    ? '<span class="chat-participant-badge">Вы</span>'
-                    : `<button type="button" class="btn btn-sm btn-danger" onclick="removeParticipantFromChat(${editChatState.chatId}, ${participant.id})">Удалить</button>`;
+                const currentUserId = currentUser ? currentUser.id : undefined;
 
-                return `
-                    <div class="chat-participant-item">
-                        <div class="chat-participant-details">
-                            <span class="chat-participant-name">${escapeHtml(participant.name || participant.username || 'Без имени')}</span>
-                            <span class="chat-participant-meta">${escapeHtml(info)}</span>
+                currentParticipantsList.innerHTML = editChatState.participants.map(participant => {
+                    const roleLabel = ROLE_LABELS[participant.user_role] || participant.user_role || '—';
+                    const info = [participant.username, roleLabel].filter(Boolean).join(' • ');
+                    const disableRemoval = participant.id === currentUserId;
+                    const actions = disableRemoval
+                        ? '<span class="chat-participant-badge">Вы</span>'
+                        : `<button type="button" class="btn btn-sm btn-danger" onclick="removeParticipantFromChat(${editChatState.chatId}, ${participant.id})">Удалить</button>`;
+
+                    return `
+                        <div class="chat-participant-item">
+                            <div class="chat-participant-details">
+                                <span class="chat-participant-name">${escapeHtml(participant.name || participant.username || 'Без имени')}</span>
+                                <span class="chat-participant-meta">${escapeHtml(info)}</span>
+                            </div>
+                            <div class="chat-participant-actions">${actions}</div>
                         </div>
-                        <div class="chat-participant-actions">${actions}</div>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
         }
 
         function renderAvailableParticipants() {
