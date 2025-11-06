@@ -168,7 +168,12 @@ const sendMessage = async (req, res) => {
         if (!normalizedContent && !normalizedFileId) {
             return res.status(400).json({
                 error: 'Message content or file is required',
-                code: 'EMPTY_MESSAGE'
+                code: 'EMPTY_MESSAGE',
+                debug: {
+                    receivedContent: content,
+                    receivedFileId: fileId,
+                    bodyKeys: Object.keys(req.body)
+                }
             });
         }
 
