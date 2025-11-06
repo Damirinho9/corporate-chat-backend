@@ -1830,7 +1830,10 @@ async function loadChats() {
                 }
 
                 if (!response.ok) {
-                    throw new Error(`Failed with status ${response.status}`);
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('[loadDeletionHistory] Error response:', errorData);
+                    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Ошибка ${response.status}: ${errorData.error || 'Не удалось загрузить историю'}</td></tr>`;
+                    return;
                 }
 
                 const data = await response.json();
@@ -3274,10 +3277,13 @@ setupModalAccessibility();
                 });
 
                 if (!res.ok) {
-                    throw new Error('Failed to load permissions');
+                    const errorData = await res.json().catch(() => ({}));
+                    console.error('[loadPermissions] Error:', res.status, errorData);
+                    throw new Error(`Failed to load permissions: ${errorData.error || res.statusText}`);
                 }
 
                 permissionsData = await res.json();
+                console.log('[loadPermissions] Received data:', permissionsData);
                 renderPermissionsMatrix(permissionsData);
 
                 // Load general permissions
@@ -3290,6 +3296,13 @@ setupModalAccessibility();
         }
 
         function renderPermissionsMatrix(data) {
+            if (!data || !data.matrix || !data.roles) {
+                console.error('[renderPermissionsMatrix] Invalid data:', data);
+                document.getElementById('permissionsMatrix').innerHTML =
+                    '<p style="color: #f56565; text-align: center;">Ошибка: данные не получены</p>';
+                return;
+            }
+
             const { matrix, roles } = data;
             const roleLabels = {
                 'admin': 'Админ',
