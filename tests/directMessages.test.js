@@ -83,6 +83,24 @@ function createMockResponse() {
             throw new Error('Пользователь не привязан к ожидаемому отделу');
         }
 
+        console.log('🔍 Проверка выдачи исходных паролей для администратора...');
+        const listReq = { user: { id: admin.id, role: 'admin' } };
+        const listRes = createMockResponse();
+        await userController.getAllUsers(listReq, listRes);
+
+        if (listRes.statusCode !== 200 || !Array.isArray(listRes.body?.users)) {
+            throw new Error(`getAllUsers вернул неожиданный ответ (статус ${listRes.statusCode})`);
+        }
+
+        const createdUserEntry = listRes.body.users.find(user => user.username === 'ivan.petrov');
+        if (!createdUserEntry) {
+            throw new Error('Созданный пользователь отсутствует в списке пользователей для администратора');
+        }
+
+        if (createdUserEntry.initial_password !== generatedPassword) {
+            throw new Error('Администратор не видит исходный пароль созданного пользователя');
+        }
+
         const salesChat = await query("SELECT id FROM chats WHERE type = 'department' AND department = $1", ['Sales']);
         const salesChatId = salesChat.rows[0]?.id;
         if (!salesChatId) {

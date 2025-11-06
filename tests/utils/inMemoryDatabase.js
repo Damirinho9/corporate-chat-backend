@@ -86,6 +86,28 @@ class InMemoryDatabase {
             return { rows: user ? [{ id: user.id, username: user.username, name: user.name }] : [], rowCount: user ? 1 : 0 };
         }
 
+        if (normalized.startsWith('SELECT id, username, name, role, department, initial_password, is_active, created_at, last_seen FROM users ORDER BY created_at DESC')) {
+            const users = [...this.data.users]
+                .sort((a, b) => {
+                    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                    return dateB - dateA;
+                })
+                .map(user => ({
+                    id: user.id,
+                    username: user.username,
+                    name: user.name,
+                    role: user.role,
+                    department: user.department,
+                    initial_password: user.initial_password || null,
+                    is_active: user.is_active !== false,
+                    created_at: user.created_at || null,
+                    last_seen: user.last_seen || null
+                }));
+
+            return { rows: users, rowCount: users.length };
+        }
+
         if (normalized.startsWith('SELECT id, username, name, role, department, initial_password, is_active, created_at, last_seen FROM users WHERE id =')) {
             const id = toInt(params[0]);
             const user = this.data.users.find(u => u.id === id);
