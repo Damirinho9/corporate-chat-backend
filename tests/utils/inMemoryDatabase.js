@@ -59,6 +59,15 @@ class InMemoryDatabase {
             return { rows: user ? [{ id: user.id }] : [], rowCount: user ? 1 : 0 };
         }
 
+        if (normalized.startsWith('SELECT id, department FROM users WHERE username =')) {
+            const username = params[0];
+            const user = this.data.users.find(u => u.username === username);
+            return {
+                rows: user ? [{ id: user.id, department: user.department || null }] : [],
+                rowCount: user ? 1 : 0
+            };
+        }
+
         if (normalized.startsWith("SELECT id FROM chats WHERE type = 'department' AND department =")) {
             const department = params[0];
             const chat = this.data.chats.find(c => c.type === 'department' && c.department === department);

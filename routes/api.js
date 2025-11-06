@@ -42,7 +42,7 @@ router.get('/chats/available-recipients', authenticateToken, getAvailableRecipie
 // ==================== AUTH ROUTES ====================
 router.post('/auth/register',
     authenticateToken,
-    requireAdmin,
+    requireAdminOrRop,
     [
         body('username').trim().isLength({ min: 3, max: 50 }),
         body('password').optional({ nullable: true }).isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),

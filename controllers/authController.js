@@ -15,7 +15,7 @@ function generateSecurePassword() {
     return password;
 }
 
-// Register new user (admin only)
+// Register new user (admin or ROP)
 const register = async (req, res) => {
     try {
         const { username, password, name, role, department } = req.body;
@@ -35,14 +35,77 @@ const register = async (req, res) => {
             });
         }
 
+        const actor = req.user || {};
+        const actorRole = actor.role;
+        const actorDepartment = actor.department;
+        const isAdmin = actorRole === 'admin';
+        const isRop = actorRole === 'rop';
+
+        if (!isAdmin && !isRop) {
+            return res.status(403).json({
+                error: 'Only admins or ROPs can create users',
+                code: 'CREATE_USER_FORBIDDEN'
+            });
+        }
+
         const normalizedRole = String(role).toLowerCase();
-        const trimmedDepartment = department ? String(department).trim() : null;
+
+        if (!['admin', 'assistant', 'rop', 'operator', 'employee'].includes(normalizedRole)) {
+            return res.status(400).json({
+                error: 'Unsupported role',
+                code: 'INVALID_ROLE'
+            });
+        }
+
+        let trimmedDepartment = department ? String(department).trim() : null;
+
+        if (!isAdmin) {
+            // ROP-specific restrictions
+            const ropAllowedRoles = ['operator', 'employee'];
+
+            if (!ropAllowedRoles.includes(normalizedRole)) {
+                return res.status(403).json({
+                    error: 'ROPs can only create operators or employees',
+                    code: 'ROP_ROLE_RESTRICTED'
+                });
+            }
+
+            if (!actorDepartment) {
+                return res.status(400).json({
+                    error: 'Department is required for ROP actions',
+                    code: 'ROP_DEPARTMENT_MISSING'
+                });
+            }
+
+            if (trimmedDepartment && trimmedDepartment !== actorDepartment) {
+                return res.status(403).json({
+                    error: 'ROPs can only create users in their own department',
+                    code: 'ROP_FOREIGN_DEPARTMENT'
+                });
+            }
+
+            trimmedDepartment = actorDepartment;
+        } else if (normalizedRole === 'rop' && !trimmedDepartment) {
+            // Admins creating a ROP must specify department
+            return res.status(400).json({
+                error: 'Department is required for this role',
+                code: 'DEPARTMENT_REQUIRED'
+            });
+        }
+
         const needsDepartment = ['rop', 'operator', 'employee'].includes(normalizedRole);
 
         if (needsDepartment && !trimmedDepartment) {
             return res.status(400).json({
                 error: 'Department is required for this role',
                 code: 'DEPARTMENT_REQUIRED'
+            });
+        }
+
+        if (!isAdmin && ['admin', 'rop'].includes(normalizedRole)) {
+            return res.status(403).json({
+                error: 'Insufficient permissions to assign this role',
+                code: 'ROLE_NOT_ALLOWED'
             });
         }
 

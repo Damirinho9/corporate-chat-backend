@@ -114,8 +114,96 @@ function createMockResponse() {
 
         console.log(`✅ Пользователь создан с паролем ${generatedPassword}`);
 
+        console.log('🧪 Проверка создания пользователя РОПом только в своём отделе...');
+        const ropSalesRow = (await query('SELECT id, department FROM users WHERE username = $1', ['rop_sales'])).rows[0];
+        const ropCreateReq = {
+            body: {
+                username: 'sales.new.operator',
+                name: 'Новый оператор отдела продаж',
+                role: 'operator'
+            },
+            user: {
+                id: ropSalesRow.id,
+                role: 'rop',
+                department: ropSalesRow.department
+            }
+        };
+        const ropCreateRes = createMockResponse();
+        await authController.register(ropCreateReq, ropCreateRes);
+
+        if (ropCreateRes.statusCode !== 201) {
+            throw new Error(`РОП не смог создать пользователя (статус ${ropCreateRes.statusCode})`);
+        }
+
+        const ropCreatedUser = (await query('SELECT id, department FROM users WHERE username = $1', ['sales.new.operator'])).rows[0];
+        if (!ropCreatedUser) {
+            throw new Error('РОПом созданный пользователь отсутствует в базе данных');
+        }
+
+        if (ropCreatedUser.department !== ropSalesRow.department) {
+            throw new Error('Пользователь создан РОПом не в его отделе');
+        }
+
+        const ropDeptChat = await query("SELECT id FROM chats WHERE type = 'department' AND department = $1", [ropSalesRow.department]);
+        const ropDeptChatId = ropDeptChat.rows[0]?.id;
+        if (!ropDeptChatId) {
+            throw new Error('Чат отдела РОПа не найден');
+        }
+
+        const ropMembership = await query('SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2', [ropDeptChatId, ropCreatedUser.id]);
+
+        if (ropMembership.rowCount === 0) {
+            throw new Error('Пользователь создан РОПом не добавлен в чат своего отдела');
+        }
+
+        console.log('🚫 Проверка запрета создания пользователя в чужом отделе...');
+        const ropForeignReq = {
+            body: {
+                username: 'marketing.hijack',
+                name: 'Чужой оператор',
+                role: 'operator',
+                department: 'Marketing'
+            },
+            user: {
+                id: ropSalesRow.id,
+                role: 'rop',
+                department: ropSalesRow.department
+            }
+        };
+        const ropForeignRes = createMockResponse();
+        await authController.register(ropForeignReq, ropForeignRes);
+
+        if (ropForeignRes.statusCode !== 403) {
+            throw new Error(`Ожидался запрет создания в чужом отделе, получен статус ${ropForeignRes.statusCode}`);
+        }
+
+        const foreignExists = await query('SELECT id FROM users WHERE username = $1', ['marketing.hijack']);
+        if (foreignExists.rowCount > 0) {
+            throw new Error('Пользователь был создан в чужом отделе несмотря на запрет');
+        }
+
+        console.log('🚫 Проверка запрета на создание администраторов РОПом...');
+        const ropAdminReq = {
+            body: {
+                username: 'should.fail',
+                name: 'Недопустимый пользователь',
+                role: 'admin'
+            },
+            user: {
+                id: ropSalesRow.id,
+                role: 'rop',
+                department: ropSalesRow.department
+            }
+        };
+        const ropAdminRes = createMockResponse();
+        await authController.register(ropAdminReq, ropAdminRes);
+
+        if (ropAdminRes.statusCode !== 403) {
+            throw new Error(`РОП смог создать администратора (статус ${ropAdminRes.statusCode})`);
+        }
+
         const operator = (await query('SELECT id FROM users WHERE username = $1', ['operator1'])).rows[0];
-        const ropSales = (await query('SELECT id FROM users WHERE username = $1', ['rop_sales'])).rows[0];
+        const ropSales = ropSalesRow;
 
         console.log('🔒 Проверка отсутствия выдачи исходных паролей для не-админов...');
         const deptReq = {

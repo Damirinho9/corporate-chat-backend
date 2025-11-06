@@ -45,8 +45,8 @@ router.get('/users', authenticateToken, requireAdminOrRop, async (req, res) => {
     }
 });
 
-// Create user (admin only)
-router.post('/auth/register', authenticateToken, requireAdmin, async (req, res) => {
+// Create user (admin or ROP)
+router.post('/auth/register', authenticateToken, requireAdminOrRop, async (req, res) => {
     try {
         await authController.register(req, res);
     } catch (error) {
