@@ -2314,13 +2314,13 @@ async function loadChats() {
                         await loadDepartments();
                     }
                 } else {
-                    showToast(result.error || 'Не удалось сбросить пароль', 'error');
+                    showToast(result.error || 'Failed to create user', 'error');
                 }
             } catch (error) {
-                console.error('[resetUserPassword] error:', error);
-                showToast('Не удалось сбросить пароль', 'error');
+                console.error('Create user error:', error);
+                showToast('Ошибка создания пользователя', 'error');
             }
-        }
+        });
 
         if (editDepartmentSelect) {
             editDepartmentSelect.addEventListener('change', () => {
