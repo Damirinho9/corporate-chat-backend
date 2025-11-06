@@ -1,16 +1,39 @@
 const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to match seed.js
-const { query, transaction } = require('../config/database');
+const { query } = require('../config/database');
+
+const ROP_MANAGEABLE_ROLES = new Set(['operator', 'employee']);
+
+function sanitizeInitialPassword(payload, includeSecret) {
+    if (includeSecret) {
+        return payload;
+    }
+
+    if (!payload) {
+        return payload;
+    }
+
+    if (Array.isArray(payload)) {
+        return payload.map((item) => {
+            const { initial_password, ...rest } = item;
+            return rest;
+        });
+    }
+
+    const { initial_password, ...rest } = payload;
+    return rest;
+}
 
 // Get all users (admin only)
 const getAllUsers = async (req, res) => {
     try {
         const result = await query(
-            `SELECT id, username, name, role, department, is_active, created_at, last_seen
+            `SELECT id, username, name, role, department, initial_password, is_active, created_at, last_seen
              FROM users
              ORDER BY created_at DESC`
         );
 
-        res.json({ users: result.rows });
+        const includeSecret = req.user?.role === 'admin';
+        res.json({ users: sanitizeInitialPassword(result.rows, includeSecret) });
     } catch (error) {
         console.error('Get all users error:', error);
         res.status(500).json({ 
@@ -26,7 +49,7 @@ const getUserById = async (req, res) => {
         const { userId } = req.params;
 
         const result = await query(
-            `SELECT id, username, name, role, department, is_active, created_at, last_seen
+            `SELECT id, username, name, role, department, initial_password, is_active, created_at, last_seen
              FROM users WHERE id = $1`,
             [userId]
         );
@@ -38,7 +61,8 @@ const getUserById = async (req, res) => {
             });
         }
 
-        res.json({ user: result.rows[0] });
+        const includeSecret = req.user?.role === 'admin';
+        res.json({ user: sanitizeInitialPassword(result.rows[0], includeSecret) });
     } catch (error) {
         console.error('Get user error:', error);
         res.status(500).json({ 
@@ -48,56 +72,200 @@ const getUserById = async (req, res) => {
     }
 };
 
-// Update user (admin only)
+// Update user (admin or ROP with restrictions)
 const updateUser = async (req, res) => {
     try {
         const { userId } = req.params;
-        const { name, role, department, isActive } = req.body;
+        const { username, name, role, department, isActive } = req.body;
 
         // Check if user exists
         const userCheck = await query(
-            'SELECT id FROM users WHERE id = $1',
+            'SELECT id, username, role, department, is_active FROM users WHERE id = $1',
             [userId]
         );
 
         if (userCheck.rows.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 error: 'User not found',
                 code: 'USER_NOT_FOUND'
             });
         }
 
-        // Build update query dynamically
+        const currentUser = userCheck.rows[0];
+        const actor = req.user || {};
+        const actorRole = actor.role;
+        const actorDepartment = actor.department || null;
+        const isAdmin = actorRole === 'admin';
+        const isRop = actorRole === 'rop';
+        const manageableRoles = ROP_MANAGEABLE_ROLES;
+        const isSelf = actor && typeof actor.id !== 'undefined'
+            ? Number(userId) === Number(actor.id)
+            : false;
+
+        if (!isAdmin && !isRop) {
+            return res.status(403).json({
+                error: 'Insufficient permissions to update user',
+                code: 'UPDATE_USER_FORBIDDEN'
+            });
+        }
+
+        if (isRop) {
+            if (!actorDepartment) {
+                return res.status(400).json({
+                    error: 'Department is required for ROP actions',
+                    code: 'ROP_DEPARTMENT_MISSING'
+                });
+            }
+
+            if (currentUser.department !== actorDepartment) {
+                return res.status(403).json({
+                    error: 'ROPs can only manage users in their own department',
+                    code: 'ROP_FOREIGN_USER'
+                });
+            }
+
+            if (!isSelf && !manageableRoles.has(currentUser.role)) {
+                return res.status(403).json({
+                    error: 'ROPs can only manage operators or employees',
+                    code: 'ROP_ROLE_RESTRICTED'
+                });
+            }
+
+            if (role !== undefined) {
+                const requestedRole = String(role).toLowerCase();
+                if (isSelf) {
+                    if (requestedRole !== currentUser.role) {
+                        return res.status(403).json({
+                            error: 'ROPs cannot change their own role',
+                            code: 'ROLE_NOT_ALLOWED'
+                        });
+                    }
+                } else if (!manageableRoles.has(requestedRole)) {
+                    return res.status(403).json({
+                        error: 'ROPs can only assign operator or employee roles',
+                        code: 'ROP_ROLE_RESTRICTED'
+                    });
+                }
+            }
+
+            if (department !== undefined) {
+                if (department === null || String(department).trim() === '') {
+                    return res.status(400).json({
+                        error: 'Department is required for this role',
+                        code: 'DEPARTMENT_REQUIRED'
+                    });
+                }
+
+                const trimmedDepartment = String(department).trim();
+                if (trimmedDepartment !== actorDepartment) {
+                    return res.status(403).json({
+                        error: 'ROPs can only assign their own department',
+                        code: 'ROP_FOREIGN_DEPARTMENT'
+                    });
+                }
+            }
+        }
+
         const updates = [];
         const values = [];
         let paramCount = 1;
 
+        let normalizedUsername;
+        if (username !== undefined) {
+            normalizedUsername = String(username).trim();
+            if (!normalizedUsername) {
+                return res.status(400).json({
+                    error: 'Username cannot be empty',
+                    code: 'INVALID_USERNAME'
+                });
+            }
+
+            if (normalizedUsername !== currentUser.username) {
+                const existing = await query(
+                    'SELECT id FROM users WHERE username = $1 AND id <> $2',
+                    [normalizedUsername, userId]
+                );
+
+                if (existing.rows.length > 0) {
+                    return res.status(409).json({
+                        error: 'Username already exists',
+                        code: 'USERNAME_EXISTS'
+                    });
+                }
+
+                updates.push(`username = $${paramCount}`);
+                values.push(normalizedUsername);
+                paramCount++;
+            }
+        }
+
+        let normalizedRole = currentUser.role;
+        if (role !== undefined) {
+            const normalizedRequestedRole = String(role).toLowerCase();
+            const allowedRoles = ['admin', 'assistant', 'rop', 'operator', 'employee'];
+            if (!allowedRoles.includes(normalizedRequestedRole)) {
+                return res.status(400).json({
+                    error: 'Invalid role',
+                    code: 'INVALID_ROLE'
+                });
+            }
+
+            normalizedRole = normalizedRequestedRole;
+            updates.push(`role = $${paramCount}`);
+            values.push(normalizedRole);
+            paramCount++;
+        }
+
+        let processedDepartment = currentUser.department;
+        if (department !== undefined) {
+            if (department === null || department === '') {
+                processedDepartment = null;
+            } else {
+                processedDepartment = String(department).trim();
+            }
+
+            if (isRop) {
+                processedDepartment = actorDepartment;
+            }
+
+            updates.push(`department = $${paramCount}`);
+            values.push(processedDepartment);
+            paramCount++;
+        }
+
+        const finalDepartment = processedDepartment;
+        const requiresDepartment = ['rop', 'operator', 'employee'].includes(normalizedRole);
+        if (requiresDepartment && !finalDepartment) {
+            return res.status(400).json({
+                error: 'Department is required for this role',
+                code: 'DEPARTMENT_REQUIRED'
+            });
+        }
+
+        if (normalizedRole === 'admin' && finalDepartment) {
+            return res.status(400).json({
+                error: 'Admins should not have a department',
+                code: 'ADMIN_DEPARTMENT_ERROR'
+            });
+        }
+
+        // Build update query dynamically
         if (name !== undefined) {
             updates.push(`name = $${paramCount}`);
             values.push(name);
             paramCount++;
         }
 
-        if (role !== undefined) {
-            updates.push(`role = $${paramCount}`);
-            values.push(role);
-            paramCount++;
-        }
-
-        if (department !== undefined) {
-            updates.push(`department = $${paramCount}`);
-            values.push(department);
-            paramCount++;
-        }
-
         if (isActive !== undefined) {
+            const normalizedActive =
+                typeof isActive === 'string' ? isActive === 'true' : Boolean(isActive);
             updates.push(`is_active = $${paramCount}`);
-            values.push(isActive);
+            values.push(normalizedActive);
             paramCount++;
         }
 
         if (updates.length === 0) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 error: 'No fields to update',
                 code: 'NO_UPDATE_FIELDS'
             });
@@ -108,47 +276,87 @@ const updateUser = async (req, res) => {
         const result = await query(
             `UPDATE users SET ${updates.join(', ')}
              WHERE id = $${paramCount}
-             RETURNING id, username, name, role, department, is_active`,
+             RETURNING id, username, name, role, department, initial_password, is_active`,
             values
         );
 
+        const updatedUser = result.rows[0];
+        const includeSecret = isAdmin;
+
         res.json({
             message: 'User updated successfully',
-            user: result.rows[0]
+            user: sanitizeInitialPassword(updatedUser, includeSecret)
         });
     } catch (error) {
         console.error('Update user error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to update user',
             code: 'UPDATE_USER_ERROR'
         });
     }
 };
 
-// Delete user (admin only)
+// Delete user (admin or ROP with restrictions)
 const deleteUser = async (req, res) => {
     try {
         const { userId } = req.params;
 
         // Check if user exists
         const userCheck = await query(
-            'SELECT id FROM users WHERE id = $1',
+            'SELECT id, role, department FROM users WHERE id = $1',
             [userId]
         );
 
         if (userCheck.rows.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 error: 'User not found',
                 code: 'USER_NOT_FOUND'
             });
         }
 
         // Prevent deleting yourself
-        if (parseInt(userId) === req.user.id) {
-            return res.status(400).json({ 
+        if (parseInt(userId, 10) === req.user.id) {
+            return res.status(400).json({
                 error: 'Cannot delete your own account',
                 code: 'CANNOT_DELETE_SELF'
             });
+        }
+
+        const actor = req.user || {};
+        const actorRole = actor.role;
+        const actorDepartment = actor.department || null;
+        const isAdmin = actorRole === 'admin';
+        const isRop = actorRole === 'rop';
+        const targetUser = userCheck.rows[0];
+
+        if (!isAdmin && !isRop) {
+            return res.status(403).json({
+                error: 'Insufficient permissions to delete user',
+                code: 'DELETE_USER_FORBIDDEN'
+            });
+        }
+
+        if (isRop) {
+            if (!actorDepartment) {
+                return res.status(400).json({
+                    error: 'Department is required for ROP actions',
+                    code: 'ROP_DEPARTMENT_MISSING'
+                });
+            }
+
+            if (targetUser.department !== actorDepartment) {
+                return res.status(403).json({
+                    error: 'ROPs can only manage users in their own department',
+                    code: 'ROP_FOREIGN_USER'
+                });
+            }
+
+            if (!ROP_MANAGEABLE_ROLES.has(targetUser.role)) {
+                return res.status(403).json({
+                    error: 'ROPs can only manage operators or employees',
+                    code: 'ROP_ROLE_RESTRICTED'
+                });
+            }
         }
 
         // Delete user (cascade will handle messages and chat participants)
@@ -157,7 +365,7 @@ const deleteUser = async (req, res) => {
         res.json({ message: 'User deleted successfully' });
     } catch (error) {
         console.error('Delete user error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to delete user',
             code: 'DELETE_USER_ERROR'
         });
@@ -196,8 +404,8 @@ const resetPassword = async (req, res) => {
 
         // Update password
         await query(
-            'UPDATE users SET password_hash = $1 WHERE id = $2',
-            [passwordHash, userId]
+            'UPDATE users SET password_hash = $1, initial_password = $2 WHERE id = $3',
+            [passwordHash, newPassword, userId]
         );
 
         res.json({ message: 'Password reset successfully' });
@@ -216,14 +424,15 @@ const getUsersByDepartment = async (req, res) => {
         const { department } = req.params;
 
         const result = await query(
-            `SELECT id, username, name, role, department, is_active, last_seen
+            `SELECT id, username, name, role, department, initial_password, is_active, last_seen
              FROM users
              WHERE department = $1 AND is_active = true
              ORDER BY role, name`,
             [department]
         );
 
-        res.json({ users: result.rows });
+        const includeSecret = req.user?.role === 'admin';
+        res.json({ users: sanitizeInitialPassword(result.rows, includeSecret) });
     } catch (error) {
         console.error('Get department users error:', error);
         res.status(500).json({ 
@@ -238,22 +447,23 @@ const getUsersByRole = async (req, res) => {
     try {
         const { role } = req.params;
 
-        if (!['admin', 'rop', 'employee'].includes(role)) {
-            return res.status(400).json({ 
+        if (!['admin', 'assistant', 'rop', 'operator', 'employee'].includes(role)) {
+            return res.status(400).json({
                 error: 'Invalid role',
                 code: 'INVALID_ROLE'
             });
         }
 
         const result = await query(
-            `SELECT id, username, name, role, department, is_active, last_seen
+            `SELECT id, username, name, role, department, initial_password, is_active, last_seen
              FROM users
              WHERE role = $1 AND is_active = true
              ORDER BY name`,
             [role]
         );
 
-        res.json({ users: result.rows });
+        const includeSecret = req.user?.role === 'admin';
+        res.json({ users: sanitizeInitialPassword(result.rows, includeSecret) });
     } catch (error) {
         console.error('Get role users error:', error);
         res.status(500).json({ 
