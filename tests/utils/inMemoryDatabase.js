@@ -294,6 +294,13 @@ class InMemoryDatabase {
             return { rows: [], rowCount: file ? 1 : 0 };
         }
 
+        if (normalized.startsWith('DELETE FROM messages WHERE id =')) {
+            const messageId = toInt(params[0]);
+            const initialLength = this.data.messages.length;
+            this.data.messages = this.data.messages.filter(m => m.id !== messageId);
+            return { rows: [], rowCount: initialLength !== this.data.messages.length ? 1 : 0 };
+        }
+
         if (normalized.startsWith('DELETE FROM users WHERE id =')) {
             const userId = toInt(params[0]);
             const initialLength = this.data.users.length;
@@ -326,6 +333,63 @@ class InMemoryDatabase {
                 mentions: null
             }));
             return { rows: result.reverse(), rowCount: result.length };
+        }
+
+        if (normalized.startsWith("SELECT m.user_id, m.file_id, m.chat_id, c.type AS chat_type, c.department AS chat_department FROM messages m JOIN chats c ON m.chat_id = c.id WHERE m.id =")) {
+            const messageId = toInt(params[0]);
+            const message = this.data.messages.find(m => m.id === messageId);
+            if (!message) {
+                return { rows: [], rowCount: 0 };
+            }
+
+            const chat = this.data.chats.find(c => c.id === message.chat_id) || {};
+            return {
+                rows: [{
+                    user_id: message.user_id,
+                    file_id: message.file_id || null,
+                    chat_id: message.chat_id,
+                    chat_type: chat.type || null,
+                    chat_department: chat.department || null
+                }],
+                rowCount: 1
+            };
+        }
+
+        if (normalized.startsWith("SELECT m.id, m.user_id FROM messages m JOIN chats c ON m.chat_id = c.id WHERE c.type = 'department' AND c.department = $1 AND m.user_id <> $2 ORDER BY m.id LIMIT 1")) {
+            const department = params[0];
+            const excludeUserId = toInt(params[1]);
+            const matches = this.data.messages
+                .filter(m => {
+                    const chat = this.data.chats.find(c => c.id === m.chat_id);
+                    return chat && chat.type === 'department' && chat.department === department && m.user_id !== excludeUserId;
+                })
+                .sort((a, b) => a.id - b.id);
+
+            if (!matches.length) {
+                return { rows: [], rowCount: 0 };
+            }
+
+            const message = matches[0];
+            return {
+                rows: [{ id: message.id, user_id: message.user_id }],
+                rowCount: 1
+            };
+        }
+
+        if (normalized.startsWith("SELECT m.id FROM messages m JOIN chats c ON m.chat_id = c.id WHERE c.type = 'department' AND c.department <> $1 ORDER BY m.id LIMIT 1")) {
+            const department = params[0];
+            const matches = this.data.messages
+                .filter(m => {
+                    const chat = this.data.chats.find(c => c.id === m.chat_id);
+                    return chat && chat.type === 'department' && chat.department !== department;
+                })
+                .sort((a, b) => a.id - b.id);
+
+            if (!matches.length) {
+                return { rows: [], rowCount: 0 };
+            }
+
+            return { rows: [{ id: matches[0].id }], rowCount: 1 };
         }
 
         if (normalized.startsWith('SELECT id, user_id, chat_id, created_at, is_deleted FROM messages WHERE id =')) {
@@ -372,6 +436,12 @@ class InMemoryDatabase {
             };
 
             return { rows: [result], rowCount: 1 };
+        }
+
+        if (normalized.startsWith('SELECT id FROM messages WHERE id =')) {
+            const messageId = toInt(params[0]);
+            const message = this.data.messages.find(m => m.id === messageId);
+            return { rows: message ? [{ id: message.id }] : [], rowCount: message ? 1 : 0 };
         }
 
         if (normalized.startsWith('SELECT m.id, m.content, m.created_at, m.user_id')) {

@@ -378,7 +378,15 @@ const deleteMessage = async (req, res) => {
 
         // Check ownership
         const messageCheck = await query(
-            'SELECT user_id, file_id FROM messages WHERE id = $1',
+            `SELECT
+                m.user_id,
+                m.file_id,
+                m.chat_id,
+                c.type AS chat_type,
+                c.department AS chat_department
+             FROM messages m
+             JOIN chats c ON m.chat_id = c.id
+             WHERE m.id = $1`,
             [messageId]
         );
 
@@ -389,8 +397,20 @@ const deleteMessage = async (req, res) => {
             });
         }
 
-        if (messageCheck.rows[0].user_id !== userId && req.user.role !== 'admin') {
-            return res.status(403).json({ 
+        const messageRow = messageCheck.rows[0];
+        const isOwner = messageRow.user_id === userId;
+        const isAdmin = req.user.role === 'admin';
+        let isDepartmentRop = false;
+
+        if (req.user.role === 'rop' && req.user.department) {
+            isDepartmentRop =
+                messageRow.chat_type === 'department' &&
+                messageRow.chat_department &&
+                messageRow.chat_department === req.user.department;
+        }
+
+        if (!isOwner && !isAdmin && !isDepartmentRop) {
+            return res.status(403).json({
                 error: 'Cannot delete this message',
                 code: 'DELETE_DENIED'
             });

@@ -497,6 +497,94 @@ function createMockResponse() {
             throw new Error('Последнее сообщение не содержит ожидаемый файл');
         }
 
+        console.log('🧹 Проверка удаления сообщений РОПом в своём отделе...');
+        const deptMessageCandidate = await query(
+            `SELECT m.id, m.user_id
+             FROM messages m
+             JOIN chats c ON m.chat_id = c.id
+             WHERE c.type = 'department'
+               AND c.department = $1
+               AND m.user_id <> $2
+             ORDER BY m.id
+             LIMIT 1`,
+            [ropSales.department, ropSales.id]
+        );
+
+        const deptChatLookup = await query(
+            "SELECT id FROM chats WHERE type = 'department' AND department = $1",
+            [ropSales.department]
+        );
+        const ropDepartmentChatId = deptChatLookup.rows[0]?.id;
+        if (!ropDepartmentChatId) {
+            throw new Error('Чат отдела РОПа не найден для проверки удаления сообщений');
+        }
+
+        let targetDeptMessage = deptMessageCandidate.rows[0];
+        if (!targetDeptMessage) {
+            const fallbackInsert = await query(
+                'INSERT INTO messages (chat_id, user_id, content) VALUES ($1, $2, $3) RETURNING id, user_id',
+                [ropDepartmentChatId, operator.id, 'Временное сообщение для проверки удаления РОПом']
+            );
+            targetDeptMessage = fallbackInsert.rows[0];
+        }
+
+        const ropDeleteMessageReq = {
+            params: { messageId: targetDeptMessage.id },
+            user: {
+                id: ropSales.id,
+                role: 'rop',
+                department: ropSales.department
+            }
+        };
+        const ropDeleteMessageRes = createMockResponse();
+        await messageController.deleteMessage(ropDeleteMessageReq, ropDeleteMessageRes);
+
+        if (ropDeleteMessageRes.statusCode !== 200) {
+            throw new Error(`РОП не смог удалить сообщение своего отдела (статус ${ropDeleteMessageRes.statusCode})`);
+        }
+
+        const verifyRopDeletion = await query('SELECT id FROM messages WHERE id = $1', [targetDeptMessage.id]);
+        if (verifyRopDeletion.rowCount !== 0) {
+            throw new Error('Сообщение отдела не было удалено РОПом');
+        }
+
+        console.log('🚫 Проверка запрета удаления сообщений чужого отдела РОПом...');
+        const foreignDeptMessage = await query(
+            `SELECT m.id
+             FROM messages m
+             JOIN chats c ON m.chat_id = c.id
+             WHERE c.type = 'department'
+               AND c.department <> $1
+             ORDER BY m.id
+             LIMIT 1`,
+            [ropSales.department]
+        );
+
+        const foreignMessage = foreignDeptMessage.rows[0];
+        if (!foreignMessage) {
+            throw new Error('Не найдено сообщение другого отдела для проверки удаления РОПом');
+        }
+
+        const ropMessageDeleteForeignReq = {
+            params: { messageId: foreignMessage.id },
+            user: {
+                id: ropSales.id,
+                role: 'rop',
+                department: ropSales.department
+            }
+        };
+        const ropMessageDeleteForeignRes = createMockResponse();
+        await messageController.deleteMessage(ropMessageDeleteForeignReq, ropMessageDeleteForeignRes);
+
+        if (ropMessageDeleteForeignRes.statusCode !== 403) {
+            throw new Error(`Ожидался запрет на удаление чужого отдела, получен статус ${ropMessageDeleteForeignRes.statusCode}`);
+        }
+
+        const verifyForeignStillExists = await query('SELECT id FROM messages WHERE id = $1', [foreignMessage.id]);
+        if (verifyForeignStillExists.rowCount === 0) {
+            throw new Error('Сообщение чужого отдела было удалено, несмотря на запрет');
+        }
+
         console.log('🎉 Автоматический тест прямых сообщений успешно пройден!');
         process.exit(0);
     } catch (error) {
