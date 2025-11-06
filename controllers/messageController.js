@@ -686,6 +686,7 @@ const searchMessages = async (req, res) => {
 };
 
 const getDeletionHistory = async (req, res) => {
+    console.log('[getDeletionHistory] Request received from user:', req.user.id, req.user.role);
     try {
         const { limit = 50, offset = 0, chatId } = req.query;
         const parsedLimitRaw = parseInt(limit, 10);
@@ -693,6 +694,8 @@ const getDeletionHistory = async (req, res) => {
         const parsedLimit = Number.isNaN(parsedLimitRaw) ? 50 : Math.min(Math.max(parsedLimitRaw, 1), 500);
         const parsedOffset = Number.isNaN(parsedOffsetRaw) ? 0 : Math.max(parsedOffsetRaw, 0);
         const parsedChatId = chatId ? Number(chatId) : null;
+
+        console.log('[getDeletionHistory] Params:', { parsedLimit, parsedOffset, parsedChatId });
 
         if (parsedChatId && Number.isNaN(parsedChatId)) {
             return res.status(400).json({
@@ -743,6 +746,9 @@ const getDeletionHistory = async (req, res) => {
         const offsetPlaceholder = placeholders();
         params.push(parsedOffset);
 
+        console.log('[getDeletionHistory] Query params:', params);
+        console.log('[getDeletionHistory] Where clauses:', whereClauses);
+
         const result = await query(
             `SELECT
                 h.id,
@@ -769,15 +775,18 @@ const getDeletionHistory = async (req, res) => {
             params
         );
 
+        console.log('[getDeletionHistory] Query result:', result.rowCount, 'rows');
         res.json({
             history: result.rows,
             count: result.rowCount
         });
     } catch (error) {
-        console.error('Get deletion history error:', error);
+        console.error('[getDeletionHistory] ERROR:', error);
+        console.error('[getDeletionHistory] Stack:', error.stack);
         res.status(500).json({
             error: 'Failed to fetch deletion history',
-            code: 'GET_DELETION_HISTORY_ERROR'
+            code: 'GET_DELETION_HISTORY_ERROR',
+            details: error.message
         });
     }
 };
