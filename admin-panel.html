@@ -1887,6 +1887,7 @@ async function loadChats() {
             const modal = document.getElementById('createUserModal');
             if (modal) {
                 modal.classList.add('show');
+                modal.style.display = 'flex';
             }
 
             if (fullNameInput) {
@@ -1898,6 +1899,7 @@ async function loadChats() {
             const modal = document.getElementById(modalId);
             if (modal) {
                 modal.classList.remove('show');
+                modal.style.display = 'none';
             }
 
             if (modalId === 'createUserModal' && createUserForm) {
@@ -2425,6 +2427,7 @@ async function showCreateChatModal() {
 
     const modal = document.getElementById('createChatModal');
     if (modal) {
+        modal.classList.add('show');
         modal.style.display = 'flex';
     }
 
@@ -2434,6 +2437,7 @@ async function showCreateChatModal() {
 function closeCreateChatModal() {
     const modal = document.getElementById('createChatModal');
     if (modal) {
+        modal.classList.remove('show');
         modal.style.display = 'none';
     }
 
@@ -2575,12 +2579,20 @@ async function createNewChat() {
 
 // ========== МОДАЛЬНОЕ ОКНО: СОЗДАТЬ ОТДЕЛ ==========
 async function showCreateDepartmentModal() {
-    document.getElementById('createDepartmentModal').style.display = 'flex';
+    const modal = document.getElementById('createDepartmentModal');
+    if (modal) {
+        modal.classList.add('show');
+        modal.style.display = 'flex';
+    }
     await loadHeadsForDepartment();
 }
 
 function closeCreateDepartmentModal() {
-    document.getElementById('createDepartmentModal').style.display = 'none';
+    const modal = document.getElementById('createDepartmentModal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+    }
     document.getElementById('newDeptName').value = '';
     document.getElementById('newDeptDescription').value = '';
     document.getElementById('newDeptHead').value = '';
@@ -2607,7 +2619,7 @@ async function createNewDepartment() {
     const name = document.getElementById('newDeptName').value.trim();
     const description = document.getElementById('newDeptDescription').value.trim();
     const headId = document.getElementById('newDeptHead').value;
-    
+
     if (!name) {
         alert('Введите название отдела');
         return;
@@ -2643,6 +2655,76 @@ async function createNewDepartment() {
         alert('Ошибка создания отдела');
     }
 }
+
+function isModalVisible(modal) {
+    if (!modal) {
+        return false;
+    }
+
+    if (modal.classList.contains('show')) {
+        return true;
+    }
+
+    const display = modal.style.display || '';
+    return display !== '' && display !== 'none';
+}
+
+function closeModalElement(modal) {
+    if (!modal) {
+        return;
+    }
+
+    switch (modal.id) {
+        case 'createUserModal':
+        case 'editUserModal':
+            closeModal(modal.id);
+            break;
+        case 'createChatModal':
+            closeCreateChatModal();
+            break;
+        case 'editChatModal':
+            closeEditChatModal();
+            break;
+        case 'createDepartmentModal':
+            closeCreateDepartmentModal();
+            break;
+        default:
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+            break;
+    }
+}
+
+function setupModalAccessibility() {
+    const modals = Array.from(document.querySelectorAll('.modal'));
+
+    modals.forEach((modal) => {
+        modal.setAttribute('role', modal.getAttribute('role') || 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModalElement(modal);
+            }
+        });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+            return;
+        }
+
+        const openModals = Array.from(document.querySelectorAll('.modal')).filter(isModalVisible);
+        if (!openModals.length) {
+            return;
+        }
+
+        event.preventDefault();
+        const topModal = openModals[openModals.length - 1];
+        closeModalElement(topModal);
+    });
+}
+
+setupModalAccessibility();
 
 
 
@@ -2701,6 +2783,7 @@ async function createNewDepartment() {
 
         function closeEditChatModal() {
             if (editChatModal) {
+                editChatModal.classList.remove('show');
                 editChatModal.style.display = 'none';
             }
             resetEditChatState();
@@ -2859,7 +2942,8 @@ async function createNewDepartment() {
             editChatState.chatId = numericId;
 
             if (editChatModal) {
-                editChatModal.style.display = 'flex';
+            editChatModal.classList.add('show');
+            editChatModal.style.display = 'flex';
             }
 
             if (currentParticipantsList) {

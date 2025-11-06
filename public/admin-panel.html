@@ -1887,6 +1887,7 @@ async function loadChats() {
             const modal = document.getElementById('createUserModal');
             if (modal) {
                 modal.classList.add('show');
+                modal.style.display = 'flex';
             }
 
             if (fullNameInput) {
@@ -1898,6 +1899,7 @@ async function loadChats() {
             const modal = document.getElementById(modalId);
             if (modal) {
                 modal.classList.remove('show');
+                modal.style.display = 'none';
             }
 
             if (modalId === 'createUserModal' && createUserForm) {
@@ -2361,6 +2363,110 @@ async function loadChats() {
             });
         }
 
+        if (editDepartmentSelect) {
+            editDepartmentSelect.addEventListener('change', () => {
+                editDepartmentSelect.dataset.lastValue = editDepartmentSelect.value;
+            });
+        }
+
+        if (editRoleSelect) {
+            editRoleSelect.addEventListener('change', (event) => {
+                const preferred = shouldRequireDepartment(event.target.value)
+                    ? (editDepartmentSelect?.dataset.lastValue || editDepartmentSelect?.value || '')
+                    : null;
+                updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
+                    preferredValue: preferred,
+                    autoSelectFirst: true,
+                    preserveValue: false
+                });
+            });
+        }
+
+        if (editUserForm) {
+            editUserForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const userId = Number(editUserIdInput?.value);
+                if (!userId) {
+                    showToast('Пользователь не выбран', 'error');
+                    return;
+                }
+
+                const name = editFullNameInput?.value.trim() || '';
+                const usernameValue = editUsernameInput?.value.trim() || '';
+                const roleValue = editRoleSelect?.value || '';
+                const isActiveValue = editStatusSelect?.value === 'true';
+                const needsDept = shouldRequireDepartment(roleValue);
+                const departmentValue = needsDept ? (editDepartmentSelect?.value || '') : '';
+                const normalizedDepartment = needsDept ? (departmentValue || null) : null;
+
+                if (!name || !usernameValue || !roleValue) {
+                    showToast('Заполните обязательные поля', 'error');
+                    return;
+                }
+
+                if (needsDept && !normalizedDepartment) {
+                    showToast('Выберите отдел для выбранной роли', 'error');
+                    return;
+                }
+
+                const updates = {};
+                const original = currentEditingUser;
+                if (original) {
+                    if (name !== original.name) updates.name = name;
+                    if (usernameValue !== original.username) updates.username = usernameValue;
+                    if (roleValue !== original.role) updates.role = roleValue;
+                    const originalDepartment = original.department || null;
+                    if ((normalizedDepartment || null) !== originalDepartment) {
+                        updates.department = normalizedDepartment;
+                    }
+                    const originalActive = original.is_active !== false;
+                    if (isActiveValue !== originalActive) {
+                        updates.isActive = isActiveValue;
+                    }
+                } else {
+                    updates.name = name;
+                    updates.username = usernameValue;
+                    updates.role = roleValue;
+                    updates.department = normalizedDepartment;
+                    updates.isActive = isActiveValue;
+                }
+
+                if (Object.keys(updates).length === 0) {
+                    showToast('Нет изменений для сохранения', 'error');
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`${API_URL}/users/${userId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updates)
+                    });
+
+                    const result = await res.json().catch(() => ({}));
+
+                    if (res.ok) {
+                        showToast('Пользователь обновлен', 'success');
+                        closeModal('editUserModal');
+                        currentEditingUser = null;
+                        await loadUsers();
+                        if (updates.role !== undefined || updates.department !== undefined) {
+                            await loadDepartments();
+                        }
+                    } else {
+                        showToast(result.error || 'Ошибка обновления пользователя', 'error');
+                    }
+                } catch (error) {
+                    console.error('[editUserForm] error:', error);
+                    showToast('Ошибка обновления пользователя', 'error');
+                }
+            });
+        }
+
         // ========== DELETE USER ==========
         async function deleteUser(userId) {
             if (!confirm('Are you sure you want to delete this user?')) return;
@@ -2427,6 +2533,7 @@ async function showCreateChatModal() {
 
     const modal = document.getElementById('createChatModal');
     if (modal) {
+        modal.classList.add('show');
         modal.style.display = 'flex';
     }
 
@@ -2436,6 +2543,7 @@ async function showCreateChatModal() {
 function closeCreateChatModal() {
     const modal = document.getElementById('createChatModal');
     if (modal) {
+        modal.classList.remove('show');
         modal.style.display = 'none';
     }
 
@@ -2526,6 +2634,23 @@ function filterParticipants() {
 }
 
 function filterParticipants() {
+    const searchInput = document.getElementById('participantsSearch');
+    const container = document.getElementById('participantsList');
+
+    if (!container) {
+        return;
+    }
+
+    const term = (searchInput?.value || '').trim().toLowerCase();
+    const items = container.querySelectorAll('[data-filter-value]');
+
+    items.forEach((item) => {
+        const value = item.getAttribute('data-filter-value') || '';
+        item.style.display = !term || value.includes(term) ? '' : 'none';
+    });
+}
+
+function filterParticipants() {
     const searchText = document.getElementById('participantsSearch').value.toLowerCase().trim();
     const items = document.querySelectorAll('.participant-item');
 
@@ -2593,12 +2718,20 @@ async function createNewChat() {
 
 // ========== МОДАЛЬНОЕ ОКНО: СОЗДАТЬ ОТДЕЛ ==========
 async function showCreateDepartmentModal() {
-    document.getElementById('createDepartmentModal').style.display = 'flex';
+    const modal = document.getElementById('createDepartmentModal');
+    if (modal) {
+        modal.classList.add('show');
+        modal.style.display = 'flex';
+    }
     await loadHeadsForDepartment();
 }
 
 function closeCreateDepartmentModal() {
-    document.getElementById('createDepartmentModal').style.display = 'none';
+    const modal = document.getElementById('createDepartmentModal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+    }
     document.getElementById('newDeptName').value = '';
     document.getElementById('newDeptDescription').value = '';
     document.getElementById('newDeptHead').value = '';
@@ -2625,7 +2758,7 @@ async function createNewDepartment() {
     const name = document.getElementById('newDeptName').value.trim();
     const description = document.getElementById('newDeptDescription').value.trim();
     const headId = document.getElementById('newDeptHead').value;
-    
+
     if (!name) {
         alert('Введите название отдела');
         return;
@@ -2661,6 +2794,76 @@ async function createNewDepartment() {
         alert('Ошибка создания отдела');
     }
 }
+
+function isModalVisible(modal) {
+    if (!modal) {
+        return false;
+    }
+
+    if (modal.classList.contains('show')) {
+        return true;
+    }
+
+    const display = modal.style.display || '';
+    return display !== '' && display !== 'none';
+}
+
+function closeModalElement(modal) {
+    if (!modal) {
+        return;
+    }
+
+    switch (modal.id) {
+        case 'createUserModal':
+        case 'editUserModal':
+            closeModal(modal.id);
+            break;
+        case 'createChatModal':
+            closeCreateChatModal();
+            break;
+        case 'editChatModal':
+            closeEditChatModal();
+            break;
+        case 'createDepartmentModal':
+            closeCreateDepartmentModal();
+            break;
+        default:
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+            break;
+    }
+}
+
+function setupModalAccessibility() {
+    const modals = Array.from(document.querySelectorAll('.modal'));
+
+    modals.forEach((modal) => {
+        modal.setAttribute('role', modal.getAttribute('role') || 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModalElement(modal);
+            }
+        });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+            return;
+        }
+
+        const openModals = Array.from(document.querySelectorAll('.modal')).filter(isModalVisible);
+        if (!openModals.length) {
+            return;
+        }
+
+        event.preventDefault();
+        const topModal = openModals[openModals.length - 1];
+        closeModalElement(topModal);
+    });
+}
+
+setupModalAccessibility();
 
 
 
@@ -2719,6 +2922,7 @@ async function createNewDepartment() {
 
         function closeEditChatModal() {
             if (editChatModal) {
+                editChatModal.classList.remove('show');
                 editChatModal.style.display = 'none';
             }
             resetEditChatState();
@@ -2877,7 +3081,8 @@ async function createNewDepartment() {
             editChatState.chatId = numericId;
 
             if (editChatModal) {
-                editChatModal.style.display = 'flex';
+            editChatModal.classList.add('show');
+            editChatModal.style.display = 'flex';
             }
 
             if (currentParticipantsList) {
