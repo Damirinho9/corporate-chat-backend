@@ -1594,10 +1594,12 @@ async function loadChats() {
                         </tr>
                     `).join('');
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #a0aec0;">Логи не найдены</td></tr>';
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка удаления', 'error');
                 }
             } catch (err) {
-                console.error('Load logs error:', err);
+                console.error('Remove user error:', err);
+                showToast('Ошибка удаления пользователя', 'error');
             }
         }
 
@@ -1969,7 +1971,78 @@ async function loadChats() {
             }
 
             try {
-                const res = await fetch(`${API_URL}/auth/register`, {
+                console.log('[renameDepartment] Renaming:', { oldName, newName });
+
+                const res = await fetch(`${API_URL}/departments/${encodeURIComponent(oldName)}/rename`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ newName })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    showToast(`Отдел переименован: "${oldName}" → "${newName}"`, 'success');
+                    console.log('[renameDepartment] Success:', data);
+                    await loadDepartments();
+                } else {
+                    const err = await res.json();
+                    console.error('[renameDepartment] Error:', err);
+                    showToast(err.error || 'Ошибка переименования отдела', 'error');
+                }
+            } catch (err) {
+                console.error('Rename department error:', err);
+                showToast('Ошибка переименования отдела', 'error');
+            }
+        }
+
+        function showAssignHeadModal(departmentName) {
+            // Простой prompt для демонстрации - можно заменить на модальное окно
+            const userId = prompt(`Введите ID пользователя для назначения РОПом отдела ${departmentName}:`);
+            if (!userId) return;
+
+            assignDepartmentHead(departmentName, parseInt(userId));
+        }
+
+        async function assignDepartmentHead(departmentName, userId) {
+            try {
+                const res = await fetch(`${API_URL}/departments/${encodeURIComponent(departmentName)}/head`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userId })
+                });
+
+                if (res.ok) {
+                    showToast('РОП назначен успешно', 'success');
+                    await loadDepartments();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка назначения РОПа', 'error');
+                }
+            } catch (err) {
+                console.error('Assign head error:', err);
+                showToast('Ошибка назначения РОПа', 'error');
+            }
+        }
+
+        function showAddUserToDepartmentModal(departmentName) {
+            const userId = prompt(`Введите ID пользователя для добавления в ${departmentName}:`);
+            if (!userId) return;
+
+            const role = prompt('Введите роль (operator/employee):', 'operator');
+            if (!role) return;
+
+            addUserToDepartment(departmentName, parseInt(userId), role);
+        }
+
+        async function addUserToDepartment(departmentName, userId, role) {
+            try {
+                const res = await fetch(`${API_URL}/departments/${encodeURIComponent(departmentName)}/users`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
