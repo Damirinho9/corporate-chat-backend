@@ -137,6 +137,21 @@ const sendMessage = async (req, res) => {
         const { content, fileId, replyToId, forwardedFromId, mentions } = req.body;
         const userId = req.user.id;
 
+        const trimmedContent = typeof content === 'string' ? content.trim() : '';
+        const normalizedContent = trimmedContent.length > 0 ? trimmedContent : null;
+        let normalizedFileId = null;
+
+        if (fileId !== undefined && fileId !== null && fileId !== '') {
+            const parsedFileId = Number(fileId);
+            if (Number.isNaN(parsedFileId)) {
+                return res.status(400).json({
+                    error: 'Invalid file identifier',
+                    code: 'INVALID_FILE_ID'
+                });
+            }
+            normalizedFileId = parsedFileId;
+        }
+
         // Check access
         const accessCheck = await query(
             'SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
@@ -150,8 +165,8 @@ const sendMessage = async (req, res) => {
             });
         }
 
-        if (!content && !fileId) {
-            return res.status(400).json({ 
+        if (!normalizedContent && !normalizedFileId) {
+            return res.status(400).json({
                 error: 'Message content or file is required',
                 code: 'EMPTY_MESSAGE'
             });
@@ -193,7 +208,7 @@ const sendMessage = async (req, res) => {
                 `INSERT INTO messages (chat_id, user_id, content, file_id, reply_to_id, forwarded_from_id)
                  VALUES ($1, $2, $3, $4, $5, $6)
                  RETURNING *`,
-                [chatId, userId, content || null, fileId || null, replyToId || null, forwardedFromId || null]
+                [chatId, userId, normalizedContent, normalizedFileId, replyToId || null, forwardedFromId || null]
             );
 
             const message = messageResult.rows[0];
@@ -213,10 +228,10 @@ const sendMessage = async (req, res) => {
             }
 
             // Update file message_id
-            if (fileId) {
+            if (normalizedFileId) {
                 await client.query(
                     'UPDATE files SET message_id = $1 WHERE id = $2',
-                    [message.id, fileId]
+                    [message.id, normalizedFileId]
                 );
             }
 
@@ -358,7 +373,20 @@ const deleteMessage = async (req, res) => {
 
         // Check ownership
         const messageCheck = await query(
-            'SELECT user_id, file_id FROM messages WHERE id = $1',
+            `SELECT
+                m.user_id,
+                m.file_id,
+                m.chat_id,
+                m.content,
+                m.created_at,
+                c.name AS chat_name,
+                c.type AS chat_type,
+                c.department AS chat_department,
+                u.name AS author_name
+             FROM messages m
+             JOIN chats c ON m.chat_id = c.id
+             JOIN users u ON m.user_id = u.id
+             WHERE m.id = $1`,
             [messageId]
         );
 
@@ -369,12 +397,82 @@ const deleteMessage = async (req, res) => {
             });
         }
 
-        if (messageCheck.rows[0].user_id !== userId && req.user.role !== 'admin') {
-            return res.status(403).json({ 
+        const messageRow = messageCheck.rows[0];
+        const isOwner = messageRow.user_id === userId;
+        const isAdmin = req.user.role === 'admin';
+        let isDepartmentRop = false;
+
+        if (req.user.role === 'rop' && req.user.department) {
+            isDepartmentRop =
+                messageRow.chat_type === 'department' &&
+                messageRow.chat_department &&
+                messageRow.chat_department === req.user.department;
+        }
+
+        const deletionWindowMs = 5 * 60 * 1000; // 5 minutes
+        const createdAt = messageRow.created_at ? new Date(messageRow.created_at) : null;
+        const createdAtTime = createdAt && !Number.isNaN(createdAt.getTime())
+            ? createdAt.getTime()
+            : null;
+
+        if (isOwner && !isAdmin && !isDepartmentRop && createdAtTime) {
+            const ageMs = Date.now() - createdAtTime;
+            if (ageMs > deletionWindowMs) {
+                return res.status(403).json({
+                    error: 'Message can only be deleted within 5 minutes of sending',
+                    code: 'DELETE_WINDOW_EXPIRED',
+                    metadata: { windowMinutes: 5 }
+                });
+            }
+        }
+
+        if (!isOwner && !isAdmin && !isDepartmentRop) {
+            return res.status(403).json({
                 error: 'Cannot delete this message',
                 code: 'DELETE_DENIED'
             });
         }
+
+        const deletionScope = isOwner ? 'self' : 'moderator';
+
+        await query(
+            `INSERT INTO message_deletion_history (
+                message_id,
+                chat_id,
+                chat_name,
+                chat_type,
+                chat_department,
+                deleted_message_user_id,
+                deleted_message_user_name,
+                deleted_by_user_id,
+                deleted_by_user_name,
+                deleted_by_role,
+                deletion_scope,
+                original_content,
+                file_id,
+                deleted_message_created_at
+            ) VALUES (
+                $1, $2, $3, $4, $5,
+                $6, $7, $8, $9, $10,
+                $11, $12, $13, $14
+            )`,
+            [
+                messageId,
+                messageRow.chat_id,
+                messageRow.chat_name || null,
+                messageRow.chat_type || null,
+                messageRow.chat_department || null,
+                messageRow.user_id,
+                messageRow.author_name || null,
+                req.user.id,
+                req.user.name || null,
+                req.user.role,
+                deletionScope,
+                messageRow.content || null,
+                messageRow.file_id || null,
+                messageRow.created_at || null
+            ]
+        );
 
         // Delete message (cascade handles mentions, reactions)
         await query('DELETE FROM messages WHERE id = $1', [messageId]);
@@ -582,6 +680,110 @@ const searchMessages = async (req, res) => {
     }
 };
 
+const getDeletionHistory = async (req, res) => {
+    try {
+        const { limit = 50, offset = 0, chatId } = req.query;
+        const parsedLimitRaw = parseInt(limit, 10);
+        const parsedOffsetRaw = parseInt(offset, 10);
+        const parsedLimit = Number.isNaN(parsedLimitRaw) ? 50 : Math.min(Math.max(parsedLimitRaw, 1), 500);
+        const parsedOffset = Number.isNaN(parsedOffsetRaw) ? 0 : Math.max(parsedOffsetRaw, 0);
+        const parsedChatId = chatId ? Number(chatId) : null;
+
+        if (parsedChatId && Number.isNaN(parsedChatId)) {
+            return res.status(400).json({
+                error: 'Invalid chat identifier',
+                code: 'INVALID_CHAT_ID'
+            });
+        }
+
+        const params = [];
+        const conditions = [];
+
+        const addCondition = (clause, value) => {
+            params.push(value);
+            conditions.push(`${clause} $${params.length}`);
+        };
+
+        if (parsedChatId) {
+            addCondition('h.chat_id =', parsedChatId);
+        }
+
+        if (req.user.role === 'rop') {
+            if (!req.user.department) {
+                return res.status(403).json({
+                    error: 'Department context required for ROP history',
+                    code: 'ROP_DEPARTMENT_REQUIRED'
+                });
+            }
+
+            addCondition('COALESCE(c.department, h.chat_department) =', req.user.department);
+
+            if (parsedChatId) {
+                const chatCheck = await query(
+                    'SELECT department, type FROM chats WHERE id = $1',
+                    [parsedChatId]
+                );
+
+                const chatRow = chatCheck.rows[0];
+
+                if (!chatRow || chatRow.type !== 'department' || !chatRow.department || chatRow.department !== req.user.department) {
+                    return res.status(403).json({
+                        error: 'Access denied to deletion history for this chat',
+                        code: 'DELETE_HISTORY_DENIED'
+                    });
+                }
+            }
+        }
+
+        const limitIndex = params.push(parsedLimit);
+        const offsetIndex = params.push(parsedOffset);
+
+        const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        const result = await query(
+            `SELECT
+                h.id,
+                h.message_id,
+                h.chat_id,
+                COALESCE(c.name, h.chat_name) AS chat_name,
+                COALESCE(c.type, h.chat_type) AS chat_type,
+                COALESCE(c.department, h.chat_department) AS chat_department,
+                h.deleted_message_user_id,
+                h.deleted_message_user_name,
+                h.deleted_by_user_id,
+                h.deleted_by_user_name,
+                h.deleted_by_role,
+                h.deletion_scope,
+                h.original_content,
+                h.file_id,
+                h.deleted_message_created_at,
+                h.deleted_at
+             FROM message_deletion_history h
+             LEFT JOIN chats c ON c.id = h.chat_id
+             ${whereClause}
+             ORDER BY h.deleted_at DESC
+             LIMIT $${limitIndex} OFFSET $${offsetIndex}`,
+            params
+        );
+
+        res.json({
+            history: result.rows,
+            count: result.rowCount
+        });
+    } catch (error) {
+        if (error && error.code === '42P01') { // undefined_table
+            console.warn('Deletion history table is missing, returning empty result');
+            return res.json({ history: [], count: 0 });
+        }
+
+        console.error('Get deletion history error:', error);
+        res.status(500).json({
+            error: 'Failed to fetch deletion history',
+            code: 'GET_DELETION_HISTORY_ERROR'
+        });
+    }
+};
+
 // Get all messages (admin only)
 const getAllMessages = async (req, res) => {
     try {
@@ -666,6 +868,7 @@ module.exports = {
     addReaction,
     removeReaction,
     forwardMessage,
+    getDeletionHistory,
     searchMessages,
     getAllMessages,
     getMessageStats
