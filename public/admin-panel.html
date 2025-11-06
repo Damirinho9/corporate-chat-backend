@@ -2426,143 +2426,25 @@ async function loadChats() {
             });
         }
 
-        if (editDepartmentSelect) {
-            editDepartmentSelect.addEventListener('change', () => {
-                editDepartmentSelect.dataset.lastValue = editDepartmentSelect.value;
-            });
-        }
-
-        if (editRoleSelect) {
-            editRoleSelect.addEventListener('change', (event) => {
-                const lastStoredValue = editDepartmentSelect ? (editDepartmentSelect.dataset.lastValue || editDepartmentSelect.value || '') : '';
-                const preferred = shouldRequireDepartment(event.target.value)
-                    ? lastStoredValue
-                    : null;
-                updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
-                    preferredValue: preferred,
-                    autoSelectFirst: true,
-                    preserveValue: false
-                });
-            });
-        }
-
-        if (editUserForm) {
-            editUserForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-
-                const userId = Number(editUserIdInput ? editUserIdInput.value : '');
-                if (!userId) {
-                    showToast('Пользователь не выбран', 'error');
-                    return;
-                }
-
-                const name = editFullNameInput ? editFullNameInput.value.trim() : '';
-                const usernameValue = editUsernameInput ? editUsernameInput.value.trim() : '';
-                const roleValue = editRoleSelect ? editRoleSelect.value : '';
-                const isActiveValue = editStatusSelect ? editStatusSelect.value === 'true' : false;
-                const needsDept = shouldRequireDepartment(roleValue);
-                const departmentValue = needsDept && editDepartmentSelect ? (editDepartmentSelect.value || '') : '';
-                const normalizedDepartment = needsDept ? (departmentValue || null) : null;
-
-                if (!name || !usernameValue || !roleValue) {
-                    showToast('Заполните обязательные поля', 'error');
-                    return;
-                }
-
-                if (needsDept && !normalizedDepartment) {
-                    showToast('Выберите отдел для выбранной роли', 'error');
-                    return;
-                }
-
-                const updates = {};
-                const original = currentEditingUser;
-                if (original) {
-                    if (name !== original.name) updates.name = name;
-                    if (usernameValue !== original.username) updates.username = usernameValue;
-                    if (roleValue !== original.role) updates.role = roleValue;
-                    const originalDepartment = original.department || null;
-                    if ((normalizedDepartment || null) !== originalDepartment) {
-                        updates.department = normalizedDepartment;
-                    }
-                    const originalActive = original.is_active !== false;
-                    if (isActiveValue !== originalActive) {
-                        updates.isActive = isActiveValue;
-                    }
-                } else {
-                    updates.name = name;
-                    updates.username = usernameValue;
-                    updates.role = roleValue;
-                    updates.department = normalizedDepartment;
-                    updates.isActive = isActiveValue;
-                }
-
-                if (Object.keys(updates).length === 0) {
-                    showToast('Нет изменений для сохранения', 'error');
-                    return;
-                }
-
-                try {
-                    const res = await fetch(`${API_URL}/users/${userId}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(updates)
-                    });
-
-                    const result = await res.json().catch(() => ({}));
-
-                    if (res.ok) {
-                        showToast('Пользователь обновлен', 'success');
-                        closeModal('editUserModal');
-                        currentEditingUser = null;
-                        await loadUsers();
-                        if (updates.role !== undefined || updates.department !== undefined) {
-                            await loadDepartments();
-                        }
-                    } else {
-                        showToast(result.error || 'Ошибка обновления пользователя', 'error');
-                    }
-                } catch (error) {
-                    console.error('[editUserForm] error:', error);
-                    showToast('Ошибка обновления пользователя', 'error');
-                }
-            });
-        }
-
         // ========== DELETE USER ==========
         async function deleteUser(userId) {
-            if (!confirm('Are you sure you want to delete this user?')) return;
-            
+            if (!confirm('Деактивировать пользователя?')) return;
+
             try {
-                const res = await fetch(`${API_URL}/users/${userId}`, {
+                const res = await fetch(`${API_URL}/admin/users/${userId}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
-                const data = await res.json();
-                
-                if (data.success) {
-                    showToast('User deleted successfully!', 'success');
+
+                if (res.ok) {
+                    showToast('Пользователь удален', 'success');
                     loadUsers();
                 } else {
-                    converted += '';
+                    showToast('Ошибка', 'error');
                 }
+            } catch (err) {
+                showToast('Ошибка', 'error');
             }
-
-            converted = converted.replace(/[^a-z0-9.]/g, '.');
-            converted = converted.replace(/\.+/g, '.').replace(/^\.+|\.+$/g, '');
-
-            if (!converted) {
-                return '';
-            }
-
-            if (/^[0-9]/.test(converted)) {
-                converted = `u${converted}`;
-            }
-
-            return converted.slice(0, 24);
         }
 
 async function showCreateChatModal() {
