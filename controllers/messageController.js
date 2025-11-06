@@ -137,6 +137,21 @@ const sendMessage = async (req, res) => {
         const { content, fileId, replyToId, forwardedFromId, mentions } = req.body;
         const userId = req.user.id;
 
+        const trimmedContent = typeof content === 'string' ? content.trim() : '';
+        const normalizedContent = trimmedContent.length > 0 ? trimmedContent : null;
+        let normalizedFileId = null;
+
+        if (fileId !== undefined && fileId !== null && fileId !== '') {
+            const parsedFileId = Number(fileId);
+            if (Number.isNaN(parsedFileId)) {
+                return res.status(400).json({
+                    error: 'Invalid file identifier',
+                    code: 'INVALID_FILE_ID'
+                });
+            }
+            normalizedFileId = parsedFileId;
+        }
+
         // Check access
         const accessCheck = await query(
             'SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
@@ -150,8 +165,8 @@ const sendMessage = async (req, res) => {
             });
         }
 
-        if (!content && !fileId) {
-            return res.status(400).json({ 
+        if (!normalizedContent && !normalizedFileId) {
+            return res.status(400).json({
                 error: 'Message content or file is required',
                 code: 'EMPTY_MESSAGE'
             });
@@ -193,7 +208,7 @@ const sendMessage = async (req, res) => {
                 `INSERT INTO messages (chat_id, user_id, content, file_id, reply_to_id, forwarded_from_id)
                  VALUES ($1, $2, $3, $4, $5, $6)
                  RETURNING *`,
-                [chatId, userId, content || null, fileId || null, replyToId || null, forwardedFromId || null]
+                [chatId, userId, normalizedContent, normalizedFileId, replyToId || null, forwardedFromId || null]
             );
 
             const message = messageResult.rows[0];
@@ -213,10 +228,10 @@ const sendMessage = async (req, res) => {
             }
 
             // Update file message_id
-            if (fileId) {
+            if (normalizedFileId) {
                 await client.query(
                     'UPDATE files SET message_id = $1 WHERE id = $2',
-                    [message.id, fileId]
+                    [message.id, normalizedFileId]
                 );
             }
 
@@ -358,7 +373,15 @@ const deleteMessage = async (req, res) => {
 
         // Check ownership
         const messageCheck = await query(
-            'SELECT user_id, file_id FROM messages WHERE id = $1',
+            `SELECT
+                m.user_id,
+                m.file_id,
+                m.chat_id,
+                c.type AS chat_type,
+                c.department AS chat_department
+             FROM messages m
+             JOIN chats c ON m.chat_id = c.id
+             WHERE m.id = $1`,
             [messageId]
         );
 
@@ -369,8 +392,20 @@ const deleteMessage = async (req, res) => {
             });
         }
 
-        if (messageCheck.rows[0].user_id !== userId && req.user.role !== 'admin') {
-            return res.status(403).json({ 
+        const messageRow = messageCheck.rows[0];
+        const isOwner = messageRow.user_id === userId;
+        const isAdmin = req.user.role === 'admin';
+        let isDepartmentRop = false;
+
+        if (req.user.role === 'rop' && req.user.department) {
+            isDepartmentRop =
+                messageRow.chat_type === 'department' &&
+                messageRow.chat_department &&
+                messageRow.chat_department === req.user.department;
+        }
+
+        if (!isOwner && !isAdmin && !isDepartmentRop) {
+            return res.status(403).json({
                 error: 'Cannot delete this message',
                 code: 'DELETE_DENIED'
             });
