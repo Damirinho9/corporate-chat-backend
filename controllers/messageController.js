@@ -755,7 +755,7 @@ const getDeletionHistory = async (req, res) => {
                 h.message_id,
                 h.chat_id,
                 COALESCE(c.name, h.chat_name) AS chat_name,
-                COALESCE(c.type, h.chat_type) AS chat_type,
+                COALESCE(c.type::text, h.chat_type) AS chat_type,
                 COALESCE(c.department, h.chat_department) AS chat_department,
                 h.deleted_message_user_id,
                 h.deleted_message_user_name,
