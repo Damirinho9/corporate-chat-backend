@@ -511,6 +511,18 @@ router.get('/messages/all',
     messageController.getAllMessages
 );
 
+router.get('/messages/deletion-history',
+    authenticateToken,
+    requireAdminOrRop,
+    [
+        queryValidator('chatId').optional().isInt({ min: 1 }),
+        queryValidator('limit').optional().isInt({ min: 1, max: 200 }),
+        queryValidator('offset').optional().isInt({ min: 0 })
+    ],
+    validate,
+    messageController.getDeletionHistory
+);
+
 router.get('/messages/stats',
     authenticateToken,
     requireAdmin,

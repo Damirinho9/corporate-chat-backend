@@ -240,6 +240,60 @@ async function applyIncrementalSchemaUpdates() {
     );
 
     await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS message_deletion_history (
+        id SERIAL PRIMARY KEY,
+        message_id INTEGER,
+        chat_id INTEGER NOT NULL,
+        chat_name VARCHAR(255),
+        chat_type VARCHAR(50),
+        chat_department VARCHAR(255),
+        deleted_message_user_id INTEGER,
+        deleted_message_user_name VARCHAR(255),
+        deleted_by_user_id INTEGER NOT NULL,
+        deleted_by_user_name VARCHAR(255),
+        deleted_by_role VARCHAR(50) NOT NULL,
+        deletion_scope VARCHAR(50) NOT NULL,
+        original_content TEXT,
+        file_id INTEGER,
+        deleted_message_created_at TIMESTAMP WITH TIME ZONE,
+        deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    const deletionAlterStatements = [
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS message_id INTEGER`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS chat_id INTEGER NOT NULL`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS chat_name VARCHAR(255)`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS chat_type VARCHAR(50)`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS chat_department VARCHAR(255)`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS deleted_message_user_id INTEGER`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS deleted_message_user_name VARCHAR(255)`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS deleted_by_user_id INTEGER NOT NULL`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS deleted_by_user_name VARCHAR(255)`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS deleted_by_role VARCHAR(50) NOT NULL`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS deletion_scope VARCHAR(50) NOT NULL DEFAULT 'self'`,
+      `ALTER TABLE message_deletion_history ALTER COLUMN deletion_scope DROP DEFAULT`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS original_content TEXT`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS file_id INTEGER`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS deleted_message_created_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE message_deletion_history ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
+    ];
+
+    for (const sql of deletionAlterStatements) {
+      await runOptionalQuery(sql);
+    }
+
+    const deletionIndexes = [
+      `CREATE INDEX IF NOT EXISTS idx_message_deletion_history_chat ON message_deletion_history(chat_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_message_deletion_history_deleted_by ON message_deletion_history(deleted_by_user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_message_deletion_history_deleted_at ON message_deletion_history(deleted_at DESC)`
+    ];
+
+    for (const sql of deletionIndexes) {
+      await runOptionalQuery(sql);
+    }
+
+    await runOptionalQuery(`
       DO $$
       BEGIN
         IF NOT EXISTS (

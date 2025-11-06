@@ -623,6 +623,50 @@ function createMockResponse() {
             throw new Error('Сообщение отдела не было удалено РОПом');
         }
 
+        console.log('📜 Проверка истории удалений сообщений...');
+
+        const deletionHistoryAdminReq = {
+            query: { limit: '20' },
+            user: { id: admin.id, role: 'admin' }
+        };
+        const deletionHistoryAdminRes = createMockResponse();
+        await messageController.getDeletionHistory(deletionHistoryAdminReq, deletionHistoryAdminRes);
+
+        if (deletionHistoryAdminRes.statusCode !== 200 || !Array.isArray(deletionHistoryAdminRes.body?.history)) {
+            throw new Error(`Администратор не смог получить историю удалений (статус ${deletionHistoryAdminRes.statusCode})`);
+        }
+
+        const historyEntries = deletionHistoryAdminRes.body.history;
+        const selfDeletionEntry = historyEntries.find(entry => entry.message_id === ownMessageId);
+        if (!selfDeletionEntry || selfDeletionEntry.deletion_scope !== 'self' || selfDeletionEntry.deleted_by_role !== 'operator') {
+            throw new Error('История не содержит запись об удалении собственного сообщения оператором');
+        }
+
+        const ropDeletionEntry = historyEntries.find(entry => entry.message_id === targetDeptMessage.id);
+        if (!ropDeletionEntry || ropDeletionEntry.deleted_by_role !== 'rop' || ropDeletionEntry.deletion_scope !== 'moderator') {
+            throw new Error('История не содержит запись об удалении сообщения РОПом отдела');
+        }
+
+        const ropHistoryReq = {
+            query: { limit: '20' },
+            user: {
+                id: ropSales.id,
+                role: 'rop',
+                department: ropSales.department
+            }
+        };
+        const ropHistoryRes = createMockResponse();
+        await messageController.getDeletionHistory(ropHistoryReq, ropHistoryRes);
+
+        if (ropHistoryRes.statusCode !== 200 || !Array.isArray(ropHistoryRes.body?.history)) {
+            throw new Error(`РОП не смог получить историю удалений своего отдела (статус ${ropHistoryRes.statusCode})`);
+        }
+
+        const ropHistoryHasEntry = ropHistoryRes.body.history.some(entry => entry.message_id === targetDeptMessage.id);
+        if (!ropHistoryHasEntry) {
+            throw new Error('История РОПа не содержит запись об удалении в его отделе');
+        }
+
         console.log('🚫 Проверка запрета удаления сообщений чужого отдела РОПом...');
         const foreignDeptMessage = await query(
             `SELECT m.id
@@ -638,6 +682,26 @@ function createMockResponse() {
         const foreignMessage = foreignDeptMessage.rows[0];
         if (!foreignMessage) {
             throw new Error('Не найдено сообщение другого отдела для проверки удаления РОПом');
+        }
+
+        const foreignChatLookup = await query('SELECT chat_id FROM messages WHERE id = $1', [foreignMessage.id]);
+        const foreignChatId = foreignChatLookup.rows[0]?.chat_id;
+
+        if (foreignChatId) {
+            const ropForeignHistoryReq = {
+                query: { chatId: String(foreignChatId) },
+                user: {
+                    id: ropSales.id,
+                    role: 'rop',
+                    department: ropSales.department
+                }
+            };
+            const ropForeignHistoryRes = createMockResponse();
+            await messageController.getDeletionHistory(ropForeignHistoryReq, ropForeignHistoryRes);
+
+            if (ropForeignHistoryRes.statusCode !== 403) {
+                throw new Error('РОП получил доступ к истории удалений чужого отдела');
+            }
         }
 
         const ropMessageDeleteForeignReq = {

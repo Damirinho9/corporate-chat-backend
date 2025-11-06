@@ -267,4 +267,31 @@ COMMENT ON TABLE chats IS 'Stores chat rooms and channels';
 COMMENT ON TABLE chat_participants IS 'Many-to-many relationship between users and chats';
 COMMENT ON TABLE messages IS 'Stores all messages with support for editing and deletion';
 COMMENT ON TABLE admin_logs IS 'Logs all admin actions for audit trail';
+CREATE TABLE IF NOT EXISTS message_deletion_history (
+    id SERIAL PRIMARY KEY,
+    message_id INTEGER,
+    chat_id INTEGER NOT NULL,
+    chat_name VARCHAR(255),
+    chat_type VARCHAR(50),
+    chat_department VARCHAR(255),
+    deleted_message_user_id INTEGER,
+    deleted_message_user_name VARCHAR(255),
+    deleted_by_user_id INTEGER NOT NULL,
+    deleted_by_user_name VARCHAR(255),
+    deleted_by_role VARCHAR(50) NOT NULL,
+    deletion_scope VARCHAR(50) NOT NULL,
+    original_content TEXT,
+    file_id INTEGER,
+    deleted_message_created_at TIMESTAMP WITH TIME ZONE,
+    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_deletion_history_chat
+    ON message_deletion_history(chat_id);
+CREATE INDEX IF NOT EXISTS idx_message_deletion_history_deleted_by
+    ON message_deletion_history(deleted_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_message_deletion_history_deleted_at
+    ON message_deletion_history(deleted_at DESC);
+
+COMMENT ON TABLE message_deletion_history IS 'Stores audit history for deleted messages by administrators and department heads';
 COMMENT ON FUNCTION can_send_direct_message IS 'Checks if a user can send direct messages to another user based on hierarchy';

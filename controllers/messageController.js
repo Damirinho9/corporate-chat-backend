@@ -382,11 +382,15 @@ const deleteMessage = async (req, res) => {
                 m.user_id,
                 m.file_id,
                 m.chat_id,
+                m.content,
                 m.created_at,
+                c.name AS chat_name,
                 c.type AS chat_type,
-                c.department AS chat_department
+                c.department AS chat_department,
+                u.name AS author_name
              FROM messages m
              JOIN chats c ON m.chat_id = c.id
+             JOIN users u ON m.user_id = u.id
              WHERE m.id = $1`,
             [messageId]
         );
@@ -433,6 +437,47 @@ const deleteMessage = async (req, res) => {
                 code: 'DELETE_DENIED'
             });
         }
+
+        const deletionScope = isOwner ? 'self' : 'moderator';
+
+        await query(
+            `INSERT INTO message_deletion_history (
+                message_id,
+                chat_id,
+                chat_name,
+                chat_type,
+                chat_department,
+                deleted_message_user_id,
+                deleted_message_user_name,
+                deleted_by_user_id,
+                deleted_by_user_name,
+                deleted_by_role,
+                deletion_scope,
+                original_content,
+                file_id,
+                deleted_message_created_at
+            ) VALUES (
+                $1, $2, $3, $4, $5,
+                $6, $7, $8, $9, $10,
+                $11, $12, $13, $14
+            )`,
+            [
+                messageId,
+                messageRow.chat_id,
+                messageRow.chat_name || null,
+                messageRow.chat_type || null,
+                messageRow.chat_department || null,
+                messageRow.user_id,
+                messageRow.author_name || null,
+                req.user.id,
+                req.user.name || null,
+                req.user.role,
+                deletionScope,
+                messageRow.content || null,
+                messageRow.file_id || null,
+                messageRow.created_at || null
+            ]
+        );
 
         // Delete message (cascade handles mentions, reactions)
         await query('DELETE FROM messages WHERE id = $1', [messageId]);
@@ -640,6 +685,103 @@ const searchMessages = async (req, res) => {
     }
 };
 
+const getDeletionHistory = async (req, res) => {
+    try {
+        const { limit = 50, offset = 0, chatId } = req.query;
+        const parsedLimitRaw = parseInt(limit, 10);
+        const parsedOffsetRaw = parseInt(offset, 10);
+        const parsedLimit = Number.isNaN(parsedLimitRaw) ? 50 : Math.min(Math.max(parsedLimitRaw, 1), 500);
+        const parsedOffset = Number.isNaN(parsedOffsetRaw) ? 0 : Math.max(parsedOffsetRaw, 0);
+        const parsedChatId = chatId ? Number(chatId) : null;
+
+        if (parsedChatId && Number.isNaN(parsedChatId)) {
+            return res.status(400).json({
+                error: 'Invalid chat identifier',
+                code: 'INVALID_CHAT_ID'
+            });
+        }
+
+        const params = [];
+        const placeholders = () => `$${params.length + 1}`;
+        const whereClauses = [];
+
+        if (parsedChatId) {
+            whereClauses.push(`h.chat_id = ${placeholders()}`);
+            params.push(parsedChatId);
+        }
+
+        if (req.user.role === 'rop') {
+            if (!req.user.department) {
+                return res.status(403).json({
+                    error: 'Department context required for ROP history',
+                    code: 'ROP_DEPARTMENT_REQUIRED'
+                });
+            }
+
+            whereClauses.push(`COALESCE(c.department, h.chat_department) = ${placeholders()}`);
+            params.push(req.user.department);
+
+            if (parsedChatId) {
+                const chatCheck = await query(
+                    'SELECT department, type FROM chats WHERE id = $1',
+                    [parsedChatId]
+                );
+
+                const chatRow = chatCheck.rows[0];
+
+                if (!chatRow || chatRow.type !== 'department' || !chatRow.department || chatRow.department !== req.user.department) {
+                    return res.status(403).json({
+                        error: 'Access denied to deletion history for this chat',
+                        code: 'DELETE_HISTORY_DENIED'
+                    });
+                }
+            }
+        }
+
+        const limitPlaceholder = placeholders();
+        params.push(parsedLimit);
+        const offsetPlaceholder = placeholders();
+        params.push(parsedOffset);
+
+        const result = await query(
+            `SELECT
+                h.id,
+                h.message_id,
+                h.chat_id,
+                COALESCE(c.name, h.chat_name) AS chat_name,
+                COALESCE(c.type, h.chat_type) AS chat_type,
+                COALESCE(c.department, h.chat_department) AS chat_department,
+                h.deleted_message_user_id,
+                h.deleted_message_user_name,
+                h.deleted_by_user_id,
+                h.deleted_by_user_name,
+                h.deleted_by_role,
+                h.deletion_scope,
+                h.original_content,
+                h.file_id,
+                h.deleted_message_created_at,
+                h.deleted_at
+             FROM message_deletion_history h
+             LEFT JOIN chats c ON c.id = h.chat_id
+             ${whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''}
+             ORDER BY h.deleted_at DESC
+             LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`,
+            params
+        );
+
+        res.json({
+            history: result.rows,
+            count: result.rowCount
+        });
+    } catch (error) {
+        console.error('Get deletion history error:', error);
+        res.status(500).json({
+            error: 'Failed to fetch deletion history',
+            code: 'GET_DELETION_HISTORY_ERROR'
+        });
+    }
+};
+
 // Get all messages (admin only)
 const getAllMessages = async (req, res) => {
     try {
@@ -724,6 +866,7 @@ module.exports = {
     addReaction,
     removeReaction,
     forwardMessage,
+    getDeletionHistory,
     searchMessages,
     getAllMessages,
     getMessageStats

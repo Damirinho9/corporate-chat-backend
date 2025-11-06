@@ -323,6 +323,9 @@
         .badge-employee { background: #feebc8; color: #7c2d12; }
         .badge-active { background: #c6f6d5; color: #22543d; }
         .badge-inactive { background: #fed7d7; color: #c53030; }
+        .badge-scope-self { background: #ebf8ff; color: #2b6cb0; }
+        .badge-scope-moderator { background: #fefcbf; color: #744210; }
+        .table-subtext { font-size: 12px; color: #718096; }
 
         /* ========== FORM ========== */
         .form-grid {
@@ -621,6 +624,9 @@
                 <div class="nav-item" data-section="permissions">
                     🛡️ Права
                 </div>
+                <div class="nav-item" data-section="deletions">
+                    🗑 История удалений
+                </div>
                 <div class="nav-item" data-section="logs">
                     📋 Logs
                 </div>
@@ -799,6 +805,34 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <!-- Logs -->
+            <div id="deletions" class="content-section">
+                <div class="header">
+                    <h2>🗑 История удалений сообщений</h2>
+                </div>
+
+                <div class="card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Время</th>
+                                <th>Удалил</th>
+                                <th>Роль</th>
+                                <th>Чат</th>
+                                <th>Удалено у</th>
+                                <th>Тип</th>
+                                <th>Содержимое</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deletionHistoryBody">
+                            <tr>
+                                <td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -1057,6 +1091,9 @@
                     break;
                 case 'permissions':
                     renderPermissionsMatrix();
+                    break;
+                case 'deletions':
+                    await loadDeletionHistory();
                     break;
                 case 'logs':
                     await loadLogs();
@@ -1451,6 +1488,94 @@ async function loadChats() {
             }
         }
 
+        async function loadDeletionHistory() {
+            const tbody = document.getElementById('deletionHistoryBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
+
+            try {
+                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.status === 403) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`Failed with status ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (!Array.isArray(data.history) || data.history.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
+                    return;
+                }
+
+                const rowsHtml = data.history.map(entry => {
+                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
+                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
+                        ? deletedAtDate.toLocaleString('ru-RU')
+                        : '—';
+
+                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
+                    const deleterCell = entry.deleted_by_user_name
+                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
+                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
+
+                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
+                    const ownerCell = entry.deleted_message_user_name
+                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
+                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
+
+                    const roleKey = entry.deleted_by_role || 'employee';
+                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
+                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
+
+                    const scopeBadge = entry.deletion_scope === 'self'
+                        ? '<span class="badge badge-scope-self">Своё</span>'
+                        : '<span class="badge badge-scope-moderator">Модерация</span>';
+                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
+
+                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
+                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
+
+                    const contentParts = [];
+                    if (entry.original_content) {
+                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
+                    }
+                    if (entry.file_id) {
+                        const fileLink = buildAttachmentLink(entry.file_id);
+                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
+                    }
+
+                    const contentCell = contentParts.length
+                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
+                        : '<span style="color:#a0aec0;">—</span>';
+
+                    return `
+                        <tr>
+                            <td>${deletedAt}</td>
+                            <td>${deleterCell}</td>
+                            <td>${roleCell}</td>
+                            <td>${chatCell}</td>
+                            <td>${ownerCell}</td>
+                            <td>${scopeCell}</td>
+                            <td>${contentCell}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                tbody.innerHTML = rowsHtml;
+            } catch (error) {
+                console.error('Failed to load deletion history:', error);
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
+            }
+        }
+
         async function loadLogs() {
             try {
                 const res = await fetch(`${API_URL}/admin/logs?limit=100`, {
@@ -1469,10 +1594,12 @@ async function loadChats() {
                         </tr>
                     `).join('');
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #a0aec0;">Логи не найдены</td></tr>';
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка удаления', 'error');
                 }
             } catch (err) {
-                console.error('Load logs error:', err);
+                console.error('Remove user error:', err);
+                showToast('Ошибка удаления пользователя', 'error');
             }
         }
 
@@ -1666,6 +1793,34 @@ async function loadChats() {
             }
         }
 
+        function escapeHtml(value) {
+            if (value === null || value === undefined) {
+                return '';
+            }
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function truncateText(value, maxLength = 120) {
+            if (!value) {
+                return '';
+            }
+            const text = String(value);
+            return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+        }
+
+        function buildAttachmentLink(fileId) {
+            if (!fileId) {
+                return '#';
+            }
+            const encodedToken = encodeURIComponent(token || '');
+            return `${window.location.origin}/api/files/${fileId}${encodedToken ? `?token=${encodedToken}` : ''}`;
+        }
+
         function copyEditPassword() {
             copyGeneratedPassword(editPasswordInput);
         }
@@ -1816,7 +1971,78 @@ async function loadChats() {
             }
 
             try {
-                const res = await fetch(`${API_URL}/auth/register`, {
+                console.log('[renameDepartment] Renaming:', { oldName, newName });
+
+                const res = await fetch(`${API_URL}/departments/${encodeURIComponent(oldName)}/rename`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ newName })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    showToast(`Отдел переименован: "${oldName}" → "${newName}"`, 'success');
+                    console.log('[renameDepartment] Success:', data);
+                    await loadDepartments();
+                } else {
+                    const err = await res.json();
+                    console.error('[renameDepartment] Error:', err);
+                    showToast(err.error || 'Ошибка переименования отдела', 'error');
+                }
+            } catch (err) {
+                console.error('Rename department error:', err);
+                showToast('Ошибка переименования отдела', 'error');
+            }
+        }
+
+        function showAssignHeadModal(departmentName) {
+            // Простой prompt для демонстрации - можно заменить на модальное окно
+            const userId = prompt(`Введите ID пользователя для назначения РОПом отдела ${departmentName}:`);
+            if (!userId) return;
+
+            assignDepartmentHead(departmentName, parseInt(userId));
+        }
+
+        async function assignDepartmentHead(departmentName, userId) {
+            try {
+                const res = await fetch(`${API_URL}/departments/${encodeURIComponent(departmentName)}/head`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userId })
+                });
+
+                if (res.ok) {
+                    showToast('РОП назначен успешно', 'success');
+                    await loadDepartments();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка назначения РОПа', 'error');
+                }
+            } catch (err) {
+                console.error('Assign head error:', err);
+                showToast('Ошибка назначения РОПа', 'error');
+            }
+        }
+
+        function showAddUserToDepartmentModal(departmentName) {
+            const userId = prompt(`Введите ID пользователя для добавления в ${departmentName}:`);
+            if (!userId) return;
+
+            const role = prompt('Введите роль (operator/employee):', 'operator');
+            if (!role) return;
+
+            addUserToDepartment(departmentName, parseInt(userId), role);
+        }
+
+        async function addUserToDepartment(departmentName, userId, role) {
+            try {
+                const res = await fetch(`${API_URL}/departments/${encodeURIComponent(departmentName)}/users`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,

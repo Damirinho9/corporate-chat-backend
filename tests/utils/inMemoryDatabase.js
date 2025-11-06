@@ -12,7 +12,8 @@ class InMemoryDatabase {
             files: [],
             reactions: [],
             mentions: [],
-            admin_logs: []
+            admin_logs: [],
+            message_deletion_history: []
         };
         this.sequences = {
             users: 1,
@@ -21,7 +22,8 @@ class InMemoryDatabase {
             files: 1,
             reactions: 1,
             mentions: 1,
-            admin_logs: 1
+            admin_logs: 1,
+            message_deletion_history: 1
         };
     }
 
@@ -65,6 +67,15 @@ class InMemoryDatabase {
             return {
                 rows: user ? [{ id: user.id, department: user.department || null }] : [],
                 rowCount: user ? 1 : 0
+            };
+        }
+
+        if (normalized.startsWith('SELECT department, type FROM chats WHERE id =')) {
+            const chatId = toInt(params[0]);
+            const chat = this.data.chats.find(c => c.id === chatId);
+            return {
+                rows: chat ? [{ department: chat.department || null, type: chat.type || null }] : [],
+                rowCount: chat ? 1 : 0
             };
         }
 
@@ -255,6 +266,10 @@ class InMemoryDatabase {
 
         if (normalized.startsWith('INSERT INTO files')) {
             return this.handleInsert('files', normalized, params);
+        }
+
+        if (normalized.startsWith('INSERT INTO message_deletion_history')) {
+            return this.handleInsert('message_deletion_history', normalized, params);
         }
 
         if (normalized.startsWith('UPDATE users SET')) {
@@ -504,6 +519,99 @@ class InMemoryDatabase {
             return { rows: result.reverse(), rowCount: result.length };
         }
 
+        if (normalized.startsWith('SELECT h.id, h.message_id') && normalized.includes('FROM message_deletion_history')) {
+            let paramIndex = 0;
+            let filterChatId = null;
+            let filterDepartment = null;
+
+            if (normalized.includes('WHERE h.chat_id =')) {
+                filterChatId = Number(params[paramIndex++]);
+            }
+
+            if (normalized.includes('COALESCE(c.department, h.chat_department) =')) {
+                filterDepartment = params[paramIndex++];
+            }
+
+            const limit = Number(params[paramIndex++]) || 50;
+            const offset = Number(params[paramIndex++]) || 0;
+
+            const sortedHistory = [...this.data.message_deletion_history]
+                .sort((a, b) => new Date(b.deleted_at || 0) - new Date(a.deleted_at || 0));
+
+            let filtered = sortedHistory;
+
+            if (filterChatId) {
+                filtered = filtered.filter(entry => entry.chat_id === filterChatId);
+            }
+
+            if (filterDepartment !== null && filterDepartment !== undefined) {
+                filtered = filtered.filter(entry => {
+                    const chat = this.data.chats.find(c => c.id === entry.chat_id);
+                    const department = (chat && (chat.department || null)) ?? (entry.chat_department || null);
+                    return department === filterDepartment;
+                });
+            }
+
+            const sliced = filtered.slice(offset, offset + limit).map(entry => {
+                const chat = this.data.chats.find(c => c.id === entry.chat_id) || null;
+                return {
+                    id: entry.id,
+                    message_id: entry.message_id,
+                    chat_id: entry.chat_id,
+                    chat_name: (chat && chat.name) || entry.chat_name || null,
+                    chat_type: (chat && chat.type) || entry.chat_type || null,
+                    chat_department: (chat && chat.department) || entry.chat_department || null,
+                    deleted_message_user_id: entry.deleted_message_user_id,
+                    deleted_message_user_name: entry.deleted_message_user_name,
+                    deleted_by_user_id: entry.deleted_by_user_id,
+                    deleted_by_user_name: entry.deleted_by_user_name,
+                    deleted_by_role: entry.deleted_by_role,
+                    deletion_scope: entry.deletion_scope,
+                    original_content: entry.original_content,
+                    file_id: entry.file_id,
+                    deleted_message_created_at: entry.deleted_message_created_at,
+                    deleted_at: entry.deleted_at
+                };
+            });
+
+            return { rows: sliced, rowCount: sliced.length };
+        }
+
+        if (normalized.startsWith('SELECT m.user_id, m.file_id, m.chat_id, m.content, m.created_at, c.name AS chat_name')) {
+            const messageId = toInt(params[0]);
+            const message = this.data.messages.find(m => m.id === messageId);
+            if (!message) {
+                return { rows: [], rowCount: 0 };
+            }
+
+            const chat = this.data.chats.find(c => c.id === message.chat_id) || {};
+            const user = this.data.users.find(u => u.id === message.user_id) || {};
+
+            return {
+                rows: [{
+                    user_id: message.user_id,
+                    file_id: message.file_id || null,
+                    chat_id: message.chat_id,
+                    content: message.content || null,
+                    created_at: message.created_at || new Date().toISOString(),
+                    chat_name: chat.name || null,
+                    chat_type: chat.type || null,
+                    chat_department: chat.department || null,
+                    author_name: user.name || null
+                }],
+                rowCount: 1
+            };
+        }
+
+        if (normalized.startsWith('SELECT chat_id FROM messages WHERE id =')) {
+            const messageId = toInt(params[0]);
+            const message = this.data.messages.find(m => m.id === messageId);
+            return {
+                rows: message ? [{ chat_id: message.chat_id }] : [],
+                rowCount: message ? 1 : 0
+            };
+        }
+
         if (normalized.startsWith('SELECT can_send_direct_message')) {
             return { rows: [{ can_send: true }], rowCount: 1 };
         }
@@ -615,6 +723,21 @@ class InMemoryDatabase {
             } else if (table === 'admin_logs') {
                 entity.id = this.nextId('admin_logs');
                 this.data.admin_logs.push(entity);
+            } else if (table === 'message_deletion_history') {
+                entity.id = this.nextId('message_deletion_history');
+                entity.chat_id = Number(entity.chat_id);
+                entity.deleted_by_user_id = Number(entity.deleted_by_user_id);
+                if (entity.deleted_message_user_id !== undefined && entity.deleted_message_user_id !== null) {
+                    entity.deleted_message_user_id = Number(entity.deleted_message_user_id);
+                } else {
+                    entity.deleted_message_user_id = null;
+                }
+                entity.file_id = entity.file_id === undefined || entity.file_id === null
+                    ? null
+                    : Number(entity.file_id);
+                entity.deleted_message_created_at = entity.deleted_message_created_at || null;
+                entity.deleted_at = entity.deleted_at || new Date().toISOString();
+                this.data.message_deletion_history.push(entity);
             }
 
             if (returnAllColumns) {
