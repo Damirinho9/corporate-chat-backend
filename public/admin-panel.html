@@ -2251,13 +2251,11 @@ async function loadChats() {
                 } else {
                     showToast(result.error || 'Failed to create user', 'error');
                 }
-                if (!selectElement.value && autoSelectFirst && selectElement.options.length > 1) {
-                    selectElement.selectedIndex = 1;
-                }
-            } else if (!preserveValue) {
-                selectElement.value = '';
+            } catch (error) {
+                console.error('Create user error:', error);
+                showToast('Ошибка создания пользователя', 'error');
             }
-        }
+        });
 
         if (editDepartmentSelect) {
             editDepartmentSelect.addEventListener('change', () => {
