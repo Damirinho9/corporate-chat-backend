@@ -558,6 +558,9 @@
                 <div class="nav-item" data-section="departments">
                     🏢 Departments
                 </div>
+                <div class="nav-item" data-section="permissions">
+                    🔐 Permissions
+                </div>
                 <div class="nav-item" data-section="logs">
                     📋 Logs
                 </div>
@@ -699,6 +702,41 @@
 
                 <div class="card">
                     <div id="departmentsList">
+                        <p style="text-align: center; color: #a0aec0;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Permissions -->
+            <div id="permissions" class="content-section">
+                <div class="header">
+                    <h2>🔐 Права доступа</h2>
+                    <div>
+                        <button class="btn btn-success" onclick="savePermissions()">
+                            💾 Сохранить
+                        </button>
+                        <button class="btn btn-danger" onclick="resetPermissions()">
+                            🔄 Сбросить
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Права отправки сообщений между ролями</h3>
+                    <p style="color: #718096; margin-bottom: 20px;">
+                        Установите галочки для разрешения отправки сообщений. Строки = отправитель, столбцы = получатель.
+                    </p>
+                    <div id="permissionsMatrix" style="overflow-x: auto;">
+                        <p style="text-align: center; color: #a0aec0;">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 30px;">
+                    <h3>Общие права доступа</h3>
+                    <p style="color: #718096; margin-bottom: 20px;">
+                        Настройте права доступа к различным функциям системы для каждой роли.
+                    </p>
+                    <div id="generalPermissionsMatrix">
                         <p style="text-align: center; color: #a0aec0;">Loading...</p>
                     </div>
                 </div>
@@ -920,6 +958,9 @@
                     break;
                 case 'departments':
                     await loadDepartments();
+                    break;
+                case 'permissions':
+                    await loadPermissions();
                     break;
                 case 'logs':
                     await loadLogs();
@@ -1862,10 +1903,11 @@ async function loadUsersForChat() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         const container = document.getElementById('participantsList');
         container.innerHTML = data.users.map(user => `
-            <label style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; transition: background 0.2s;">
+            <label class="participant-item" data-name="${user.name.toLowerCase()}" data-username="${user.username.toLowerCase()}"
+                   style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; transition: background 0.2s;">
                 <input type="checkbox" value="${user.id}" onchange="toggleParticipant(${user.id})" style="margin-right: 10px;">
                 <div>
                     <div style="font-weight: 600;">${user.name}</div>
@@ -1885,6 +1927,22 @@ function toggleParticipant(userId) {
     } else {
         selectedParticipants.add(userId);
     }
+}
+
+function filterParticipants() {
+    const searchText = document.getElementById('participantsSearch').value.toLowerCase().trim();
+    const items = document.querySelectorAll('.participant-item');
+
+    items.forEach(item => {
+        const name = item.dataset.name || '';
+        const username = item.dataset.username || '';
+
+        if (name.includes(searchText) || username.includes(searchText)) {
+            item.style.display = 'flex';
+        } else {
+            item.style.display = 'none';
+        }
+    });
 }
 
 async function createNewChat() {
@@ -2024,18 +2082,211 @@ async function createNewDepartment() {
             } catch (err) { showToast('Ошибка', 'error'); }
         }
 
+        // ========== EDIT CHAT ==========
+        let currentEditChatId = null;
+        let currentChatParticipants = [];
+        let participantsToAdd = new Set();
+
         async function editChat(chatId) {
-            const newName = prompt('Новое название:');
-            if (!newName) return;
+            currentEditChatId = chatId;
+            document.getElementById('editChatModal').style.display = 'flex';
+            await loadChatForEdit(chatId);
+        }
+
+        async function loadChatForEdit(chatId) {
             try {
-                const res = await fetch(`${API_URL}/admin/chats/${chatId}`, {
-                    method: 'PATCH',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newName })
+                // Load chat details
+                const chatRes = await fetch(`${API_URL}/admin/chats/${chatId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (res.ok) { showToast('Обновлено', 'success'); loadChats(); }
-                else { showToast('Ошибка', 'error'); }
-            } catch (err) { showToast('Ошибка', 'error'); }
+                const chat = await chatRes.json();
+
+                document.getElementById('editChatId').value = chatId;
+                document.getElementById('editChatName').value = chat.name || '';
+                document.getElementById('editChatType').value = chat.type || 'group';
+                document.getElementById('editChatDepartment').value = chat.department || '';
+
+                // Show/hide department field
+                const deptGroup = document.getElementById('editChatDepartmentGroup');
+                deptGroup.style.display = chat.type === 'department' ? 'block' : 'none';
+
+                // Load participants
+                await loadEditChatParticipants(chatId);
+            } catch (err) {
+                console.error('Load chat error:', err);
+                showToast('Ошибка загрузки чата', 'error');
+            }
+        }
+
+        async function loadEditChatParticipants(chatId) {
+            try {
+                // Load current participants
+                const partRes = await fetch(`${API_URL}/chats/${chatId}/participants`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const participants = await partRes.json();
+                currentChatParticipants = participants.participants || [];
+
+                // Load all users
+                const usersRes = await fetch(`${API_URL}/users`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const usersData = await usersRes.json();
+                const allUsers = usersData.users || [];
+
+                // Render current participants
+                const currentContainer = document.getElementById('currentParticipantsList');
+                if (currentChatParticipants.length > 0) {
+                    currentContainer.innerHTML = currentChatParticipants.map(user => `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #e2e8f0;">
+                            <div>
+                                <div style="font-weight: 600;">${user.name || user.user_name}</div>
+                                <div style="font-size: 12px; color: #718096;">${user.username} • ${user.role}</div>
+                            </div>
+                            <button class="btn btn-sm btn-danger" onclick="removeParticipantFromChat(${user.id || user.user_id})">
+                                Удалить
+                            </button>
+                        </div>
+                    `).join('');
+                } else {
+                    currentContainer.innerHTML = '<p style="text-align: center; color: #a0aec0;">Нет участников</p>';
+                }
+
+                // Render available users (not in chat)
+                const participantIds = currentChatParticipants.map(p => p.id || p.user_id);
+                const availableUsers = allUsers.filter(user => !participantIds.includes(user.id));
+
+                const availableContainer = document.getElementById('availableParticipantsList');
+                if (availableUsers.length > 0) {
+                    availableContainer.innerHTML = availableUsers.map(user => `
+                        <label class="edit-participant-item" data-name="${user.name.toLowerCase()}" data-username="${user.username.toLowerCase()}"
+                               style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; transition: background 0.2s;">
+                            <input type="checkbox" value="${user.id}" onchange="toggleEditParticipant(${user.id})" style="margin-right: 10px;">
+                            <div>
+                                <div style="font-weight: 600;">${user.name}</div>
+                                <div style="font-size: 12px; color: #718096;">${user.username} • ${user.role}</div>
+                            </div>
+                        </label>
+                    `).join('');
+                } else {
+                    availableContainer.innerHTML = '<p style="text-align: center; color: #a0aec0;">Все пользователи уже в чате</p>';
+                }
+            } catch (err) {
+                console.error('Load participants error:', err);
+                showToast('Ошибка загрузки участников', 'error');
+            }
+        }
+
+        function handleEditChatTypeChange() {
+            const type = document.getElementById('editChatType').value;
+            const deptGroup = document.getElementById('editChatDepartmentGroup');
+            deptGroup.style.display = type === 'department' ? 'block' : 'none';
+        }
+
+        function toggleEditParticipant(userId) {
+            if (participantsToAdd.has(userId)) {
+                participantsToAdd.delete(userId);
+            } else {
+                participantsToAdd.add(userId);
+            }
+        }
+
+        function filterEditParticipants() {
+            const searchText = document.getElementById('editParticipantsSearch').value.toLowerCase().trim();
+            const items = document.querySelectorAll('.edit-participant-item');
+
+            items.forEach(item => {
+                const name = item.dataset.name || '';
+                const username = item.dataset.username || '';
+
+                if (name.includes(searchText) || username.includes(searchText)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        async function removeParticipantFromChat(userId) {
+            if (!confirm('Удалить участника из чата?')) return;
+
+            try {
+                const res = await fetch(`${API_URL}/chats/${currentEditChatId}/participants/${userId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.ok) {
+                    showToast('Участник удален', 'success');
+                    await loadEditChatParticipants(currentEditChatId);
+                } else {
+                    showToast('Ошибка удаления', 'error');
+                }
+            } catch (err) {
+                console.error('Remove participant error:', err);
+                showToast('Ошибка удаления участника', 'error');
+            }
+        }
+
+        async function saveEditedChat() {
+            const chatId = currentEditChatId;
+            const name = document.getElementById('editChatName').value.trim();
+            const type = document.getElementById('editChatType').value;
+            const department = document.getElementById('editChatDepartment').value.trim();
+
+            if (!name) {
+                alert('Введите название чата');
+                return;
+            }
+
+            try {
+                // Update chat details
+                const updateRes = await fetch(`${API_URL}/admin/chats/${chatId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        type: type,
+                        department: department || null
+                    })
+                });
+
+                if (!updateRes.ok) {
+                    throw new Error('Failed to update chat');
+                }
+
+                // Add new participants
+                if (participantsToAdd.size > 0) {
+                    for (const userId of participantsToAdd) {
+                        await fetch(`${API_URL}/chats/${chatId}/participants`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ userId: userId })
+                        });
+                    }
+                }
+
+                showToast('Чат успешно обновлен!', 'success');
+                closeEditChatModal();
+                loadChats();
+            } catch (err) {
+                console.error('Save chat error:', err);
+                showToast('Ошибка сохранения чата', 'error');
+            }
+        }
+
+        function closeEditChatModal() {
+            document.getElementById('editChatModal').style.display = 'none';
+            currentEditChatId = null;
+            currentChatParticipants = [];
+            participantsToAdd.clear();
+            document.getElementById('editParticipantsSearch').value = '';
         }
 
         function openCreateChatModal() {
@@ -2148,6 +2399,258 @@ async function createNewDepartment() {
                 }
             } catch (err) {
                 showToast('Ошибка', 'error');
+            }
+        }
+
+        // ========== PERMISSIONS MANAGEMENT ==========
+        let permissionsData = null;
+
+        async function loadPermissions() {
+            try {
+                // Load messaging permissions
+                const res = await fetch(`${API_URL}/permissions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) {
+                    throw new Error('Failed to load permissions');
+                }
+
+                permissionsData = await res.json();
+                renderPermissionsMatrix(permissionsData);
+
+                // Load general permissions
+                await loadGeneralPermissions();
+            } catch (err) {
+                console.error('Load permissions error:', err);
+                document.getElementById('permissionsMatrix').innerHTML =
+                    '<p style="color: #f56565; text-align: center;">Ошибка загрузки прав доступа</p>';
+            }
+        }
+
+        function renderPermissionsMatrix(data) {
+            const { matrix, roles } = data;
+            const roleLabels = {
+                'admin': 'Админ',
+                'assistant': 'Ассистент',
+                'rop': 'РОП',
+                'operator': 'Оператор',
+                'employee': 'Сотрудник'
+            };
+
+            let html = '<table style="border-collapse: collapse; width: 100%;">';
+
+            // Header row
+            html += '<thead><tr><th style="padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0;">От \\ Кому</th>';
+            roles.forEach(role => {
+                html += `<th style="padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; text-align: center;">
+                    <span class="badge badge-${role}">${roleLabels[role]}</span>
+                </th>`;
+            });
+            html += '</tr></thead>';
+
+            // Data rows
+            html += '<tbody>';
+            roles.forEach(fromRole => {
+                html += `<tr><td style="padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; font-weight: 600;">
+                    <span class="badge badge-${fromRole}">${roleLabels[fromRole]}</span>
+                </td>`;
+
+                roles.forEach(toRole => {
+                    const canSend = matrix[fromRole] && matrix[fromRole][toRole] !== undefined
+                        ? matrix[fromRole][toRole]
+                        : true;
+
+                    html += `<td style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">
+                        <input type="checkbox"
+                               data-from="${fromRole}"
+                               data-to="${toRole}"
+                               ${canSend ? 'checked' : ''}
+                               style="width: 20px; height: 20px; cursor: pointer;"
+                               onchange="markPermissionChanged(this)">
+                    </td>`;
+                });
+
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            html += '</table>';
+
+            document.getElementById('permissionsMatrix').innerHTML = html;
+        }
+
+        function markPermissionChanged(checkbox) {
+            checkbox.style.outline = '2px solid #4299e1';
+        }
+
+        async function resetPermissions() {
+            if (!confirm('Вы уверены, что хотите сбросить все права доступа к настройкам по умолчанию?')) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/permissions/reset`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (res.ok) {
+                    showToast('Права доступа сброшены к настройкам по умолчанию', 'success');
+                    await loadPermissions();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка сброса прав', 'error');
+                }
+            } catch (err) {
+                console.error('Reset permissions error:', err);
+                showToast('Ошибка сброса прав доступа', 'error');
+            }
+        }
+
+        // ========== GENERAL PERMISSIONS MANAGEMENT ==========
+        let generalPermissionsData = null;
+
+        async function loadGeneralPermissions() {
+            try {
+                const res = await fetch(`${API_URL}/permissions/general`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) {
+                    throw new Error('Failed to load general permissions');
+                }
+
+                generalPermissionsData = await res.json();
+                renderGeneralPermissionsMatrix(generalPermissionsData);
+            } catch (err) {
+                console.error('Load general permissions error:', err);
+                document.getElementById('generalPermissionsMatrix').innerHTML =
+                    '<p style="color: #f56565; text-align: center;">Ошибка загрузки общих прав</p>';
+            }
+        }
+
+        function renderGeneralPermissionsMatrix(data) {
+            const { permissions, categories, roles } = data;
+            const roleLabels = {
+                'admin': 'Админ',
+                'assistant': 'Ассистент',
+                'rop': 'РОП',
+                'operator': 'Оператор',
+                'employee': 'Сотрудник'
+            };
+
+            let html = '';
+
+            // Render each category
+            Object.keys(categories).forEach(categoryKey => {
+                const category = categories[categoryKey];
+
+                html += `<div style="margin-bottom: 30px;">`;
+                html += `<h4 style="margin-bottom: 15px; color: #2d3748; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0;">${category.label}</h4>`;
+                html += `<table style="border-collapse: collapse; width: 100%;">`;
+
+                // Header
+                html += '<thead><tr><th style="padding: 10px; background: #f7fafc; border: 1px solid #e2e8f0;">Право</th>';
+                roles.forEach(role => {
+                    html += `<th style="padding: 10px; background: #f7fafc; border: 1px solid #e2e8f0; text-align: center;">
+                        <span class="badge badge-${role}">${roleLabels[role]}</span>
+                    </th>`;
+                });
+                html += '</tr></thead>';
+
+                // Permission rows
+                html += '<tbody>';
+                category.permissions.forEach(perm => {
+                    html += `<tr><td style="padding: 10px; border: 1px solid #e2e8f0;">${perm.label}</td>`;
+
+                    roles.forEach(role => {
+                        const canPerform = permissions[role] && permissions[role][perm.key] !== undefined
+                            ? permissions[role][perm.key]
+                            : false;
+
+                        html += `<td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center;">
+                            <input type="checkbox"
+                                   data-role="${role}"
+                                   data-permission="${perm.key}"
+                                   ${canPerform ? 'checked' : ''}
+                                   style="width: 18px; height: 18px; cursor: pointer;"
+                                   onchange="markGeneralPermissionChanged(this)">
+                        </td>`;
+                    });
+
+                    html += '</tr>';
+                });
+                html += '</tbody>';
+                html += '</table>';
+                html += '</div>';
+            });
+
+            document.getElementById('generalPermissionsMatrix').innerHTML = html;
+        }
+
+        function markGeneralPermissionChanged(checkbox) {
+            checkbox.style.outline = '2px solid #4299e1';
+        }
+
+        async function savePermissions() {
+            try {
+                // Save messaging permissions
+                const msgCheckboxes = document.querySelectorAll('#permissionsMatrix input[type="checkbox"]');
+                const msgUpdates = [];
+
+                msgCheckboxes.forEach(cb => {
+                    msgUpdates.push({
+                        fromRole: cb.dataset.from,
+                        toRole: cb.dataset.to,
+                        canSend: cb.checked
+                    });
+                });
+
+                const msgRes = await fetch(`${API_URL}/permissions/batch`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ permissions: msgUpdates })
+                });
+
+                // Save general permissions
+                const genCheckboxes = document.querySelectorAll('#generalPermissionsMatrix input[type="checkbox"]');
+                const genUpdates = [];
+
+                genCheckboxes.forEach(cb => {
+                    genUpdates.push({
+                        role: cb.dataset.role,
+                        permission: cb.dataset.permission,
+                        canPerform: cb.checked
+                    });
+                });
+
+                const genRes = await fetch(`${API_URL}/permissions/general/batch`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ updates: genUpdates })
+                });
+
+                if (msgRes.ok && genRes.ok) {
+                    showToast('Все права доступа сохранены успешно!', 'success');
+                    // Remove outlines
+                    msgCheckboxes.forEach(cb => cb.style.outline = 'none');
+                    genCheckboxes.forEach(cb => cb.style.outline = 'none');
+                    await loadPermissions();
+                } else {
+                    showToast('Ошибка сохранения некоторых прав', 'error');
+                }
+            } catch (err) {
+                console.error('Save permissions error:', err);
+                showToast('Ошибка сохранения прав доступа', 'error');
             }
         }
 
