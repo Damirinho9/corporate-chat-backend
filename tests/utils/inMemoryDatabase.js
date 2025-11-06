@@ -270,6 +270,20 @@ class InMemoryDatabase {
             return { rows: [], rowCount: chat ? 1 : 0 };
         }
 
+        if (normalized.startsWith('UPDATE messages SET content =')) {
+            return this.handleUpdateMessageContent(params);
+        }
+
+        if (normalized.startsWith('UPDATE messages SET created_at =')) {
+            const timestamp = params[0];
+            const messageId = toInt(params[1]);
+            const message = this.data.messages.find(m => m.id === messageId);
+            if (message) {
+                message.created_at = timestamp;
+            }
+            return { rows: [], rowCount: message ? 1 : 0 };
+        }
+
         if (normalized.startsWith('UPDATE files SET message_id =')) {
             const messageId = toInt(params[0]);
             const fileId = toInt(params[1]);
@@ -299,7 +313,7 @@ class InMemoryDatabase {
                 content: m.content,
                 created_at: m.created_at,
                 updated_at: m.updated_at,
-                is_edited: false,
+                is_edited: Boolean(m.is_edited),
                 reply_to_id: m.reply_to_id || null,
                 forwarded_from_id: m.forwarded_from_id || null,
                 user_id: m.user_id,
@@ -314,6 +328,52 @@ class InMemoryDatabase {
             return { rows: result.reverse(), rowCount: result.length };
         }
 
+        if (normalized.startsWith('SELECT id, user_id, chat_id, created_at, is_deleted FROM messages WHERE id =')) {
+            const messageId = toInt(params[0]);
+            const message = this.data.messages.find(m => m.id === messageId);
+            if (!message) {
+                return { rows: [], rowCount: 0 };
+            }
+
+            return {
+                rows: [{
+                    id: message.id,
+                    user_id: message.user_id,
+                    chat_id: message.chat_id,
+                    created_at: message.created_at,
+                    is_deleted: Boolean(message.is_deleted)
+                }],
+                rowCount: 1
+            };
+        }
+
+        if (normalized.startsWith('SELECT m.id, m.chat_id, m.content, m.created_at, m.updated_at, m.is_edited')) {
+            const messageId = toInt(params[0]);
+            const message = this.data.messages.find(m => m.id === messageId);
+            if (!message) {
+                return { rows: [], rowCount: 0 };
+            }
+
+            const result = {
+                id: message.id,
+                chat_id: message.chat_id,
+                content: message.content,
+                created_at: message.created_at,
+                updated_at: message.updated_at,
+                is_edited: Boolean(message.is_edited),
+                user_id: message.user_id,
+                user_name: this.userName(message.user_id),
+                username: this.userUsername(message.user_id),
+                file: message.file_id ? this.buildFilePayload(message.file_id) : null,
+                reply_to: null,
+                forwarded_from: null,
+                reactions: null,
+                mentions: null
+            };
+
+            return { rows: [result], rowCount: 1 };
+        }
+
         if (normalized.startsWith('SELECT m.id, m.content, m.created_at, m.user_id')) {
             const messageId = toInt(params[0]);
             const message = this.data.messages.find(m => m.id === messageId);
@@ -324,6 +384,8 @@ class InMemoryDatabase {
                 id: message.id,
                 content: message.content,
                 created_at: message.created_at,
+                updated_at: message.updated_at,
+                is_edited: Boolean(message.is_edited),
                 user_id: message.user_id,
                 user_name: this.userName(message.user_id),
                 username: this.userUsername(message.user_id),
@@ -342,7 +404,7 @@ class InMemoryDatabase {
                 content: m.content,
                 created_at: m.created_at,
                 updated_at: m.updated_at,
-                is_edited: false,
+                is_edited: Boolean(m.is_edited),
                 reply_to_id: m.reply_to_id || null,
                 forwarded_from_id: m.forwarded_from_id || null,
                 user_id: m.user_id,
@@ -383,16 +445,49 @@ class InMemoryDatabase {
         const returnAllColumns = returning.includes('*');
 
         const rowsToInsert = [];
-        let paramIndex = 0;
-        const rowCount = (valuesPart.match(/\(/g) || []).length;
 
-        for (let i = 0; i < rowCount; i++) {
+        const rowMatches = valuesPart.match(/\(([^)]+)\)/g) || [];
+
+        const resolveTokenValue = (token) => {
+            const trimmed = token.trim();
+
+            if (/^\$\d+$/.test(trimmed)) {
+                const paramPosition = Number(trimmed.slice(1)) - 1;
+                return params[paramPosition];
+            }
+
+            if (/^'.*'$/.test(trimmed)) {
+                return trimmed.slice(1, -1);
+            }
+
+            if (trimmed.toUpperCase() === 'NULL') {
+                return null;
+            }
+
+            if (/^\d+$/.test(trimmed)) {
+                return Number(trimmed);
+            }
+
+            return trimmed;
+        };
+
+        rowMatches.forEach((rowExpression) => {
+            const withoutParens = rowExpression.replace(/[()]/g, '');
+            const valueTokens = withoutParens.split(',');
+
+            if (valueTokens.length !== columns.length) {
+                console.warn('⚠️ Количество значений не совпадает с количеством колонок для INSERT:', normalized);
+                return;
+            }
+
             const row = {};
-            columns.forEach((column) => {
-                row[column] = params[paramIndex++];
+            valueTokens.forEach((token, index) => {
+                const column = columns[index];
+                row[column] = resolveTokenValue(token);
             });
+
             rowsToInsert.push(row);
-        }
+        });
 
         const insertedRows = [];
 
@@ -409,6 +504,8 @@ class InMemoryDatabase {
                 entity.created_at = entity.updated_at = new Date().toISOString();
                 this.data.chats.push(entity);
             } else if (table === 'chat_participants') {
+                entity.chat_id = Number(entity.chat_id);
+                entity.user_id = Number(entity.user_id);
                 this.data.chat_participants.push({ ...entity });
             } else if (table === 'messages') {
                 entity.id = this.nextId('messages');
@@ -420,6 +517,8 @@ class InMemoryDatabase {
                 const timestamp = new Date().toISOString();
                 entity.created_at = timestamp;
                 entity.updated_at = timestamp;
+                entity.is_edited = Boolean(entity.is_edited);
+                entity.is_deleted = Boolean(entity.is_deleted);
                 this.data.messages.push(entity);
             } else if (table === 'files') {
                 entity.id = this.nextId('files');
@@ -500,6 +599,22 @@ class InMemoryDatabase {
         };
 
         return { rows: [row], rowCount: 1 };
+    }
+
+    handleUpdateMessageContent(params) {
+        const content = params[0];
+        const messageId = Number(params[1]);
+        const message = this.data.messages.find(m => m.id === messageId);
+
+        if (!message) {
+            return { rows: [], rowCount: 0 };
+        }
+
+        message.content = content;
+        message.is_edited = true;
+        message.updated_at = new Date().toISOString();
+
+        return { rows: [], rowCount: 1 };
     }
 
     handleInsertChatParticipantsSelect(normalized, params) {
