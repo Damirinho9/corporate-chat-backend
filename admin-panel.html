@@ -1304,6 +1304,65 @@
         const editStatusSelect = document.getElementById('editStatus');
         const editPasswordInput = document.getElementById('editInitialPassword');
 
+        const modalFocusMemory = new WeakMap();
+
+        function rememberModalFocus(modal) {
+            if (!modal) {
+                return;
+            }
+
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement instanceof HTMLElement) {
+                modalFocusMemory.set(modal, activeElement);
+            } else {
+                modalFocusMemory.set(modal, null);
+            }
+        }
+
+        function restoreModalFocus(modal) {
+            if (!modal) {
+                return;
+            }
+
+            const previousElement = modalFocusMemory.get(modal);
+            modalFocusMemory.delete(modal);
+
+            if (previousElement && typeof previousElement.focus === 'function') {
+                try {
+                    previousElement.focus();
+                } catch (error) {
+                    console.warn('[modal] Unable to restore focus', error);
+                }
+            }
+        }
+
+        function openModalElement(modal, { focusTarget = null, focusSelector = null } = {}) {
+            if (!modal) {
+                return;
+            }
+
+            rememberModalFocus(modal);
+
+            modal.classList.add('show');
+            modal.style.display = 'flex';
+
+            let focusElement = null;
+            if (focusTarget && typeof focusTarget.focus === 'function') {
+                focusElement = focusTarget;
+            } else if (focusSelector) {
+                focusElement = modal.querySelector(focusSelector);
+            }
+
+            if (!focusElement) {
+                focusElement = modal.querySelector('[data-autofocus]')
+                    || modal.querySelector('input, select, textarea, button');
+            }
+
+            if (focusElement && typeof focusElement.focus === 'function') {
+                setTimeout(() => focusElement.focus(), 0);
+            }
+        }
+
         // Check auth
         if (!token || !currentUser || currentUser.role !== 'admin') {
             window.location.href = '/';
@@ -1884,15 +1943,7 @@ async function loadChats() {
                 toggleDepartmentField(roleSelect);
             }
 
-            const modal = document.getElementById('createUserModal');
-            if (modal) {
-                modal.classList.add('show');
-                modal.style.display = 'flex';
-            }
-
-            if (fullNameInput) {
-                setTimeout(() => fullNameInput.focus(), 50);
-            }
+            openModalElement(document.getElementById('createUserModal'), { focusTarget: fullNameInput });
         }
 
         function closeModal(modalId) {
@@ -1900,6 +1951,7 @@ async function loadChats() {
             if (modal) {
                 modal.classList.remove('show');
                 modal.style.display = 'none';
+                restoreModalFocus(modal);
             }
 
             if (modalId === 'createUserModal' && createUserForm) {
@@ -2396,12 +2448,27 @@ async function loadChats() {
             }, 3000);
         }
 
-        // ========== LOGOUT ==========
-        function logout() {
-            if (confirm('Logout?')) {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                window.location.href = '/';
+        async function addUserToDepartment(departmentName, userId, role) {
+            try {
+                const res = await fetch(`${API_URL}/departments/${encodeURIComponent(departmentName)}/users`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userId, role })
+                });
+
+                if (res.ok) {
+                    showToast('Пользователь добавлен в отдел', 'success');
+                    await loadDepartments();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка добавления', 'error');
+                }
+            } catch (err) {
+                console.error('Add user to department error:', err);
+                showToast('Ошибка добавления пользователя', 'error');
             }
         }
 
@@ -2425,11 +2492,7 @@ async function showCreateChatModal() {
         searchInput.value = '';
     }
 
-    const modal = document.getElementById('createChatModal');
-    if (modal) {
-        modal.classList.add('show');
-        modal.style.display = 'flex';
-    }
+    openModalElement(document.getElementById('createChatModal'), { focusSelector: '#participantsSearch' });
 
     await loadUsersForChat();
 }
@@ -2439,6 +2502,7 @@ function closeCreateChatModal() {
     if (modal) {
         modal.classList.remove('show');
         modal.style.display = 'none';
+        restoreModalFocus(modal);
     }
 
     const form = document.getElementById('createChatForm');
@@ -2579,11 +2643,7 @@ async function createNewChat() {
 
 // ========== МОДАЛЬНОЕ ОКНО: СОЗДАТЬ ОТДЕЛ ==========
 async function showCreateDepartmentModal() {
-    const modal = document.getElementById('createDepartmentModal');
-    if (modal) {
-        modal.classList.add('show');
-        modal.style.display = 'flex';
-    }
+    openModalElement(document.getElementById('createDepartmentModal'), { focusSelector: '#newDeptName' });
     await loadHeadsForDepartment();
 }
 
@@ -2592,6 +2652,7 @@ function closeCreateDepartmentModal() {
     if (modal) {
         modal.classList.remove('show');
         modal.style.display = 'none';
+        restoreModalFocus(modal);
     }
     document.getElementById('newDeptName').value = '';
     document.getElementById('newDeptDescription').value = '';
@@ -2691,6 +2752,7 @@ function closeModalElement(modal) {
         default:
             modal.classList.remove('show');
             modal.style.display = 'none';
+            restoreModalFocus(modal);
             break;
     }
 }
@@ -2785,6 +2847,7 @@ setupModalAccessibility();
             if (editChatModal) {
                 editChatModal.classList.remove('show');
                 editChatModal.style.display = 'none';
+                restoreModalFocus(editChatModal);
             }
             resetEditChatState();
         }
@@ -2942,8 +3005,7 @@ setupModalAccessibility();
             editChatState.chatId = numericId;
 
             if (editChatModal) {
-            editChatModal.classList.add('show');
-            editChatModal.style.display = 'flex';
+                openModalElement(editChatModal, { focusTarget: editChatNameInput });
             }
 
             if (currentParticipantsList) {
@@ -3204,7 +3266,7 @@ setupModalAccessibility();
             }
 
             if (editUserModal) {
-                editUserModal.classList.add('show');
+                openModalElement(editUserModal, { focusTarget: editFullNameInput });
             }
         }
 

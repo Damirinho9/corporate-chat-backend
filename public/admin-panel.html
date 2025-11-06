@@ -1304,6 +1304,65 @@
         const editStatusSelect = document.getElementById('editStatus');
         const editPasswordInput = document.getElementById('editInitialPassword');
 
+        const modalFocusMemory = new WeakMap();
+
+        function rememberModalFocus(modal) {
+            if (!modal) {
+                return;
+            }
+
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement instanceof HTMLElement) {
+                modalFocusMemory.set(modal, activeElement);
+            } else {
+                modalFocusMemory.set(modal, null);
+            }
+        }
+
+        function restoreModalFocus(modal) {
+            if (!modal) {
+                return;
+            }
+
+            const previousElement = modalFocusMemory.get(modal);
+            modalFocusMemory.delete(modal);
+
+            if (previousElement && typeof previousElement.focus === 'function') {
+                try {
+                    previousElement.focus();
+                } catch (error) {
+                    console.warn('[modal] Unable to restore focus', error);
+                }
+            }
+        }
+
+        function openModalElement(modal, { focusTarget = null, focusSelector = null } = {}) {
+            if (!modal) {
+                return;
+            }
+
+            rememberModalFocus(modal);
+
+            modal.classList.add('show');
+            modal.style.display = 'flex';
+
+            let focusElement = null;
+            if (focusTarget && typeof focusTarget.focus === 'function') {
+                focusElement = focusTarget;
+            } else if (focusSelector) {
+                focusElement = modal.querySelector(focusSelector);
+            }
+
+            if (!focusElement) {
+                focusElement = modal.querySelector('[data-autofocus]')
+                    || modal.querySelector('input, select, textarea, button');
+            }
+
+            if (focusElement && typeof focusElement.focus === 'function') {
+                setTimeout(() => focusElement.focus(), 0);
+            }
+        }
+
         // Check auth
         if (!token || !currentUser || currentUser.role !== 'admin') {
             window.location.href = '/';
@@ -1884,15 +1943,7 @@ async function loadChats() {
                 toggleDepartmentField(roleSelect);
             }
 
-            const modal = document.getElementById('createUserModal');
-            if (modal) {
-                modal.classList.add('show');
-                modal.style.display = 'flex';
-            }
-
-            if (fullNameInput) {
-                setTimeout(() => fullNameInput.focus(), 50);
-            }
+            openModalElement(document.getElementById('createUserModal'), { focusTarget: fullNameInput });
         }
 
         function closeModal(modalId) {
@@ -1900,6 +1951,7 @@ async function loadChats() {
             if (modal) {
                 modal.classList.remove('show');
                 modal.style.display = 'none';
+                restoreModalFocus(modal);
             }
 
             if (modalId === 'createUserModal' && createUserForm) {
@@ -2229,7 +2281,7 @@ async function loadChats() {
             }
 
             try {
-                const res = await fetch(`${API_URL}/auth/register`, {
+                const res = await fetch(`${API_URL}/users/${userId}/reset-password`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -2249,222 +2301,12 @@ async function loadChats() {
                         await loadDepartments();
                     }
                 } else {
-                    showToast(result.error || 'Failed to create user', 'error');
+                    showToast(result.error || 'Не удалось сбросить пароль', 'error');
                 }
-                if (!selectElement.value && autoSelectFirst && selectElement.options.length > 1) {
-                    selectElement.selectedIndex = 1;
-                }
-            } else if (!preserveValue) {
-                selectElement.value = '';
+            } catch (error) {
+                console.error('[resetUserPassword] error:', error);
+                showToast('Не удалось сбросить пароль', 'error');
             }
-        }
-
-        if (editDepartmentSelect) {
-            editDepartmentSelect.addEventListener('change', () => {
-                editDepartmentSelect.dataset.lastValue = editDepartmentSelect.value;
-            });
-        }
-
-        if (editRoleSelect) {
-            editRoleSelect.addEventListener('change', (event) => {
-                const preferred = shouldRequireDepartment(event.target.value)
-                    ? (editDepartmentSelect?.dataset.lastValue || editDepartmentSelect?.value || '')
-                    : null;
-                updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
-                    preferredValue: preferred,
-                    autoSelectFirst: true,
-                    preserveValue: false
-                });
-            });
-        }
-
-        if (editUserForm) {
-            editUserForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-
-                const userId = Number(editUserIdInput?.value);
-                if (!userId) {
-                    showToast('Пользователь не выбран', 'error');
-                    return;
-                }
-
-                const name = editFullNameInput?.value.trim() || '';
-                const usernameValue = editUsernameInput?.value.trim() || '';
-                const roleValue = editRoleSelect?.value || '';
-                const isActiveValue = editStatusSelect?.value === 'true';
-                const needsDept = shouldRequireDepartment(roleValue);
-                const departmentValue = needsDept ? (editDepartmentSelect?.value || '') : '';
-                const normalizedDepartment = needsDept ? (departmentValue || null) : null;
-
-                if (!name || !usernameValue || !roleValue) {
-                    showToast('Заполните обязательные поля', 'error');
-                    return;
-                }
-
-                if (needsDept && !normalizedDepartment) {
-                    showToast('Выберите отдел для выбранной роли', 'error');
-                    return;
-                }
-
-                const updates = {};
-                const original = currentEditingUser;
-                if (original) {
-                    if (name !== original.name) updates.name = name;
-                    if (usernameValue !== original.username) updates.username = usernameValue;
-                    if (roleValue !== original.role) updates.role = roleValue;
-                    const originalDepartment = original.department || null;
-                    if ((normalizedDepartment || null) !== originalDepartment) {
-                        updates.department = normalizedDepartment;
-                    }
-                    const originalActive = original.is_active !== false;
-                    if (isActiveValue !== originalActive) {
-                        updates.isActive = isActiveValue;
-                    }
-                } else {
-                    updates.name = name;
-                    updates.username = usernameValue;
-                    updates.role = roleValue;
-                    updates.department = normalizedDepartment;
-                    updates.isActive = isActiveValue;
-                }
-
-                if (Object.keys(updates).length === 0) {
-                    showToast('Нет изменений для сохранения', 'error');
-                    return;
-                }
-
-                try {
-                    const res = await fetch(`${API_URL}/users/${userId}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(updates)
-                    });
-
-                    const result = await res.json().catch(() => ({}));
-
-                    if (res.ok) {
-                        showToast('Пользователь обновлен', 'success');
-                        closeModal('editUserModal');
-                        currentEditingUser = null;
-                        await loadUsers();
-                        if (updates.role !== undefined || updates.department !== undefined) {
-                            await loadDepartments();
-                        }
-                    } else {
-                        showToast(result.error || 'Ошибка обновления пользователя', 'error');
-                    }
-                } catch (error) {
-                    console.error('[editUserForm] error:', error);
-                    showToast('Ошибка обновления пользователя', 'error');
-                }
-            });
-        }
-
-        if (editDepartmentSelect) {
-            editDepartmentSelect.addEventListener('change', () => {
-                editDepartmentSelect.dataset.lastValue = editDepartmentSelect.value;
-            });
-        }
-
-        if (editRoleSelect) {
-            editRoleSelect.addEventListener('change', (event) => {
-                const preferred = shouldRequireDepartment(event.target.value)
-                    ? (editDepartmentSelect?.dataset.lastValue || editDepartmentSelect?.value || '')
-                    : null;
-                updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
-                    preferredValue: preferred,
-                    autoSelectFirst: true,
-                    preserveValue: false
-                });
-            });
-        }
-
-        if (editUserForm) {
-            editUserForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-
-                const userId = Number(editUserIdInput?.value);
-                if (!userId) {
-                    showToast('Пользователь не выбран', 'error');
-                    return;
-                }
-
-                const name = editFullNameInput?.value.trim() || '';
-                const usernameValue = editUsernameInput?.value.trim() || '';
-                const roleValue = editRoleSelect?.value || '';
-                const isActiveValue = editStatusSelect?.value === 'true';
-                const needsDept = shouldRequireDepartment(roleValue);
-                const departmentValue = needsDept ? (editDepartmentSelect?.value || '') : '';
-                const normalizedDepartment = needsDept ? (departmentValue || null) : null;
-
-                if (!name || !usernameValue || !roleValue) {
-                    showToast('Заполните обязательные поля', 'error');
-                    return;
-                }
-
-                if (needsDept && !normalizedDepartment) {
-                    showToast('Выберите отдел для выбранной роли', 'error');
-                    return;
-                }
-
-                const updates = {};
-                const original = currentEditingUser;
-                if (original) {
-                    if (name !== original.name) updates.name = name;
-                    if (usernameValue !== original.username) updates.username = usernameValue;
-                    if (roleValue !== original.role) updates.role = roleValue;
-                    const originalDepartment = original.department || null;
-                    if ((normalizedDepartment || null) !== originalDepartment) {
-                        updates.department = normalizedDepartment;
-                    }
-                    const originalActive = original.is_active !== false;
-                    if (isActiveValue !== originalActive) {
-                        updates.isActive = isActiveValue;
-                    }
-                } else {
-                    updates.name = name;
-                    updates.username = usernameValue;
-                    updates.role = roleValue;
-                    updates.department = normalizedDepartment;
-                    updates.isActive = isActiveValue;
-                }
-
-                if (Object.keys(updates).length === 0) {
-                    showToast('Нет изменений для сохранения', 'error');
-                    return;
-                }
-
-                try {
-                    const res = await fetch(`${API_URL}/users/${userId}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(updates)
-                    });
-
-                    const result = await res.json().catch(() => ({}));
-
-                    if (res.ok) {
-                        showToast('Пользователь обновлен', 'success');
-                        closeModal('editUserModal');
-                        currentEditingUser = null;
-                        await loadUsers();
-                        if (updates.role !== undefined || updates.department !== undefined) {
-                            await loadDepartments();
-                        }
-                    } else {
-                        showToast(result.error || 'Ошибка обновления пользователя', 'error');
-                    }
-                } catch (error) {
-                    console.error('[editUserForm] error:', error);
-                    showToast('Ошибка обновления пользователя', 'error');
-                }
-            });
         }
 
         if (editDepartmentSelect) {
@@ -2587,40 +2429,49 @@ async function loadChats() {
                     showToast('User deleted successfully!', 'success');
                     loadUsers();
                 } else {
-                    showToast(data.error || 'Failed to delete user', 'error');
+                    converted += '';
                 }
-            } catch (err) {
-                console.error('Delete user error:', err);
-                showToast('Failed to delete user', 'error');
             }
-        }
 
-        // ========== TOAST ==========
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = `toast ${type} show`;
-            
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
+            converted = converted.replace(/[^a-z0-9.]/g, '.');
+            converted = converted.replace(/\.+/g, '.').replace(/^\.+|\.+$/g, '');
 
-        // ========== LOGOUT ==========
-        function logout() {
-            if (confirm('Logout?')) {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                window.location.href = '/';
+            if (!converted) {
+                return '';
             }
+
+            if (/^[0-9]/.test(converted)) {
+                converted = `u${converted}`;
+            }
+
+            return converted.slice(0, 24);
         }
 
-        // ========== INIT ==========
-        loadDashboard();
-    
+        function updateUsernameFromFullName() {
+            if (!fullNameInput || manualUsernameOverride) {
+                return;
+            }
 
-// ========== МОДАЛЬНОЕ ОКНО: СОЗДАТЬ ЧАТ ==========
-let selectedParticipants = new Set();
+            usernameInput.value = buildUsernameFromFullName(fullNameInput.value);
+        }
+
+        if (fullNameInput) {
+            fullNameInput.addEventListener('input', () => {
+                updateUsernameFromFullName();
+            });
+        }
+
+        if (usernameInput) {
+            usernameInput.addEventListener('input', () => {
+                manualUsernameOverride = true;
+            });
+            usernameInput.addEventListener('focus', () => {
+                if (!usernameInput.value) {
+                    manualUsernameOverride = false;
+                    updateUsernameFromFullName();
+                }
+            });
+        }
 
 async function showCreateChatModal() {
     selectedParticipants.clear();
@@ -2635,11 +2486,7 @@ async function showCreateChatModal() {
         searchInput.value = '';
     }
 
-    const modal = document.getElementById('createChatModal');
-    if (modal) {
-        modal.classList.add('show');
-        modal.style.display = 'flex';
-    }
+    openModalElement(document.getElementById('createChatModal'), { focusSelector: '#participantsSearch' });
 
     await loadUsersForChat();
 }
@@ -2649,6 +2496,7 @@ function closeCreateChatModal() {
     if (modal) {
         modal.classList.remove('show');
         modal.style.display = 'none';
+        restoreModalFocus(modal);
     }
 
     const form = document.getElementById('createChatForm');
@@ -2687,7 +2535,7 @@ async function loadUsersForChat() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-
+        
         const container = document.getElementById('participantsList');
         if (!container) {
             return;
@@ -2789,11 +2637,7 @@ async function createNewChat() {
 
 // ========== МОДАЛЬНОЕ ОКНО: СОЗДАТЬ ОТДЕЛ ==========
 async function showCreateDepartmentModal() {
-    const modal = document.getElementById('createDepartmentModal');
-    if (modal) {
-        modal.classList.add('show');
-        modal.style.display = 'flex';
-    }
+    openModalElement(document.getElementById('createDepartmentModal'), { focusSelector: '#newDeptName' });
     await loadHeadsForDepartment();
 }
 
@@ -2802,6 +2646,7 @@ function closeCreateDepartmentModal() {
     if (modal) {
         modal.classList.remove('show');
         modal.style.display = 'none';
+        restoreModalFocus(modal);
     }
     document.getElementById('newDeptName').value = '';
     document.getElementById('newDeptDescription').value = '';
@@ -2901,6 +2746,7 @@ function closeModalElement(modal) {
         default:
             modal.classList.remove('show');
             modal.style.display = 'none';
+            restoreModalFocus(modal);
             break;
     }
 }
@@ -2995,6 +2841,7 @@ setupModalAccessibility();
             if (editChatModal) {
                 editChatModal.classList.remove('show');
                 editChatModal.style.display = 'none';
+                restoreModalFocus(editChatModal);
             }
             resetEditChatState();
         }
@@ -3152,8 +2999,7 @@ setupModalAccessibility();
             editChatState.chatId = numericId;
 
             if (editChatModal) {
-            editChatModal.classList.add('show');
-            editChatModal.style.display = 'flex';
+                openModalElement(editChatModal, { focusTarget: editChatNameInput });
             }
 
             if (currentParticipantsList) {
@@ -3414,7 +3260,7 @@ setupModalAccessibility();
             }
 
             if (editUserModal) {
-                editUserModal.classList.add('show');
+                openModalElement(editUserModal, { focusTarget: editFullNameInput });
             }
         }
 
