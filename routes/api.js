@@ -101,7 +101,7 @@ router.get('/users/:userId',
 
 router.put('/users/:userId',
     authenticateToken,
-    requireAdmin,
+    requireAdminOrRop,
     [
         param('userId').isInt(),
         body('username').optional().trim().isLength({ min: 3, max: 50 }),
@@ -116,7 +116,7 @@ router.put('/users/:userId',
 
 router.delete('/users/:userId',
     authenticateToken,
-    requireAdmin,
+    requireAdminOrRop,
     [param('userId').isInt()],
     validate,
     userController.deleteUser

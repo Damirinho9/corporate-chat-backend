@@ -89,6 +89,34 @@ class InMemoryDatabase {
             return { rows: user ? [{ role: user.role }] : [], rowCount: user ? 1 : 0 };
         }
 
+        if (normalized.startsWith('SELECT id, username, role, department, is_active FROM users WHERE id =')) {
+            const id = toInt(params[0]);
+            const user = this.data.users.find(u => u.id === id);
+            return {
+                rows: user ? [{
+                    id: user.id,
+                    username: user.username,
+                    role: user.role,
+                    department: user.department || null,
+                    is_active: user.is_active !== false
+                }] : [],
+                rowCount: user ? 1 : 0
+            };
+        }
+
+        if (normalized.startsWith('SELECT id, role, department FROM users WHERE id =')) {
+            const id = toInt(params[0]);
+            const user = this.data.users.find(u => u.id === id);
+            return {
+                rows: user ? [{
+                    id: user.id,
+                    role: user.role,
+                    department: user.department || null
+                }] : [],
+                rowCount: user ? 1 : 0
+            };
+        }
+
         if (normalized.startsWith('SELECT id, username, name FROM users WHERE id =')) {
             const id = toInt(params[0]);
             const user = this.data.users.find(u => u.id === id && u.is_active);
@@ -229,6 +257,10 @@ class InMemoryDatabase {
             return this.handleInsert('files', normalized, params);
         }
 
+        if (normalized.startsWith('UPDATE users SET')) {
+            return this.handleUpdateUsers(normalized, params);
+        }
+
         if (normalized.startsWith('UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id =')) {
             const chatId = toInt(params[0]);
             const chat = this.data.chats.find(c => c.id === chatId);
@@ -246,6 +278,15 @@ class InMemoryDatabase {
                 file.message_id = messageId;
             }
             return { rows: [], rowCount: file ? 1 : 0 };
+        }
+
+        if (normalized.startsWith('DELETE FROM users WHERE id =')) {
+            const userId = toInt(params[0]);
+            const initialLength = this.data.users.length;
+            this.data.users = this.data.users.filter(u => u.id !== userId);
+            this.data.chat_participants = this.data.chat_participants.filter(cp => cp.user_id !== userId);
+            this.data.messages = this.data.messages.filter(m => m.user_id !== userId);
+            return { rows: [], rowCount: initialLength !== this.data.users.length ? 1 : 0 };
         }
 
         if (normalized.startsWith('SELECT m.id, m.content, m.created_at, m.updated_at')) {
@@ -407,6 +448,58 @@ class InMemoryDatabase {
             rows: returning.length > 0 ? insertedRows : [],
             rowCount: rowsToInsert.length
         };
+    }
+
+    handleUpdateUsers(normalized, params) {
+        const userId = Number(params[params.length - 1]);
+        const user = this.data.users.find(u => u.id === userId);
+
+        if (!user) {
+            return { rows: [], rowCount: 0 };
+        }
+
+        const setSegment = normalized.split('SET ')[1].split(' WHERE ')[0];
+        const assignments = setSegment.split(',').map(part => part.trim());
+        let paramIndex = 0;
+
+        assignments.forEach((assignment) => {
+            const [column] = assignment.split('=').map(part => part.trim());
+            const value = params[paramIndex++];
+
+            switch (column) {
+                case 'username':
+                    user.username = value;
+                    break;
+                case 'role':
+                    user.role = value;
+                    break;
+                case 'department':
+                    user.department = value === null || value === undefined ? null : value;
+                    break;
+                case 'name':
+                    user.name = value;
+                    break;
+                case 'is_active':
+                    user.is_active = value === false ? false : Boolean(value);
+                    break;
+                default:
+                    break;
+            }
+        });
+
+        user.updated_at = new Date().toISOString();
+
+        const row = {
+            id: user.id,
+            username: user.username,
+            name: user.name,
+            role: user.role,
+            department: user.department || null,
+            initial_password: user.initial_password || null,
+            is_active: user.is_active !== false
+        };
+
+        return { rows: [row], rowCount: 1 };
     }
 
     handleInsertChatParticipantsSelect(normalized, params) {

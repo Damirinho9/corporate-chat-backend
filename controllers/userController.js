@@ -1,6 +1,8 @@
 const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to match seed.js
 const { query } = require('../config/database');
 
+const ROP_MANAGEABLE_ROLES = new Set(['operator', 'employee']);
+
 function sanitizeInitialPassword(payload, includeSecret) {
     if (includeSecret) {
         return payload;
@@ -70,7 +72,7 @@ const getUserById = async (req, res) => {
     }
 };
 
-// Update user (admin only)
+// Update user (admin or ROP with restrictions)
 const updateUser = async (req, res) => {
     try {
         const { userId } = req.params;
@@ -90,6 +92,80 @@ const updateUser = async (req, res) => {
         }
 
         const currentUser = userCheck.rows[0];
+        const actor = req.user || {};
+        const actorRole = actor.role;
+        const actorDepartment = actor.department || null;
+        const isAdmin = actorRole === 'admin';
+        const isRop = actorRole === 'rop';
+        const manageableRoles = ROP_MANAGEABLE_ROLES;
+        const isSelf = actor && typeof actor.id !== 'undefined'
+            ? Number(userId) === Number(actor.id)
+            : false;
+
+        if (!isAdmin && !isRop) {
+            return res.status(403).json({
+                error: 'Insufficient permissions to update user',
+                code: 'UPDATE_USER_FORBIDDEN'
+            });
+        }
+
+        if (isRop) {
+            if (!actorDepartment) {
+                return res.status(400).json({
+                    error: 'Department is required for ROP actions',
+                    code: 'ROP_DEPARTMENT_MISSING'
+                });
+            }
+
+            if (currentUser.department !== actorDepartment) {
+                return res.status(403).json({
+                    error: 'ROPs can only manage users in their own department',
+                    code: 'ROP_FOREIGN_USER'
+                });
+            }
+
+            if (!isSelf && !manageableRoles.has(currentUser.role)) {
+                return res.status(403).json({
+                    error: 'ROPs can only manage operators or employees',
+                    code: 'ROP_ROLE_RESTRICTED'
+                });
+            }
+
+            if (role !== undefined) {
+                const requestedRole = String(role).toLowerCase();
+                if (isSelf) {
+                    if (requestedRole !== currentUser.role) {
+                        return res.status(403).json({
+                            error: 'ROPs cannot change their own role',
+                            code: 'ROLE_NOT_ALLOWED'
+                        });
+                    }
+                } else if (!manageableRoles.has(requestedRole)) {
+                    return res.status(403).json({
+                        error: 'ROPs can only assign operator or employee roles',
+                        code: 'ROP_ROLE_RESTRICTED'
+                    });
+                }
+            }
+
+            if (department !== undefined) {
+                if (department === null || String(department).trim() === '') {
+                    return res.status(400).json({
+                        error: 'Department is required for this role',
+                        code: 'DEPARTMENT_REQUIRED'
+                    });
+                }
+
+                const trimmedDepartment = String(department).trim();
+                if (trimmedDepartment !== actorDepartment) {
+                    return res.status(403).json({
+                        error: 'ROPs can only assign their own department',
+                        code: 'ROP_FOREIGN_DEPARTMENT'
+                    });
+                }
+            }
+        }
+
         const updates = [];
         const values = [];
         let paramCount = 1;
@@ -125,15 +201,16 @@ const updateUser = async (req, res) => {
 
         let normalizedRole = currentUser.role;
         if (role !== undefined) {
+            const normalizedRequestedRole = String(role).toLowerCase();
             const allowedRoles = ['admin', 'assistant', 'rop', 'operator', 'employee'];
-            if (!allowedRoles.includes(role)) {
+            if (!allowedRoles.includes(normalizedRequestedRole)) {
                 return res.status(400).json({
                     error: 'Invalid role',
                     code: 'INVALID_ROLE'
                 });
             }
 
-            normalizedRole = role;
+            normalizedRole = normalizedRequestedRole;
             updates.push(`role = $${paramCount}`);
             values.push(normalizedRole);
             paramCount++;
@@ -145,6 +222,10 @@ const updateUser = async (req, res) => {
                 processedDepartment = null;
             } else {
                 processedDepartment = String(department).trim();
+            }
+
+            if (isRop) {
+                processedDepartment = actorDepartment;
             }
 
             updates.push(`department = $${paramCount}`);
@@ -184,7 +265,7 @@ const updateUser = async (req, res) => {
         }
 
         if (updates.length === 0) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 error: 'No fields to update',
                 code: 'NO_UPDATE_FIELDS'
             });
@@ -199,43 +280,83 @@ const updateUser = async (req, res) => {
             values
         );
 
+        const updatedUser = result.rows[0];
+        const includeSecret = isAdmin;
+
         res.json({
             message: 'User updated successfully',
-            user: result.rows[0]
+            user: sanitizeInitialPassword(updatedUser, includeSecret)
         });
     } catch (error) {
         console.error('Update user error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to update user',
             code: 'UPDATE_USER_ERROR'
         });
     }
 };
 
-// Delete user (admin only)
+// Delete user (admin or ROP with restrictions)
 const deleteUser = async (req, res) => {
     try {
         const { userId } = req.params;
 
         // Check if user exists
         const userCheck = await query(
-            'SELECT id FROM users WHERE id = $1',
+            'SELECT id, role, department FROM users WHERE id = $1',
             [userId]
         );
 
         if (userCheck.rows.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 error: 'User not found',
                 code: 'USER_NOT_FOUND'
             });
         }
 
         // Prevent deleting yourself
-        if (parseInt(userId) === req.user.id) {
-            return res.status(400).json({ 
+        if (parseInt(userId, 10) === req.user.id) {
+            return res.status(400).json({
                 error: 'Cannot delete your own account',
                 code: 'CANNOT_DELETE_SELF'
             });
+        }
+
+        const actor = req.user || {};
+        const actorRole = actor.role;
+        const actorDepartment = actor.department || null;
+        const isAdmin = actorRole === 'admin';
+        const isRop = actorRole === 'rop';
+        const targetUser = userCheck.rows[0];
+
+        if (!isAdmin && !isRop) {
+            return res.status(403).json({
+                error: 'Insufficient permissions to delete user',
+                code: 'DELETE_USER_FORBIDDEN'
+            });
+        }
+
+        if (isRop) {
+            if (!actorDepartment) {
+                return res.status(400).json({
+                    error: 'Department is required for ROP actions',
+                    code: 'ROP_DEPARTMENT_MISSING'
+                });
+            }
+
+            if (targetUser.department !== actorDepartment) {
+                return res.status(403).json({
+                    error: 'ROPs can only manage users in their own department',
+                    code: 'ROP_FOREIGN_USER'
+                });
+            }
+
+            if (!ROP_MANAGEABLE_ROLES.has(targetUser.role)) {
+                return res.status(403).json({
+                    error: 'ROPs can only manage operators or employees',
+                    code: 'ROP_ROLE_RESTRICTED'
+                });
+            }
         }
 
         // Delete user (cascade will handle messages and chat participants)
@@ -244,7 +365,7 @@ const deleteUser = async (req, res) => {
         res.json({ message: 'User deleted successfully' });
     } catch (error) {
         console.error('Delete user error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to delete user',
             code: 'DELETE_USER_ERROR'
         });

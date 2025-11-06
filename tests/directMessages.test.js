@@ -202,6 +202,162 @@ function createMockResponse() {
             throw new Error(`РОП смог создать администратора (статус ${ropAdminRes.statusCode})`);
         }
 
+        console.log('🛠 Проверка редактирования сотрудника РОПом в своём отделе...');
+        const ropUpdateReq = {
+            params: { userId: ropCreatedUser.id },
+            body: {
+                name: 'Обновлённый оператор отдела продаж',
+                isActive: false
+            },
+            user: {
+                id: ropSalesRow.id,
+                role: 'rop',
+                department: ropSalesRow.department
+            }
+        };
+        const ropUpdateRes = createMockResponse();
+        await userController.updateUser(ropUpdateReq, ropUpdateRes);
+
+        if (ropUpdateRes.statusCode !== 200) {
+            throw new Error(`РОП не смог обновить сотрудника своего отдела (статус ${ropUpdateRes.statusCode})`);
+        }
+
+        if (!ropUpdateRes.body?.user || ropUpdateRes.body.user.name !== 'Обновлённый оператор отдела продаж') {
+            throw new Error('Ответ обновления пользователя не содержит актуальное имя');
+        }
+
+        if (ropUpdateRes.body.user.is_active !== false) {
+            throw new Error('Флаг активности пользователя не обновился после запроса РОПа');
+        }
+
+        if (Object.prototype.hasOwnProperty.call(ropUpdateRes.body.user, 'initial_password')) {
+            throw new Error('РОП получил исходный пароль в ответе обновления');
+        }
+
+        const verifyUpdatedUser = await query(
+            'SELECT id, role, department FROM users WHERE id = $1',
+            [ropCreatedUser.id]
+        );
+
+        if (verifyUpdatedUser.rowCount === 0 || verifyUpdatedUser.rows[0].department !== ropSalesRow.department) {
+            throw new Error('Пользователь исчез или сменил отдел после обновления РОПом');
+        }
+
+        console.log('🚫 Попытка РОПа изменить отдел сотрудника...');
+        const ropChangeDeptReq = {
+            params: { userId: ropCreatedUser.id },
+            body: { department: 'Marketing' },
+            user: {
+                id: ropSalesRow.id,
+                role: 'rop',
+                department: ropSalesRow.department
+            }
+        };
+        const ropChangeDeptRes = createMockResponse();
+        await userController.updateUser(ropChangeDeptReq, ropChangeDeptRes);
+
+        if (ropChangeDeptRes.statusCode !== 403) {
+            throw new Error(`Ожидался отказ при смене отдела, получен статус ${ropChangeDeptRes.statusCode}`);
+        }
+
+        console.log('🚫 Попытка РОПа назначить недопустимую роль...');
+        const ropForbiddenRoleReq = {
+            params: { userId: ropCreatedUser.id },
+            body: { role: 'admin' },
+            user: {
+                id: ropSalesRow.id,
+                role: 'rop',
+                department: ropSalesRow.department
+            }
+        };
+        const ropForbiddenRoleRes = createMockResponse();
+        await userController.updateUser(ropForbiddenRoleReq, ropForbiddenRoleRes);
+
+        if (ropForbiddenRoleRes.statusCode !== 403) {
+            throw new Error(`РОП смог сменить роль на недопустимую (статус ${ropForbiddenRoleRes.statusCode})`);
+        }
+
+        console.log('🚫 Попытка РОПа редактировать пользователя чужого отдела...');
+        const marketingOperator = (await query('SELECT id, department FROM users WHERE username = $1', ['operator3'])).rows[0];
+        const ropForeignEditReq = {
+            params: { userId: marketingOperator.id },
+            body: { name: 'Не должен обновиться' },
+            user: {
+                id: ropSalesRow.id,
+                role: 'rop',
+                department: ropSalesRow.department
+            }
+        };
+        const ropForeignEditRes = createMockResponse();
+        await userController.updateUser(ropForeignEditReq, ropForeignEditRes);
+
+        if (ropForeignEditRes.statusCode !== 403) {
+            throw new Error(`РОП смог обновить сотрудника чужого отдела (статус ${ropForeignEditRes.statusCode})`);
+        }
+
+        console.log('🗑 Подготовка временного пользователя для проверки удаления...');
+        const ropDeleteTargetReq = {
+            body: {
+                username: 'sales.temp.delete',
+                name: 'Временный сотрудник отдела продаж',
+                role: 'operator'
+            },
+            user: {
+                id: ropSalesRow.id,
+                role: 'rop',
+                department: ropSalesRow.department
+            }
+        };
+        const ropDeleteTargetRes = createMockResponse();
+        await authController.register(ropDeleteTargetReq, ropDeleteTargetRes);
+
+        if (ropDeleteTargetRes.statusCode !== 201) {
+            throw new Error(`Не удалось создать временного пользователя для удаления (статус ${ropDeleteTargetRes.statusCode})`);
+        }
+
+        if (!ropDeleteTargetRes.body?.user?.id) {
+            throw new Error('Ответ регистрации не содержит идентификатор пользователя для удаления');
+        }
+
+        const ropDeleteUserId = ropDeleteTargetRes.body.user.id;
+
+        console.log('🗑 Проверка удаления сотрудника своего отдела РОПом...');
+        const ropDeleteOwnReq = {
+            params: { userId: ropDeleteUserId },
+            user: {
+                id: ropSalesRow.id,
+                role: 'rop',
+                department: ropSalesRow.department
+            }
+        };
+        const ropDeleteOwnRes = createMockResponse();
+        await userController.deleteUser(ropDeleteOwnReq, ropDeleteOwnRes);
+
+        if (ropDeleteOwnRes.statusCode !== 200) {
+            throw new Error(`РОП не смог удалить сотрудника своего отдела (статус ${ropDeleteOwnRes.statusCode})`);
+        }
+
+        const deletedCheck = await query('SELECT id, role, department FROM users WHERE id = $1', [ropDeleteUserId]);
+        if (deletedCheck.rowCount !== 0) {
+            throw new Error('Пользователь не был удалён из базы данных');
+        }
+
+        console.log('🚫 Попытка удаления пользователя чужого отдела РОПом...');
+        const ropDeleteForeignReq = {
+            params: { userId: marketingOperator.id },
+            user: {
+                id: ropSalesRow.id,
+                role: 'rop',
+                department: ropSalesRow.department
+            }
+        };
+        const ropDeleteForeignRes = createMockResponse();
+        await userController.deleteUser(ropDeleteForeignReq, ropDeleteForeignRes);
+
+        if (ropDeleteForeignRes.statusCode !== 403) {
+            throw new Error(`РОП смог удалить сотрудника чужого отдела (статус ${ropDeleteForeignRes.statusCode})`);
+        }
+
         const operator = (await query('SELECT id FROM users WHERE username = $1', ['operator1'])).rows[0];
         const ropSales = ropSalesRow;
 
