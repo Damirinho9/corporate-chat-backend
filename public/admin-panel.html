@@ -3272,9 +3272,12 @@ setupModalAccessibility();
         async function loadPermissions() {
             try {
                 // Load messaging permissions
+                console.log('[loadPermissions] Fetching from:', `${API_URL}/permissions`);
                 const res = await fetch(`${API_URL}/permissions`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+
+                console.log('[loadPermissions] Response status:', res.status);
 
                 if (!res.ok) {
                     const errorData = await res.json().catch(() => ({}));
@@ -3284,6 +3287,11 @@ setupModalAccessibility();
 
                 permissionsData = await res.json();
                 console.log('[loadPermissions] Received data:', permissionsData);
+
+                if (!permissionsData) {
+                    throw new Error('Permissions data is null or undefined');
+                }
+
                 renderPermissionsMatrix(permissionsData);
 
                 // Load general permissions
