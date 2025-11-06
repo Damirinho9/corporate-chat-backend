@@ -116,6 +116,13 @@ const register = async (req, res) => {
             });
         }
 
+        if (!['admin', 'assistant', 'rop', 'operator', 'employee'].includes(normalizedRole)) {
+            return res.status(400).json({
+                error: 'Unsupported role',
+                code: 'INVALID_ROLE'
+            });
+        }
+
         // Check if username already exists
         const existingUser = await query(
             'SELECT id FROM users WHERE username = $1',

@@ -2448,12 +2448,27 @@ async function loadChats() {
             }, 3000);
         }
 
-        // ========== LOGOUT ==========
-        function logout() {
-            if (confirm('Logout?')) {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                window.location.href = '/';
+        async function addUserToDepartment(departmentName, userId, role) {
+            try {
+                const res = await fetch(`${API_URL}/departments/${encodeURIComponent(departmentName)}/users`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userId, role })
+                });
+
+                if (res.ok) {
+                    showToast('Пользователь добавлен в отдел', 'success');
+                    await loadDepartments();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка добавления', 'error');
+                }
+            } catch (err) {
+                console.error('Add user to department error:', err);
+                showToast('Ошибка добавления пользователя', 'error');
             }
         }
 
