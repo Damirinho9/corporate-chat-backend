@@ -2,7 +2,7 @@
         // For department chats, allow heads and operators of same department
         if (chat.type === 'department') {
             // Allow head of the department
-            if (userRole === 'head' && userDept === chat.department) {
+            if ((userRole === 'rop' || userRole === 'head') && userDept === chat.department) {
                 return next();
             }
             // Allow operators of the same department
