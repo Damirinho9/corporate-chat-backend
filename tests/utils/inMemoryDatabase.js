@@ -335,7 +335,7 @@ class InMemoryDatabase {
             return { rows: result.reverse(), rowCount: result.length };
         }
 
-        if (normalized.startsWith("SELECT m.user_id, m.file_id, m.chat_id, c.type AS chat_type, c.department AS chat_department FROM messages m JOIN chats c ON m.chat_id = c.id WHERE m.id =")) {
+        if (normalized.startsWith("SELECT m.user_id, m.file_id, m.chat_id, m.created_at, c.type AS chat_type, c.department AS chat_department FROM messages m JOIN chats c ON m.chat_id = c.id WHERE m.id =")) {
             const messageId = toInt(params[0]);
             const message = this.data.messages.find(m => m.id === messageId);
             if (!message) {
@@ -348,6 +348,7 @@ class InMemoryDatabase {
                     user_id: message.user_id,
                     file_id: message.file_id || null,
                     chat_id: message.chat_id,
+                    created_at: message.created_at || null,
                     chat_type: chat.type || null,
                     chat_department: chat.department || null
                 }],
@@ -373,6 +374,20 @@ class InMemoryDatabase {
             return {
                 rows: [{ id: message.id, user_id: message.user_id }],
                 rowCount: 1
+            };
+        }
+
+        if (normalized.startsWith("SELECT c.id FROM chats c JOIN chat_participants cp ON cp.chat_id = c.id WHERE cp.user_id = $1 AND c.type = 'department' LIMIT 1")) {
+            const userId = toInt(params[0]);
+            const participant = this.data.chat_participants.find(cp => cp.user_id === userId);
+            if (!participant) {
+                return { rows: [], rowCount: 0 };
+            }
+
+            const chat = this.data.chats.find(c => c.id === participant.chat_id && c.type === 'department');
+            return {
+                rows: chat ? [{ id: chat.id }] : [],
+                rowCount: chat ? 1 : 0
             };
         }
 

@@ -181,6 +181,66 @@
             color: #2d3748;
         }
 
+        .permissions-intro {
+            font-size: 14px;
+            color: #4a5568;
+            line-height: 1.6;
+        }
+
+        .permissions-table-wrapper {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+
+        .permissions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .permissions-table th,
+        .permissions-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .permissions-table th:first-child,
+        .permissions-table td:first-child {
+            text-align: left;
+        }
+
+        .perm-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-weight: 600;
+        }
+
+        .perm-chip--allowed {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .perm-chip--denied {
+            background: #fed7d7;
+            color: #822727;
+        }
+
+        .perm-chip--limited {
+            background: #fefcbf;
+            color: #744210;
+        }
+
+        .permission-hint td {
+            font-size: 13px;
+            color: #718096;
+            background: #f7fafc;
+        }
+
         /* ========== STATS ========== */
         .stats-grid {
             display: grid;
@@ -559,7 +619,7 @@
                     🏢 Departments
                 </div>
                 <div class="nav-item" data-section="permissions">
-                    🔐 Permissions
+                    🛡️ Права
                 </div>
                 <div class="nav-item" data-section="logs">
                     📋 Logs
@@ -710,34 +770,34 @@
             <!-- Permissions -->
             <div id="permissions" class="content-section">
                 <div class="header">
-                    <h2>🔐 Права доступа</h2>
-                    <div>
-                        <button class="btn btn-success" onclick="savePermissions()">
-                            💾 Сохранить
-                        </button>
-                        <button class="btn btn-danger" onclick="resetPermissions()">
-                            🔄 Сбросить
-                        </button>
-                    </div>
+                    <h2>🛡️ Права и действия</h2>
                 </div>
 
                 <div class="card">
-                    <h3>Права отправки сообщений между ролями</h3>
-                    <p style="color: #718096; margin-bottom: 20px;">
-                        Установите галочки для разрешения отправки сообщений. Строки = отправитель, столбцы = получатель.
+                    <p class="permissions-intro">
+                        Разделённые права позволяют управлять самостоятельным удалением сообщений и модерацией чатов.
+                        Пользователи могут удалять свои сообщения только в течение пяти минут после отправки, а администраторы
+                        и руководители отделов модерируют переписку в пределах своих полномочий.
                     </p>
-                    <div id="permissionsMatrix" style="overflow-x: auto;">
-                        <p style="text-align: center; color: #a0aec0;">Loading...</p>
-                    </div>
-                </div>
 
-                <div class="card" style="margin-top: 30px;">
-                    <h3>Общие права доступа</h3>
-                    <p style="color: #718096; margin-bottom: 20px;">
-                        Настройте права доступа к различным функциям системы для каждой роли.
-                    </p>
-                    <div id="generalPermissionsMatrix">
-                        <p style="text-align: center; color: #a0aec0;">Loading...</p>
+                    <div class="permissions-table-wrapper">
+                        <table class="permissions-table">
+                            <thead>
+                                <tr>
+                                    <th>Действие</th>
+                                    <th>Админ</th>
+                                    <th>Ассистент</th>
+                                    <th>РОП</th>
+                                    <th>Оператор</th>
+                                    <th>Сотрудник</th>
+                                </tr>
+                            </thead>
+                            <tbody id="permissionsMatrixBody">
+                                <tr>
+                                    <td colspan="6" style="text-align: center; color: #a0aec0;">Загрузка...</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -899,6 +959,42 @@
         let usersCache = [];
         let currentEditingUser = null;
 
+        const ROLE_ORDER = ['admin', 'assistant', 'rop', 'operator', 'employee'];
+        const ROLE_LABELS = {
+            admin: 'Админ',
+            assistant: 'Ассистент',
+            rop: 'РОП',
+            operator: 'Оператор',
+            employee: 'Сотрудник'
+        };
+
+        const PERMISSIONS_MATRIX = [
+            {
+                id: 'deleteOwnMessages',
+                label: 'Удалять свои сообщения (до 5 минут после отправки)',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: true,
+                    operator: true,
+                    employee: true
+                },
+                hint: 'Доступно всем ролям в течение пяти минут после отправки собственного сообщения.'
+            },
+            {
+                id: 'deleteAnyMessages',
+                label: 'Удалять сообщения других участников',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: 'department',
+                    operator: false,
+                    employee: false
+                },
+                hint: 'РОП может удалять сообщения только в чатах своего отдела; администратор — в любых чатах.'
+            }
+        ];
+
         const createUserForm = document.getElementById('createUserForm');
         const usernameInput = document.getElementById('createUsername');
         const fullNameInput = document.getElementById('createFullName');
@@ -960,12 +1056,41 @@
                     await loadDepartments();
                     break;
                 case 'permissions':
-                    await loadPermissions();
+                    renderPermissionsMatrix();
                     break;
                 case 'logs':
                     await loadLogs();
                     break;
             }
+        }
+
+        function renderPermissionsMatrix() {
+            const tbody = document.getElementById('permissionsMatrixBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = PERMISSIONS_MATRIX.map(row => {
+                const columns = ROLE_ORDER.map(role => {
+                    const value = row.roles[role];
+
+                    if (value === 'department') {
+                        return `<td><span class="perm-chip perm-chip--limited" title="Только в чатах своего отдела">◐</span></td>`;
+                    }
+
+                    return `<td><span class="perm-chip ${value ? 'perm-chip--allowed' : 'perm-chip--denied'}">${value ? '✔' : '✖'}</span></td>`;
+                }).join('');
+
+                const hintRow = row.hint
+                    ? `<tr class="permission-hint"><td colspan="${ROLE_ORDER.length + 1}">${row.hint}</td></tr>`
+                    : '';
+
+                return `
+                    <tr>
+                        <th scope="row">${row.label}</th>
+                        ${columns}
+                    </tr>
+                    ${hintRow}
+                `;
+            }).join('');
         }
 
         async function loadDashboard() {

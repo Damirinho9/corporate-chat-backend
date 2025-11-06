@@ -497,6 +497,81 @@ function createMockResponse() {
             throw new Error('Последнее сообщение не содержит ожидаемый файл');
         }
 
+        console.log('🕒 Проверка удаления своих сообщений с ограничением по времени...');
+
+        const operatorDeptChatLookup = await query(
+            `SELECT c.id
+               FROM chats c
+               JOIN chat_participants cp ON cp.chat_id = c.id
+              WHERE cp.user_id = $1
+                AND c.type = 'department'
+              LIMIT 1`,
+            [operator.id]
+        );
+
+        const operatorDepartmentChatId = operatorDeptChatLookup.rows[0]?.id;
+        if (!operatorDepartmentChatId) {
+            throw new Error('Чат отдела оператора не найден для проверки удаления своих сообщений');
+        }
+
+        const ownMessageInsert = await query(
+            'INSERT INTO messages (chat_id, user_id, content) VALUES ($1, $2, $3) RETURNING id',
+            [operatorDepartmentChatId, operator.id, 'Сообщение для проверки удаления в окне 5 минут']
+        );
+
+        const ownMessageId = ownMessageInsert.rows[0].id;
+
+        const deleteOwnReq = {
+            params: { messageId: ownMessageId },
+            user: {
+                id: operator.id,
+                role: 'operator'
+            }
+        };
+        const deleteOwnRes = createMockResponse();
+        await messageController.deleteMessage(deleteOwnReq, deleteOwnRes);
+
+        if (deleteOwnRes.statusCode !== 200) {
+            throw new Error(`Оператор не смог удалить своё сообщение в течение 5 минут (статус ${deleteOwnRes.statusCode})`);
+        }
+
+        const ownMessageCheck = await query('SELECT id FROM messages WHERE id = $1', [ownMessageId]);
+        if (ownMessageCheck.rowCount !== 0) {
+            throw new Error('Сообщение не было удалено оператором в разрешённое время');
+        }
+
+        console.log('⏳ Проверка запрета удаления своих сообщений после истечения 5 минут...');
+
+        const staleMessageInsert = await query(
+            'INSERT INTO messages (chat_id, user_id, content) VALUES ($1, $2, $3) RETURNING id',
+            [operatorDepartmentChatId, operator.id, 'Старое сообщение для проверки ограничения']
+        );
+
+        const staleMessageId = staleMessageInsert.rows[0].id;
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        await query('UPDATE messages SET created_at = $1 WHERE id = $2', [tenMinutesAgo, staleMessageId]);
+
+        const deleteStaleReq = {
+            params: { messageId: staleMessageId },
+            user: {
+                id: operator.id,
+                role: 'operator'
+            }
+        };
+        const deleteStaleRes = createMockResponse();
+        await messageController.deleteMessage(deleteStaleReq, deleteStaleRes);
+
+        if (deleteStaleRes.statusCode !== 403 || deleteStaleRes.body?.code !== 'DELETE_WINDOW_EXPIRED') {
+            throw new Error(`Ожидалось ограничение по времени на удаление (статус ${deleteStaleRes.statusCode}, код ${deleteStaleRes.body?.code})`);
+        }
+
+        const staleMessageStillExists = await query('SELECT id FROM messages WHERE id = $1', [staleMessageId]);
+        if (staleMessageStillExists.rowCount === 0) {
+            throw new Error('Старое сообщение было удалено вопреки ограничению по времени');
+        }
+
+        await query('DELETE FROM messages WHERE id = $1', [staleMessageId]);
+
         console.log('🧹 Проверка удаления сообщений РОПом в своём отделе...');
         const deptMessageCandidate = await query(
             `SELECT m.id, m.user_id

@@ -382,6 +382,7 @@ const deleteMessage = async (req, res) => {
                 m.user_id,
                 m.file_id,
                 m.chat_id,
+                m.created_at,
                 c.type AS chat_type,
                 c.department AS chat_department
              FROM messages m
@@ -407,6 +408,23 @@ const deleteMessage = async (req, res) => {
                 messageRow.chat_type === 'department' &&
                 messageRow.chat_department &&
                 messageRow.chat_department === req.user.department;
+        }
+
+        const deletionWindowMs = 5 * 60 * 1000; // 5 minutes
+        const createdAt = messageRow.created_at ? new Date(messageRow.created_at) : null;
+        const createdAtTime = createdAt && !Number.isNaN(createdAt.getTime())
+            ? createdAt.getTime()
+            : null;
+
+        if (isOwner && !isAdmin && !isDepartmentRop && createdAtTime) {
+            const ageMs = Date.now() - createdAtTime;
+            if (ageMs > deletionWindowMs) {
+                return res.status(403).json({
+                    error: 'Message can only be deleted within 5 minutes of sending',
+                    code: 'DELETE_WINDOW_EXPIRED',
+                    metadata: { windowMinutes: 5 }
+                });
+            }
         }
 
         if (!isOwner && !isAdmin && !isDepartmentRop) {
