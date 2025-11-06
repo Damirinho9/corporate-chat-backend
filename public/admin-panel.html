@@ -205,6 +205,12 @@
             font-size: 14px;
         }
 
+        .permissions-empty {
+            text-align: center;
+            color: #a0aec0;
+            padding: 16px 0;
+        }
+
         .permissions-table th:first-child,
         .permissions-table td:first-child {
             text-align: left;
@@ -1368,6 +1374,55 @@
             window.location.href = '/';
         }
 
+        function restoreModalFocus(modal) {
+            if (!modal) {
+                return;
+            }
+
+            const previousElement = modalFocusMemory.get(modal);
+            modalFocusMemory.delete(modal);
+
+            if (previousElement && typeof previousElement.focus === 'function') {
+                try {
+                    previousElement.focus();
+                } catch (error) {
+                    console.warn('[modal] Unable to restore focus', error);
+                }
+            }
+        }
+
+        function openModalElement(modal, { focusTarget = null, focusSelector = null } = {}) {
+            if (!modal) {
+                return;
+            }
+
+            rememberModalFocus(modal);
+
+            modal.classList.add('show');
+            modal.style.display = 'flex';
+
+            let focusElement = null;
+            if (focusTarget && typeof focusTarget.focus === 'function') {
+                focusElement = focusTarget;
+            } else if (focusSelector) {
+                focusElement = modal.querySelector(focusSelector);
+            }
+
+            if (!focusElement) {
+                focusElement = modal.querySelector('[data-autofocus]')
+                    || modal.querySelector('input, select, textarea, button');
+            }
+
+            if (focusElement && typeof focusElement.focus === 'function') {
+                setTimeout(() => focusElement.focus(), 0);
+            }
+        }
+
+        // Check auth
+        if (!token || !currentUser || currentUser.role !== 'admin') {
+            window.location.href = '/';
+        }
+
         // Set admin info
         document.getElementById('adminName').textContent = currentUser.name;
         document.getElementById('adminRole').textContent = currentUser.role;
@@ -1420,6 +1475,11 @@
         function renderPermissionsMatrix() {
             const tbody = document.getElementById('permissionsMatrixBody');
             if (!tbody) return;
+
+            if (!Array.isArray(PERMISSIONS_MATRIX) || PERMISSIONS_MATRIX.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="permissions-empty">Данные о правах недоступны</td></tr>';
+                return;
+            }
 
             tbody.innerHTML = PERMISSIONS_MATRIX.map(row => {
                 const columns = ROLE_ORDER.map(role => {
@@ -1830,10 +1890,7 @@ async function loadChats() {
                 }
 
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    console.error('[loadDeletionHistory] Error response:', errorData);
-                    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Ошибка ${response.status}: ${errorData.error || 'Не удалось загрузить историю'}</td></tr>`;
-                    return;
+                    throw new Error(`Failed with status ${response.status}`);
                 }
 
                 const data = await response.json();
@@ -2309,8 +2366,9 @@ async function loadChats() {
                 const result = await res.json();
 
                 if (res.ok && result.success) {
-                    const displayPassword = result.password || payload.password;
-                    showToast(`Пользователь создан. Пароль: ${displayPassword}`, 'success');
+                    const displayPassword = result.password || payload.password || '';
+                    const successMessage = 'Пользователь создан. Пароль: ' + displayPassword;
+                    showToast(successMessage, 'success');
                     closeModal('createUserModal');
                     await loadUsers();
                     if (needsDepartment) {
@@ -2333,8 +2391,9 @@ async function loadChats() {
 
         if (editRoleSelect) {
             editRoleSelect.addEventListener('change', (event) => {
+                const lastStoredValue = editDepartmentSelect ? (editDepartmentSelect.dataset.lastValue || editDepartmentSelect.value || '') : '';
                 const preferred = shouldRequireDepartment(event.target.value)
-                    ? (editDepartmentSelect?.dataset.lastValue || editDepartmentSelect?.value || '')
+                    ? lastStoredValue
                     : null;
                 updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
                     preferredValue: preferred,
@@ -2348,18 +2407,18 @@ async function loadChats() {
             editUserForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
 
-                const userId = Number(editUserIdInput?.value);
+                const userId = Number(editUserIdInput ? editUserIdInput.value : '');
                 if (!userId) {
                     showToast('Пользователь не выбран', 'error');
                     return;
                 }
 
-                const name = editFullNameInput?.value.trim() || '';
-                const usernameValue = editUsernameInput?.value.trim() || '';
-                const roleValue = editRoleSelect?.value || '';
-                const isActiveValue = editStatusSelect?.value === 'true';
+                const name = editFullNameInput ? editFullNameInput.value.trim() : '';
+                const usernameValue = editUsernameInput ? editUsernameInput.value.trim() : '';
+                const roleValue = editRoleSelect ? editRoleSelect.value : '';
+                const isActiveValue = editStatusSelect ? editStatusSelect.value === 'true' : false;
                 const needsDept = shouldRequireDepartment(roleValue);
-                const departmentValue = needsDept ? (editDepartmentSelect?.value || '') : '';
+                const departmentValue = needsDept && editDepartmentSelect ? (editDepartmentSelect.value || '') : '';
                 const normalizedDepartment = needsDept ? (departmentValue || null) : null;
 
                 if (!name || !usernameValue || !roleValue) {
