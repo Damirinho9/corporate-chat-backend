@@ -687,6 +687,26 @@
             color: #c53030;
             font-size: 13px;
         }
+
+        /* ========== COLLAPSIBLE SECTIONS ========== */
+        .chevron {
+            display: inline-block;
+            transition: transform 0.2s ease;
+            font-size: 0.8em;
+            color: #a0aec0;
+        }
+
+        .chevron.expanded {
+            transform: rotate(180deg);
+        }
+
+        #chatsContainer .card h3 {
+            user-select: none;
+        }
+
+        #chatsContainer .card h3:hover .chevron {
+            color: #4a5568;
+        }
     </style>
 </head>
 <body>
@@ -833,24 +853,9 @@
                     </button>
                 </div>
 
-                <div class="card">
-                    <table id="chatsTable">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Name</th>
-                                <th>Тип</th>
-                                <th>Отдел</th>
-                                <th>Участники</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td colspan="6" style="text-align: center; color: #a0aec0;">Loading...</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div id="chatsContainer">
+                    <!-- Chat groups will be inserted here by JavaScript -->
+                    <div style="text-align: center; color: #a0aec0; padding: 20px;">Loading...</div>
                 </div>
             </div>
 
@@ -1633,20 +1638,33 @@ async function loadChats() {
                 const data = await res.json();
                 chatsCache = Array.isArray(data.chats) ? data.chats : [];
 
-                const tbody = document.querySelector('#chatsTable tbody');
-                if (chatsCache.length > 0) {
-                    tbody.innerHTML = chatsCache.map(chat => {
-                        // For direct chats, show participant names instead of "Unnamed"
-                        let displayName = chat.name || 'Unnamed';
-                        if (chat.type === 'direct' && !chat.name) {
-                            if (chat.participants && Array.isArray(chat.participants) && chat.participants.length > 0) {
-                                displayName = '💬 ' + chat.participants.map(p => p.name).join(' ↔ ');
-                            } else {
-                                displayName = `💬 ЛС (ID: ${chat.id})`;
-                            }
-                        }
+                // Group chats by type
+                const departmentChats = [];
+                const groupChats = [];
+                const directChats = [];
 
-                        return `
+                chatsCache.forEach(chat => {
+                    if (chat.type === 'department') {
+                        departmentChats.push(chat);
+                    } else if (chat.type === 'group') {
+                        groupChats.push(chat);
+                    } else if (chat.type === 'direct') {
+                        directChats.push(chat);
+                    }
+                });
+
+                // Helper function to render chat row
+                const renderChatRow = (chat) => {
+                    let displayName = chat.name || 'Unnamed';
+                    if (chat.type === 'direct' && !chat.name) {
+                        if (chat.participants && Array.isArray(chat.participants) && chat.participants.length > 0) {
+                            displayName = '💬 ' + chat.participants.map(p => p.name).join(' ↔ ');
+                        } else {
+                            displayName = `💬 ЛС (ID: ${chat.id})`;
+                        }
+                    }
+
+                    return `
                         <tr>
                             <td>${chat.id}</td>
                             <td>${displayName}</td>
@@ -1658,14 +1676,73 @@ async function loadChats() {
                                 <button class="btn-delete" onclick="deleteChat(${chat.id})">Удалить</button>
                             </td>
                         </tr>
-                        `;
-                    }).join('');
+                    `;
+                };
+
+                // Helper function to create table section
+                const createTableSection = (title, chats, collapsible = false, collapsed = false) => {
+                    if (chats.length === 0) return '';
+
+                    const sectionId = title.replace(/\s+/g, '-').toLowerCase();
+                    const chevron = collapsible ? `<span class="chevron ${collapsed ? '' : 'expanded'}">▼</span>` : '';
+                    const tableClass = collapsed ? 'style="display: none;"' : '';
+
+                    return `
+                        <div class="card" style="margin-bottom: 20px;">
+                            <h3 style="margin: 0 0 15px 0; color: #2d3748; display: flex; align-items: center; gap: 10px; ${collapsible ? 'cursor: pointer;' : ''}"
+                                ${collapsible ? `onclick="toggleChatSection('${sectionId}')"` : ''}>
+                                ${chevron}
+                                ${title}
+                                <span style="color: #a0aec0; font-size: 0.9em; font-weight: normal;">(${chats.length})</span>
+                            </h3>
+                            <table id="${sectionId}-table" ${tableClass}>
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Тип</th>
+                                        <th>Отдел</th>
+                                        <th>Участники</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${chats.map(renderChatRow).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                };
+
+                // Build HTML
+                const container = document.getElementById('chatsContainer');
+                if (chatsCache.length > 0) {
+                    let html = '';
+                    html += createTableSection('🏢 Чаты отделов', departmentChats);
+                    html += createTableSection('👥 Групповые чаты', groupChats);
+                    html += createTableSection('💬 Личные чаты', directChats, true, true); // Collapsible and collapsed by default
+
+                    container.innerHTML = html;
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#a0aec0;">No chats found</td></tr>';
+                    container.innerHTML = '<div class="card" style="text-align: center; color: #a0aec0; padding: 20px;">No chats found</div>';
                 }
             } catch (err) {
                 console.error('Load chats error:', err);
                 showToast('Failed to load chats', 'error');
+            }
+        }
+
+        // Toggle function for collapsible sections
+        function toggleChatSection(sectionId) {
+            const table = document.getElementById(`${sectionId}-table`);
+            const chevron = event.currentTarget.querySelector('.chevron');
+
+            if (table.style.display === 'none') {
+                table.style.display = '';
+                chevron.classList.add('expanded');
+            } else {
+                table.style.display = 'none';
+                chevron.classList.remove('expanded');
             }
         }
 
