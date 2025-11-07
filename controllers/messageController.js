@@ -760,11 +760,35 @@ const getDeletionHistory = async (req, res) => {
         const availableColumns = new Set(columnInfo.rows.map((row) => row.column_name));
         const hasStoredChatDepartment = availableColumns.has('chat_department');
 
-        if (pendingDepartmentFilter) {
+        const chatColumnsInfo = await query(`
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'chats'
+        `);
+
+        const chatColumnSet = new Set(chatColumnsInfo.rows.map((row) => row.column_name));
+
+        const departmentExpressionForFilter = (() => {
+            if (chatColumnSet.has('department') && hasStoredChatDepartment) {
+                return 'COALESCE(c.department, h.chat_department)';
+            }
+            if (chatColumnSet.has('department')) {
+                return 'c.department';
+            }
             if (hasStoredChatDepartment) {
-                addCondition('COALESCE(c.department, h.chat_department) =', pendingDepartmentFilter);
+                return 'h.chat_department';
+            }
+            return null;
+        })();
+
+        if (pendingDepartmentFilter) {
+            if (departmentExpressionForFilter) {
+                addCondition(`${departmentExpressionForFilter} =`, pendingDepartmentFilter);
             } else {
-                addCondition('c.department =', pendingDepartmentFilter);
+                return res.status(403).json({
+                    error: 'Department filtering unavailable for this installation',
+                    code: 'DEPARTMENT_FILTER_UNAVAILABLE'
+                });
             }
         }
 
@@ -778,6 +802,10 @@ const getDeletionHistory = async (req, res) => {
                 ? `h.${columnName}`
                 : `CAST(NULL AS ${castType})`
         );
+
+        const chatNameExpr = chatColumnSet.has('name') ? 'c.name' : 'CAST(NULL AS TEXT)';
+        const chatTypeExpr = chatColumnSet.has('type') ? 'c.type' : "CAST('unknown' AS TEXT)";
+        const chatDepartmentExpr = chatColumnSet.has('department') ? 'c.department' : 'CAST(NULL AS TEXT)';
 
         const selectFragments = [
             'h.id',
@@ -796,9 +824,9 @@ const getDeletionHistory = async (req, res) => {
             `${storedOrNull('chat_type', 'TEXT')} AS stored_chat_type`,
             `${storedOrNull('chat_department', 'TEXT')} AS stored_chat_department`,
             'h.deleted_at',
-            'c.name AS chat_name_current',
-            'c.type AS chat_type_current',
-            'c.department AS chat_department_current'
+            `${chatNameExpr} AS chat_name_current`,
+            `${chatTypeExpr} AS chat_type_current`,
+            `${chatDepartmentExpr} AS chat_department_current`
         ];
 
         const result = await query(

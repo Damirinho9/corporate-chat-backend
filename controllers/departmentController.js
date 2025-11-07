@@ -1,40 +1,91 @@
 const { query, pool } = require('../config/database');
 
+const collator = new Intl.Collator('ru-RU');
+const ROLE_SORT_ORDER = { rop: 0, operator: 1 };
+
+const normalizeDepartmentName = (value) => {
+    if (!value) {
+        return null;
+    }
+    const trimmed = String(value).trim();
+    return trimmed.length ? trimmed : null;
+};
+
+const sortDepartmentUsers = (users = []) => {
+    return [...users].sort((a, b) => {
+        const orderA = ROLE_SORT_ORDER[a.role] ?? 2;
+        const orderB = ROLE_SORT_ORDER[b.role] ?? 2;
+        if (orderA !== orderB) {
+            return orderA - orderB;
+        }
+        const nameA = (a.name || a.username || '').toLowerCase();
+        const nameB = (b.name || b.username || '').toLowerCase();
+        return collator.compare(nameA, nameB);
+    });
+};
+
 // Получить все отделы со статистикой
 const getAllDepartments = async (req, res) => {
     try {
         const result = await query(`
-            SELECT
-                d.name as department,
-                COUNT(u.id) as user_count,
-                COUNT(u.id) FILTER (WHERE u.role = 'rop') as rop_count,
-                COUNT(u.id) FILTER (WHERE u.role = 'operator') as operator_count,
-                json_agg(
-                    json_build_object(
-                        'id', u.id,
-                        'name', u.name,
-                        'role', u.role,
-                        'username', u.username,
-                        'is_active', u.is_active
-                    ) ORDER BY
-                        CASE u.role
-                            WHEN 'rop' THEN 1
-                            WHEN 'operator' THEN 2
-                            ELSE 3
-                        END,
-                        u.name
-                ) FILTER (WHERE u.id IS NOT NULL) as users
-            FROM (
-                SELECT DISTINCT TRIM(department) as name
-                FROM users
-                WHERE department IS NOT NULL AND TRIM(department) <> ''
-            ) d
-            LEFT JOIN users u ON TRIM(u.department) = d.name AND u.is_active = true
-            GROUP BY d.name
-            ORDER BY d.name
+            SELECT id, username, name, role, department, is_active
+            FROM users
+            WHERE department IS NOT NULL
         `);
 
-        res.json({ departments: result.rows });
+        const departmentMap = new Map();
+
+        result.rows.forEach((row) => {
+            const normalizedName = normalizeDepartmentName(row.department);
+            if (!normalizedName) {
+                return;
+            }
+
+            if (!departmentMap.has(normalizedName)) {
+                departmentMap.set(normalizedName, {
+                    department: normalizedName,
+                    user_count: 0,
+                    rop_count: 0,
+                    operator_count: 0,
+                    users: []
+                });
+            }
+
+            if (row.is_active !== true) {
+                return;
+            }
+
+            const bucket = departmentMap.get(normalizedName);
+            bucket.user_count += 1;
+
+            if (row.role === 'rop') {
+                bucket.rop_count += 1;
+            }
+
+            if (row.role === 'operator') {
+                bucket.operator_count += 1;
+            }
+
+            bucket.users.push({
+                id: row.id,
+                name: row.name,
+                role: row.role,
+                username: row.username,
+                is_active: true
+            });
+        });
+
+        const departments = Array.from(departmentMap.values())
+            .map((entry) => ({
+                department: entry.department,
+                user_count: String(entry.user_count),
+                rop_count: String(entry.rop_count),
+                operator_count: String(entry.operator_count),
+                users: sortDepartmentUsers(entry.users)
+            }))
+            .sort((a, b) => collator.compare(a.department, b.department));
+
+        res.json({ departments });
     } catch (error) {
         console.error('Get departments error:', error);
         res.status(500).json({
@@ -98,50 +149,57 @@ const getAssistants = async (req, res) => {
 const getContactsStructured = async (req, res) => {
     try {
         // Получаем все отделы с пользователями
-        const deptResult = await query(`
-            SELECT
-                d.name as department,
-                json_agg(
-                    json_build_object(
-                        'id', u.id,
-                        'name', u.name,
-                        'role', u.role,
-                        'username', u.username,
-                        'is_active', u.is_active,
-                        'last_seen', u.last_seen
-                    ) ORDER BY
-                        CASE u.role
-                            WHEN 'rop' THEN 1
-                            WHEN 'operator' THEN 2
-                            ELSE 3
-                        END,
-                        u.name
-                ) FILTER (WHERE u.id IS NOT NULL) as users
-            FROM (
-                SELECT DISTINCT TRIM(department) as name
-                FROM users
-                WHERE department IS NOT NULL AND TRIM(department) <> ''
-            ) d
-            LEFT JOIN users u ON TRIM(u.department) = d.name AND u.is_active = true
-            GROUP BY d.name
-            ORDER BY d.name
-        `);
-
-        // Получаем ассистентов
-        const assistResult = await query(`
-            SELECT
-                id, username, name, role, is_active, last_seen
+        const usersResult = await query(`
+            SELECT id, username, name, role, department, is_active, last_seen
             FROM users
-            WHERE role = 'assistant' AND is_active = true
-            ORDER BY name
         `);
 
-        // Формируем структуру
+        const departmentMap = new Map();
+        const assistants = [];
+
+        usersResult.rows.forEach((row) => {
+            if (row.role === 'assistant' && row.is_active) {
+                assistants.push({
+                    id: row.id,
+                    username: row.username,
+                    name: row.name,
+                    role: row.role,
+                    is_active: row.is_active,
+                    last_seen: row.last_seen
+                });
+            }
+
+            const normalizedName = normalizeDepartmentName(row.department);
+            if (!normalizedName || row.is_active !== true) {
+                return;
+            }
+
+            if (!departmentMap.has(normalizedName)) {
+                departmentMap.set(normalizedName, []);
+            }
+
+            departmentMap.get(normalizedName).push({
+                id: row.id,
+                name: row.name,
+                role: row.role,
+                username: row.username,
+                is_active: true,
+                last_seen: row.last_seen
+            });
+        });
+
+        const departments = Array.from(departmentMap.entries())
+            .map(([name, users]) => ({
+                department: name,
+                users: sortDepartmentUsers(users)
+            }))
+            .sort((a, b) => collator.compare(a.department, b.department));
+
         const structure = {
-            departments: deptResult.rows,
+            departments,
             assistants: {
                 name: 'Ассистенты',
-                users: assistResult.rows
+                users: assistants.sort((a, b) => collator.compare(a.name || a.username || '', b.name || b.username || ''))
             }
         };
 

@@ -27,6 +27,7 @@ const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
 const authController = require('../controllers/authController');
 const userController = require('../controllers/userController');
+const departmentController = require('../controllers/departmentController');
 
 function createMockResponse() {
     const response = { statusCode: 200 };
@@ -113,6 +114,36 @@ function createMockResponse() {
         }
 
         console.log(`✅ Пользователь создан с паролем ${generatedPassword}`);
+
+        console.log('🛠 Проверка настроек чата отдела...');
+        const chatSettingsReq = {
+            params: { chatId: salesChatId },
+            user: { id: admin.id, role: 'admin' }
+        };
+        const chatSettingsRes = createMockResponse();
+        await chatController.getChatSettings(chatSettingsReq, chatSettingsRes);
+
+        if (chatSettingsRes.statusCode !== 200 || !chatSettingsRes.body?.chat) {
+            throw new Error(`Не удалось получить настройки чата отдела (статус ${chatSettingsRes.statusCode})`);
+        }
+
+        if (!Array.isArray(chatSettingsRes.body.participants) || chatSettingsRes.body.participants.length === 0) {
+            throw new Error('Список участников чата отдела пуст');
+        }
+
+        console.log('📋 Проверка списка отделов без пустых названий...');
+        const departmentListReq = { user: { id: admin.id, role: 'admin' } };
+        const departmentListRes = createMockResponse();
+        await departmentController.getAllDepartments(departmentListReq, departmentListRes);
+
+        if (departmentListRes.statusCode !== 200 || !Array.isArray(departmentListRes.body?.departments)) {
+            throw new Error(`Контроллер отделов вернул неожиданный ответ (статус ${departmentListRes.statusCode})`);
+        }
+
+        const hasEmptyDepartments = departmentListRes.body.departments.some((dept) => !dept.department || !dept.department.trim());
+        if (hasEmptyDepartments) {
+            throw new Error('В списке отделов присутствуют записи без названия');
+        }
 
         console.log('🧪 Проверка создания пользователя РОПом только в своём отделе...');
         const ropSalesRow = (await query('SELECT id, department FROM users WHERE username = $1', ['rop_sales'])).rows[0];

@@ -37,6 +37,13 @@ class InMemoryDatabase {
         const normalized = text.replace(/\s+/g, ' ').trim();
 
         const toInt = (value) => (typeof value === 'number' ? value : Number(value));
+        const normalizeDepartment = (value) => {
+            if (!value) {
+                return null;
+            }
+            const trimmed = String(value).trim();
+            return trimmed.length ? trimmed : null;
+        };
 
         if (!normalized) {
             return { rows: [], rowCount: 0 };
@@ -83,6 +90,14 @@ class InMemoryDatabase {
             };
         }
 
+        if (normalized.startsWith("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'chats'")) {
+            const columns = ['id', 'name', 'type', 'department', 'created_by', 'is_archived', 'created_at', 'updated_at'];
+            return {
+                rows: columns.map((name) => ({ column_name: name })),
+                rowCount: columns.length
+            };
+        }
+
         if (normalized === 'BEGIN' || normalized === 'COMMIT' || normalized === 'ROLLBACK') {
             return { rows: [], rowCount: 0 };
         }
@@ -112,6 +127,20 @@ class InMemoryDatabase {
             const chat = this.data.chats.find(c => c.id === chatId);
             return {
                 rows: chat ? [{ department: chat.department || null, type: chat.type || null }] : [],
+                rowCount: chat ? 1 : 0
+            };
+        }
+
+        if (normalized.startsWith('SELECT id, type, department, name FROM chats WHERE id =')) {
+            const chatId = toInt(params[0]);
+            const chat = this.data.chats.find(c => c.id === chatId);
+            return {
+                rows: chat ? [{
+                    id: chat.id,
+                    type: chat.type || 'group',
+                    department: chat.department || null,
+                    name: chat.name || null
+                }] : [],
                 rowCount: chat ? 1 : 0
             };
         }
@@ -166,6 +195,64 @@ class InMemoryDatabase {
                     is_active: user.is_active !== false
                 }] : [],
                 rowCount: user ? 1 : 0
+            };
+        }
+
+        if (normalized.startsWith('SELECT id, username, name, role, department, is_active FROM users WHERE department IS NOT NULL')) {
+            const rows = this.data.users
+                .filter(u => normalizeDepartment(u.department))
+                .map(u => ({
+                    id: u.id,
+                    username: u.username,
+                    name: u.name,
+                    role: u.role,
+                    department: u.department,
+                    is_active: u.is_active !== false
+                }));
+
+            return {
+                rows,
+                rowCount: rows.length
+            };
+        }
+
+        if (normalized.startsWith('SELECT id, username, name, role, department, is_active, last_seen FROM users')) {
+            const rows = this.data.users.map(u => ({
+                id: u.id,
+                username: u.username,
+                name: u.name,
+                role: u.role,
+                department: u.department,
+                is_active: u.is_active !== false,
+                last_seen: u.last_seen || null
+            }));
+
+            return {
+                rows,
+                rowCount: rows.length
+            };
+        }
+
+        if (normalized.startsWith('SELECT u.id, u.name, u.username, u.role AS user_role, u.department FROM chat_participants cp JOIN users u ON cp.user_id = u.id WHERE cp.chat_id =')) {
+            const chatId = toInt(params[0]);
+            const participants = this.data.chat_participants
+                .filter(cp => cp.chat_id === chatId)
+                .map(cp => {
+                    const user = this.data.users.find(u => u.id === cp.user_id);
+                    return user ? {
+                        id: user.id,
+                        name: user.name,
+                        username: user.username,
+                        user_role: user.role,
+                        department: user.department
+                    } : null;
+                })
+                .filter(Boolean)
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+            return {
+                rows: participants,
+                rowCount: participants.length
             };
         }
 
