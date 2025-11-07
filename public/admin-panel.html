@@ -2756,6 +2756,9 @@ async function loadChats() {
                     editPasswordInput.value = '';
                 }
                 updateDepartmentVisibility('', editDepartmentField, editDepartmentSelect, { preserveValue: false });
+            } catch (err) {
+                console.error('Delete user error:', err);
+                showToast('Ошибка удаления пользователя', 'error');
             }
         }
 
