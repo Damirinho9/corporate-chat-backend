@@ -1957,11 +1957,13 @@ async function loadChats() {
                     await loadDepartments();
                 } else {
                     const err = await res.json();
-                    showToast(err.error || 'Ошибка добавления', 'error');
+                    console.error('Server error response:', err);
+                    const errorMsg = err.details ? `${err.error}: ${err.details}` : err.error || 'Ошибка добавления';
+                    showToast(errorMsg, 'error');
                 }
             } catch (err) {
                 console.error('Add user to department error:', err);
-                showToast('Ошибка добавления пользователя', 'error');
+                showToast('Ошибка добавления пользователя: ' + err.message, 'error');
             }
         }
         async function loadDeletionHistory() {

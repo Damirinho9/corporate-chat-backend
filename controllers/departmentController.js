@@ -533,9 +533,17 @@ const addUserToDepartment = async (req, res) => {
         });
     } catch (error) {
         console.error('Add user to department error:', error);
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            departmentName,
+            userId,
+            role
+        });
         res.status(500).json({
             error: 'Failed to add user to department',
-            code: 'ADD_USER_ERROR'
+            code: 'ADD_USER_ERROR',
+            details: error.message
         });
     }
 };
