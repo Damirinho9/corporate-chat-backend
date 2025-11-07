@@ -561,8 +561,11 @@ const getChatSettings = async (req, res) => {
         // Get participants with their roles
         const participants = await query(`
             SELECT
-                u.id, u.name, u.username, u.role as user_role, u.department,
-                cp.role as chat_role, cp.can_add_members, cp.can_remove_members
+                u.id,
+                u.name,
+                u.username,
+                u.role AS user_role,
+                u.department
             FROM chat_participants cp
             JOIN users u ON cp.user_id = u.id
             WHERE cp.chat_id = $1

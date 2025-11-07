@@ -46,6 +46,43 @@ class InMemoryDatabase {
             return { rows: [{ '?column?': 1 }], rowCount: 1 };
         }
 
+        if (normalized.startsWith("SELECT to_regclass('public.message_deletion_history')")) {
+            const tableName = Array.isArray(this.data.message_deletion_history)
+                ? 'message_deletion_history'
+                : null;
+
+            return {
+                rows: [{ table_name: tableName }],
+                rowCount: 1
+            };
+        }
+
+        if (normalized.startsWith("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'message_deletion_history'")) {
+            const columns = [
+                'id',
+                'message_id',
+                'chat_id',
+                'chat_name',
+                'chat_type',
+                'chat_department',
+                'deleted_message_user_id',
+                'deleted_message_user_name',
+                'deleted_by_user_id',
+                'deleted_by_user_name',
+                'deleted_by_role',
+                'deletion_scope',
+                'original_content',
+                'file_id',
+                'deleted_message_created_at',
+                'deleted_at'
+            ];
+
+            return {
+                rows: columns.map((name) => ({ column_name: name })),
+                rowCount: columns.length
+            };
+        }
+
         if (normalized === 'BEGIN' || normalized === 'COMMIT' || normalized === 'ROLLBACK') {
             return { rows: [], rowCount: 0 };
         }
@@ -579,19 +616,22 @@ class InMemoryDatabase {
                     id: entry.id,
                     message_id: entry.message_id,
                     chat_id: entry.chat_id,
-                    chat_name: (chat && chat.name) || entry.chat_name || null,
-                    chat_type: (chat && chat.type) || entry.chat_type || null,
-                    chat_department: (chat && chat.department) || entry.chat_department || null,
-                    deleted_message_user_id: entry.deleted_message_user_id,
-                    deleted_message_user_name: entry.deleted_message_user_name,
+                    stored_deleted_message_user_id: entry.deleted_message_user_id ?? null,
+                    stored_deleted_message_user_name: entry.deleted_message_user_name || null,
                     deleted_by_user_id: entry.deleted_by_user_id,
                     deleted_by_user_name: entry.deleted_by_user_name,
                     deleted_by_role: entry.deleted_by_role,
                     deletion_scope: entry.deletion_scope,
-                    original_content: entry.original_content,
-                    file_id: entry.file_id,
-                    deleted_message_created_at: entry.deleted_message_created_at,
-                    deleted_at: entry.deleted_at
+                    stored_original_content: entry.original_content || null,
+                    stored_file_id: entry.file_id ?? null,
+                    stored_deleted_message_created_at: entry.deleted_message_created_at || null,
+                    stored_chat_name: entry.chat_name || null,
+                    stored_chat_type: entry.chat_type || null,
+                    stored_chat_department: entry.chat_department || null,
+                    deleted_at: entry.deleted_at,
+                    chat_name_current: chat ? (chat.name || null) : null,
+                    chat_type_current: chat ? (chat.type || null) : null,
+                    chat_department_current: chat ? (chat.department || null) : null
                 };
             });
 

@@ -702,12 +702,16 @@ const getDeletionHistory = async (req, res) => {
         }
 
         const params = [];
-        const placeholders = () => `$${params.length + 1}`;
-        const whereClauses = [];
+        const conditions = [];
+        let pendingDepartmentFilter = null;
+
+        const addCondition = (clause, value) => {
+            params.push(value);
+            conditions.push(`${clause} $${params.length}`);
+        };
 
         if (parsedChatId) {
-            whereClauses.push(`h.chat_id = ${placeholders()}`);
-            params.push(parsedChatId);
+            addCondition('h.chat_id =', parsedChatId);
         }
 
         if (req.user.role === 'rop') {
@@ -718,8 +722,7 @@ const getDeletionHistory = async (req, res) => {
                 });
             }
 
-            whereClauses.push(`COALESCE(c.department, h.chat_department) = ${placeholders()}`);
-            params.push(req.user.department);
+            pendingDepartmentFilter = req.user.department;
 
             if (parsedChatId) {
                 const chatCheck = await query(
@@ -738,42 +741,106 @@ const getDeletionHistory = async (req, res) => {
             }
         }
 
-        const limitPlaceholder = placeholders();
-        params.push(parsedLimit);
-        const offsetPlaceholder = placeholders();
-        params.push(parsedOffset);
+        const historyTableCheck = await query(
+            "SELECT to_regclass('public.message_deletion_history') AS table_name"
+        );
+
+        const tableExists = historyTableCheck.rows[0] && historyTableCheck.rows[0].table_name;
+
+        if (!tableExists) {
+            return res.json({ history: [], count: 0 });
+        }
+
+        const columnInfo = await query(`
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'message_deletion_history'
+        `);
+
+        const availableColumns = new Set(columnInfo.rows.map((row) => row.column_name));
+        const hasStoredChatDepartment = availableColumns.has('chat_department');
+
+        if (pendingDepartmentFilter) {
+            if (hasStoredChatDepartment) {
+                addCondition('COALESCE(c.department, h.chat_department) =', pendingDepartmentFilter);
+            } else {
+                addCondition('c.department =', pendingDepartmentFilter);
+            }
+        }
+
+        const limitIndex = params.push(parsedLimit);
+        const offsetIndex = params.push(parsedOffset);
+
+        const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        const storedOrNull = (columnName, castType) => (
+            availableColumns.has(columnName)
+                ? `h.${columnName}`
+                : `CAST(NULL AS ${castType})`
+        );
+
+        const selectFragments = [
+            'h.id',
+            'h.message_id',
+            'h.chat_id',
+            `${storedOrNull('deleted_message_user_id', 'INTEGER')} AS stored_deleted_message_user_id`,
+            `${storedOrNull('deleted_message_user_name', 'TEXT')} AS stored_deleted_message_user_name`,
+            'h.deleted_by_user_id',
+            'h.deleted_by_user_name',
+            'h.deleted_by_role',
+            'h.deletion_scope',
+            `${storedOrNull('original_content', 'TEXT')} AS stored_original_content`,
+            `${storedOrNull('file_id', 'INTEGER')} AS stored_file_id`,
+            `${storedOrNull('deleted_message_created_at', 'TIMESTAMP WITH TIME ZONE')} AS stored_deleted_message_created_at`,
+            `${storedOrNull('chat_name', 'TEXT')} AS stored_chat_name`,
+            `${storedOrNull('chat_type', 'TEXT')} AS stored_chat_type`,
+            `${storedOrNull('chat_department', 'TEXT')} AS stored_chat_department`,
+            'h.deleted_at',
+            'c.name AS chat_name_current',
+            'c.type AS chat_type_current',
+            'c.department AS chat_department_current'
+        ];
 
         const result = await query(
             `SELECT
-                h.id,
-                h.message_id,
-                h.chat_id,
-                COALESCE(c.name, h.chat_name) AS chat_name,
-                COALESCE(c.type, h.chat_type) AS chat_type,
-                COALESCE(c.department, h.chat_department) AS chat_department,
-                h.deleted_message_user_id,
-                h.deleted_message_user_name,
-                h.deleted_by_user_id,
-                h.deleted_by_user_name,
-                h.deleted_by_role,
-                h.deletion_scope,
-                h.original_content,
-                h.file_id,
-                h.deleted_message_created_at,
-                h.deleted_at
+                ${selectFragments.join(',\n                ')}
              FROM message_deletion_history h
              LEFT JOIN chats c ON c.id = h.chat_id
-             ${whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''}
+             ${whereClause}
              ORDER BY h.deleted_at DESC
-             LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`,
+             LIMIT $${limitIndex} OFFSET $${offsetIndex}`,
             params
         );
 
+        const history = result.rows.map((row) => ({
+            id: row.id,
+            message_id: row.message_id,
+            chat_id: row.chat_id,
+            chat_name: row.chat_name_current || row.stored_chat_name || null,
+            chat_type: row.chat_type_current || row.stored_chat_type || null,
+            chat_department: row.chat_department_current || row.stored_chat_department || null,
+            deleted_message_user_id: row.stored_deleted_message_user_id ?? null,
+            deleted_message_user_name: row.stored_deleted_message_user_name || null,
+            deleted_by_user_id: row.deleted_by_user_id,
+            deleted_by_user_name: row.deleted_by_user_name,
+            deleted_by_role: row.deleted_by_role,
+            deletion_scope: row.deletion_scope,
+            original_content: row.stored_original_content || null,
+            file_id: row.stored_file_id ?? null,
+            deleted_message_created_at: row.stored_deleted_message_created_at || null,
+            deleted_at: row.deleted_at
+        }));
+
         res.json({
-            history: result.rows,
-            count: result.rowCount
+            history,
+            count: history.length
         });
     } catch (error) {
+        if (error && (error.code === '42P01' || error.code === '42703')) { // undefined_table or undefined_column
+            console.warn('Deletion history table is missing, returning empty result');
+            return res.json({ history: [], count: 0 });
+        }
+
         console.error('Get deletion history error:', error);
         res.status(500).json({
             error: 'Failed to fetch deletion history',

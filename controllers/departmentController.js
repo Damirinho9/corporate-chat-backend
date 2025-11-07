@@ -25,17 +25,14 @@ const getAllDepartments = async (req, res) => {
                         u.name
                 ) FILTER (WHERE u.id IS NOT NULL) as users
             FROM (
-                SELECT DISTINCT department as name
+                SELECT DISTINCT TRIM(department) as name
                 FROM users
-                WHERE department IS NOT NULL
+                WHERE department IS NOT NULL AND TRIM(department) <> ''
             ) d
-            LEFT JOIN users u ON u.department = d.name AND u.is_active = true
+            LEFT JOIN users u ON TRIM(u.department) = d.name AND u.is_active = true
             GROUP BY d.name
             ORDER BY d.name
         `);
-
-        console.log('[getAllDepartments] SQL result.rows:', JSON.stringify(result.rows, null, 2));
-        console.log('[getAllDepartments] Sending response:', JSON.stringify({ departments: result.rows }, null, 2));
 
         res.json({ departments: result.rows });
     } catch (error) {
@@ -121,11 +118,11 @@ const getContactsStructured = async (req, res) => {
                         u.name
                 ) FILTER (WHERE u.id IS NOT NULL) as users
             FROM (
-                SELECT DISTINCT department as name
+                SELECT DISTINCT TRIM(department) as name
                 FROM users
-                WHERE department IS NOT NULL
+                WHERE department IS NOT NULL AND TRIM(department) <> ''
             ) d
-            LEFT JOIN users u ON u.department = d.name AND u.is_active = true
+            LEFT JOIN users u ON TRIM(u.department) = d.name AND u.is_active = true
             GROUP BY d.name
             ORDER BY d.name
         `);

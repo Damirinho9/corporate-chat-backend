@@ -205,6 +205,12 @@
             font-size: 14px;
         }
 
+        .permissions-empty {
+            text-align: center;
+            color: #a0aec0;
+            padding: 16px 0;
+        }
+
         .permissions-table th:first-child,
         .permissions-table td:first-child {
             text-align: left;
@@ -1276,6 +1282,8 @@
             }
         ];
 
+        window.PERMISSIONS_MATRIX = PERMISSIONS_MATRIX;
+
         const createUserForm = document.getElementById('createUserForm');
         const usernameInput = document.getElementById('createUsername');
         const fullNameInput = document.getElementById('createFullName');
@@ -1303,16 +1311,16 @@
         const editDepartmentSelect = document.getElementById('editDepartmentSelect');
         const editStatusSelect = document.getElementById('editStatus');
         const editPasswordInput = document.getElementById('editInitialPassword');
+
         const modalFocusMemory = new WeakMap();
 
         function rememberModalFocus(modal) {
-            if (!(modal instanceof HTMLElement)) {
-                modalFocusMemory.set(modal, null);
+            if (!modal) {
                 return;
             }
 
             const activeElement = document.activeElement;
-            if (activeElement && modal.contains(activeElement) && typeof activeElement.focus === 'function') {
+            if (activeElement && activeElement instanceof HTMLElement) {
                 modalFocusMemory.set(modal, activeElement);
             } else {
                 modalFocusMemory.set(modal, null);
@@ -1333,6 +1341,33 @@
                 } catch (error) {
                     console.warn('[modal] Unable to restore focus', error);
                 }
+            }
+        }
+
+        function openModalElement(modal, { focusTarget = null, focusSelector = null } = {}) {
+            if (!modal) {
+                return;
+            }
+
+            rememberModalFocus(modal);
+
+            modal.classList.add('show');
+            modal.style.display = 'flex';
+
+            let focusElement = null;
+            if (focusTarget && typeof focusTarget.focus === 'function') {
+                focusElement = focusTarget;
+            } else if (focusSelector) {
+                focusElement = modal.querySelector(focusSelector);
+            }
+
+            if (!focusElement) {
+                focusElement = modal.querySelector('[data-autofocus]')
+                    || modal.querySelector('input, select, textarea, button');
+            }
+
+            if (focusElement && typeof focusElement.focus === 'function') {
+                setTimeout(() => focusElement.focus(), 0);
             }
         }
 
@@ -1379,7 +1414,7 @@
                     await loadDepartments();
                     break;
                 case 'permissions':
-                    renderPermissionsMatrix();
+                    renderPermissionsMatrix(window.PERMISSIONS_MATRIX || PERMISSIONS_MATRIX);
                     break;
                 case 'deletions':
                     await loadDeletionHistory();
@@ -1390,11 +1425,22 @@
             }
         }
 
-        function renderPermissionsMatrix() {
+        function renderPermissionsMatrix(matrixData) {
             const tbody = document.getElementById('permissionsMatrixBody');
             if (!tbody) return;
 
-            tbody.innerHTML = PERMISSIONS_MATRIX.map(row => {
+            const matrix = Array.isArray(matrixData) && matrixData.length
+                ? matrixData
+                : (Array.isArray(window.PERMISSIONS_MATRIX) && window.PERMISSIONS_MATRIX.length
+                    ? window.PERMISSIONS_MATRIX
+                    : PERMISSIONS_MATRIX);
+
+            if (!matrix.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="permissions-empty">Данные о правах недоступны</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = matrix.map(row => {
                 const columns = ROLE_ORDER.map(role => {
                     const value = row.roles[role];
 
@@ -1568,11 +1614,19 @@ async function loadChats() {
                 const data = await res.json();
                 departmentsCache = Array.isArray(data.departments)
                     ? data.departments
-                        .map(dept => (typeof dept?.department === 'string' ? dept.department.trim() : null))
+                        .map((dept) => {
+                            if (dept && typeof dept.department === 'string') {
+                                const trimmed = dept.department.trim();
+                                return trimmed.length ? trimmed : null;
+                            }
+                            return null;
+                        })
                         .filter(Boolean)
                     : [];
                 populateDepartmentSelectOptions(departmentSelect, departmentSelect ? departmentSelect.value : null);
-                const editPreferredDepartment = currentEditingUser?.department || (editDepartmentSelect ? editDepartmentSelect.value : null);
+                const editPreferredDepartment = (currentEditingUser && currentEditingUser.department)
+                    ? currentEditingUser.department
+                    : (editDepartmentSelect ? editDepartmentSelect.value : null);
                 populateDepartmentSelectOptions(editDepartmentSelect, editPreferredDepartment);
                 if (roleSelect) {
                     updateDepartmentVisibility(roleSelect.value, departmentField, departmentSelect, { preserveValue: true });
@@ -1584,49 +1638,51 @@ async function loadChats() {
                         autoSelectFirst: !editPreferredDepartment
                     });
                 }
-                console.log('[Departments] Raw data received:', data);
-                console.log('[Departments] data.departments type:', typeof data.departments);
-                console.log('[Departments] data.departments is array:', Array.isArray(data.departments));
-                console.log('[Departments] data.departments length:', data.departments?.length);
-                console.log('[Departments] First item:', data.departments?.[0]);
-                console.log('[Departments] First item type:', typeof data.departments?.[0]);
-                console.log('[Departments] First item stringified:', JSON.stringify(data.departments?.[0], null, 2));
-
                 const div = document.getElementById('departmentsList');
-                if (data.departments && data.departments.length > 0) {
-                    div.innerHTML = data.departments.map(dept => {
-                        console.log('[Departments] Processing dept:', dept);
-                        console.log('[Departments] dept type:', typeof dept);
-                        console.log('[Departments] dept.department value:', dept.department);
-                        console.log('[Departments] dept.users value:', dept.users);
-                        const ropUser = dept.users ? dept.users.find(u => u.role === 'rop') : null;
-                        const operators = dept.users ? dept.users.filter(u => u.role === 'operator') : [];
+                if (Array.isArray(data.departments) && data.departments.length > 0) {
+                    div.innerHTML = data.departments.map((dept) => {
+                        const rawName = typeof dept.department === 'string' ? dept.department.trim() : '';
+                        const displayName = rawName || 'Без отдела';
+                        const safeDisplayName = escapeHtml(displayName);
+                        const hasDepartmentIdentity = Boolean(rawName);
+                        const renameButton = hasDepartmentIdentity
+                            ? `<button class="btn btn-sm" onclick='showRenameDepartmentModal(${JSON.stringify(rawName)})'
+                                    style="background: #f7fafc; border: 1px solid #e2e8f0; padding: 4px 8px;">
+                                    ✏️ Переименовать
+                               </button>`
+                            : '';
+                        const addButton = hasDepartmentIdentity
+                            ? `<button class="btn btn-sm btn-primary" onclick='showAddUserToDepartmentModal(${JSON.stringify(rawName)})'>
+                                    ➕ Добавить
+                               </button>`
+                            : '';
+                        const ropUser = Array.isArray(dept.users) ? dept.users.find(u => u.role === 'rop') : null;
+                        const operators = Array.isArray(dept.users) ? dept.users.filter(u => u.role === 'operator') : [];
+                        const otherUsers = Array.isArray(dept.users)
+                            ? dept.users.filter(u => !['rop', 'operator'].includes(u.role))
+                            : [];
+                        const headerNotice = hasDepartmentIdentity ? '' : '<span style="color: #a0aec0;">Редактирование недоступно</span>';
 
                         return `
                             <div class="card" style="margin-bottom: 20px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                     <div style="display: flex; align-items: center; gap: 10px;">
-                                        <h3>🏢 ${dept.department}</h3>
-                                        <button class="btn btn-sm" onclick="showRenameDepartmentModal('${dept.department}')"
-                                                style="background: #f7fafc; border: 1px solid #e2e8f0; padding: 4px 8px;">
-                                            ✏️ Переименовать
-                                        </button>
+                                        <h3>🏢 ${safeDisplayName}</h3>
+                                        ${renameButton || headerNotice}
                                     </div>
                                     <div>
                                         <span style="background: #e2e8f0; padding: 5px 12px; border-radius: 6px; font-size: 13px; margin-right: 10px;">
                                             ${dept.user_count || 0} человек
                                         </span>
-                                        <button class="btn btn-sm btn-primary" onclick="showAddUserToDepartmentModal('${dept.department}')">
-                                            ➕ Добавить
-                                        </button>
+                                        ${addButton}
                                     </div>
                                 </div>
 
                                 <div style="margin-bottom: 10px;">
                                     <strong>РОП:</strong> ${ropUser ?
-                                        `<span style="color: #4299e1;">${ropUser.name} (${ropUser.username})</span>` :
+                                        `<span style=\"color: #4299e1;\">${escapeHtml(ropUser.name)} (${escapeHtml(ropUser.username)})</span>` :
                                         '<span style="color: #a0aec0;">Не назначен</span>'}
-                                    ${ropUser ? '' : `<button class="btn btn-sm btn-success" onclick="showAssignHeadModal('${dept.department}')" style="margin-left: 10px;">Назначить РОПа</button>`}
+                                    ${!ropUser && hasDepartmentIdentity ? `<button class="btn btn-sm btn-success" onclick='showAssignHeadModal(${JSON.stringify(rawName)})' style="margin-left: 10px;">Назначить РОПа</button>` : ''}
                                 </div>
 
                                 ${operators.length > 0 ? `
@@ -1635,13 +1691,26 @@ async function loadChats() {
                                         <div style="margin-top: 10px;">
                                             ${operators.map(user => `
                                                 <div style="background: #f7fafc; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-                                                    <span>👤 ${user.name} (${user.username})</span>
-                                                    <button class="btn btn-sm btn-danger" onclick="removeUserFromDepartment(${user.id}, '${dept.department}')">Удалить</button>
+                                                    <span>👤 ${escapeHtml(user.name)} (${escapeHtml(user.username)})</span>
+                                                    ${hasDepartmentIdentity ? `<button class='btn btn-sm btn-danger' onclick='removeUserFromDepartment(${user.id}, ${JSON.stringify(rawName)})'>Удалить</button>` : ''}
                                                 </div>
                                             `).join('')}
                                         </div>
                                     </div>
                                 ` : '<div style="margin-top: 10px; color: #a0aec0;">Нет операторов</div>'}
+
+                                ${otherUsers.length > 0 ? `
+                                    <div style="margin-top: 15px;">
+                                        <strong>Сотрудники:</strong>
+                                        <div style="margin-top: 10px;">
+                                            ${otherUsers.map(user => `
+                                                <div style=\"background: #f7fafc; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;\">
+                                                    <span>${escapeHtml(user.name)} (${escapeHtml(user.username)}) • ${escapeHtml(ROLE_LABELS[user.role] || user.role || '—')}</span>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                ` : ''}
                             </div>
                         `;
                     }).join('');
@@ -1743,6 +1812,9 @@ async function loadChats() {
                 showToast('Ошибка назначения РОПа', 'error');
             }
         }
+        async function loadDeletionHistory() {
+            const tbody = document.getElementById('deletionHistoryBody');
+            if (!tbody) return;
 
         function showAddUserToDepartmentModal(departmentName) {
             const userId = prompt(`Введите ID пользователя для добавления в ${departmentName}:`);
@@ -1777,6 +1849,7 @@ async function loadChats() {
                 showToast('Ошибка добавления пользователя', 'error');
             }
         }
+
         async function loadDeletionHistory() {
             const tbody = document.getElementById('deletionHistoryBody');
             if (!tbody) return;
@@ -1897,7 +1970,10 @@ async function loadChats() {
                     await loadDepartments();
                 } else {
                     populateDepartmentSelectOptions(departmentSelect);
-                    populateDepartmentSelectOptions(editDepartmentSelect, currentEditingUser?.department || null);
+                    const editModalDepartment = (currentEditingUser && currentEditingUser.department)
+                        ? currentEditingUser.department
+                        : null;
+                    populateDepartmentSelectOptions(editDepartmentSelect, editModalDepartment);
                 }
             } catch (error) {
                 console.warn('[showCreateUserModal] Не удалось обновить список отделов', error);
@@ -1915,15 +1991,7 @@ async function loadChats() {
                 toggleDepartmentField(roleSelect);
             }
 
-            const modal = document.getElementById('createUserModal');
-            if (modal) {
-                modal.classList.add('show');
-                modal.style.display = 'flex';
-            }
-
-            if (fullNameInput) {
-                setTimeout(() => fullNameInput.focus(), 50);
-            }
+            openModalElement(document.getElementById('createUserModal'), { focusTarget: fullNameInput });
         }
 
         function closeModal(modalId) {
@@ -1931,6 +1999,7 @@ async function loadChats() {
             if (modal) {
                 modal.classList.remove('show');
                 modal.style.display = 'none';
+                restoreModalFocus(modal);
             }
 
             if (modalId === 'createUserModal' && createUserForm) {
@@ -2000,7 +2069,9 @@ async function loadChats() {
             const uniqueDepartments = Array.from(new Set(departmentsCache))
                 .filter(Boolean)
                 .sort((a, b) => a.localeCompare(b, 'ru'));
-            const currentValue = preferredValue ?? targetSelect.value ?? '';
+            const currentValue = (typeof preferredValue !== 'undefined' && preferredValue !== null)
+                ? preferredValue
+                : (targetSelect && typeof targetSelect.value === 'string' ? targetSelect.value : '');
             const options = ['<option value="">Выберите отдел</option>'];
 
             uniqueDepartments.forEach((dept) => {
@@ -2115,7 +2186,7 @@ async function loadChats() {
         }
 
         async function resetUserPassword() {
-            const userId = Number(editUserIdInput?.value);
+            const userId = Number(editUserIdInput ? editUserIdInput.value : '');
             if (!userId) {
                 showToast('Пользователь не выбран', 'error');
                 return;
@@ -2272,8 +2343,9 @@ async function loadChats() {
                 const result = await res.json();
 
                 if (res.ok && result.success) {
-                    const displayPassword = result.password || payload.password;
-                    showToast(`Пользователь создан. Пароль: ${displayPassword}`, 'success');
+                    const displayPassword = result.password || payload.password || '';
+                    const successMessage = 'Пользователь создан. Пароль: ' + displayPassword;
+                    showToast(successMessage, 'success');
                     closeModal('createUserModal');
                     await loadUsers();
                     if (needsDepartment) {
@@ -2296,8 +2368,9 @@ async function loadChats() {
 
         if (editRoleSelect) {
             editRoleSelect.addEventListener('change', (event) => {
+                const lastStoredValue = editDepartmentSelect ? (editDepartmentSelect.dataset.lastValue || editDepartmentSelect.value || '') : '';
                 const preferred = shouldRequireDepartment(event.target.value)
-                    ? (editDepartmentSelect?.dataset.lastValue || editDepartmentSelect?.value || '')
+                    ? lastStoredValue
                     : null;
                 updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
                     preferredValue: preferred,
@@ -2311,18 +2384,18 @@ async function loadChats() {
             editUserForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
 
-                const userId = Number(editUserIdInput?.value);
+                const userId = Number(editUserIdInput ? editUserIdInput.value : '');
                 if (!userId) {
                     showToast('Пользователь не выбран', 'error');
                     return;
                 }
 
-                const name = editFullNameInput?.value.trim() || '';
-                const usernameValue = editUsernameInput?.value.trim() || '';
-                const roleValue = editRoleSelect?.value || '';
-                const isActiveValue = editStatusSelect?.value === 'true';
+                const name = editFullNameInput ? editFullNameInput.value.trim() : '';
+                const usernameValue = editUsernameInput ? editUsernameInput.value.trim() : '';
+                const roleValue = editRoleSelect ? editRoleSelect.value : '';
+                const isActiveValue = editStatusSelect ? editStatusSelect.value === 'true' : false;
                 const needsDept = shouldRequireDepartment(roleValue);
-                const departmentValue = needsDept ? (editDepartmentSelect?.value || '') : '';
+                const departmentValue = needsDept && editDepartmentSelect ? (editDepartmentSelect.value || '') : '';
                 const normalizedDepartment = needsDept ? (departmentValue || null) : null;
 
                 if (!name || !usernameValue || !roleValue) {
@@ -2427,6 +2500,14 @@ async function loadChats() {
             }, 3000);
         }
 
+        const initialisePermissionsMatrix = () => renderPermissionsMatrix(window.PERMISSIONS_MATRIX || PERMISSIONS_MATRIX);
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initialisePermissionsMatrix, { once: true });
+        } else {
+            initialisePermissionsMatrix();
+        }
+
         // ========== LOGOUT ==========
         function logout() {
             if (confirm('Logout?')) {
@@ -2456,11 +2537,7 @@ async function showCreateChatModal() {
         searchInput.value = '';
     }
 
-    const modal = document.getElementById('createChatModal');
-    if (modal) {
-        modal.classList.add('show');
-        modal.style.display = 'flex';
-    }
+    openModalElement(document.getElementById('createChatModal'), { focusSelector: '#participantsSearch' });
 
     await loadUsersForChat();
 }
@@ -2470,6 +2547,7 @@ function closeCreateChatModal() {
     if (modal) {
         modal.classList.remove('show');
         modal.style.display = 'none';
+        restoreModalFocus(modal);
     }
 
     const form = document.getElementById('createChatForm');
@@ -2549,7 +2627,8 @@ function filterParticipants() {
         return;
     }
 
-    const term = (searchInput?.value || '').trim().toLowerCase();
+    const searchValue = searchInput && typeof searchInput.value === 'string' ? searchInput.value : '';
+    const term = searchValue.trim().toLowerCase();
     const items = container.querySelectorAll('[data-filter-value]');
 
     items.forEach((item) => {
@@ -2610,11 +2689,7 @@ async function createNewChat() {
 
 // ========== МОДАЛЬНОЕ ОКНО: СОЗДАТЬ ОТДЕЛ ==========
 async function showCreateDepartmentModal() {
-    const modal = document.getElementById('createDepartmentModal');
-    if (modal) {
-        modal.classList.add('show');
-        modal.style.display = 'flex';
-    }
+    openModalElement(document.getElementById('createDepartmentModal'), { focusSelector: '#newDeptName' });
     await loadHeadsForDepartment();
 }
 
@@ -2623,6 +2698,7 @@ function closeCreateDepartmentModal() {
     if (modal) {
         modal.classList.remove('show');
         modal.style.display = 'none';
+        restoreModalFocus(modal);
     }
     document.getElementById('newDeptName').value = '';
     document.getElementById('newDeptDescription').value = '';
@@ -2722,6 +2798,7 @@ function closeModalElement(modal) {
         default:
             modal.classList.remove('show');
             modal.style.display = 'none';
+            restoreModalFocus(modal);
             break;
     }
 }
@@ -2816,6 +2893,7 @@ setupModalAccessibility();
             if (editChatModal) {
                 editChatModal.classList.remove('show');
                 editChatModal.style.display = 'none';
+                restoreModalFocus(editChatModal);
             }
             resetEditChatState();
         }
@@ -2843,21 +2921,21 @@ setupModalAccessibility();
         }
 
         function applyChatHeaderState() {
-            const chat = editChatState.chat;
+            const chat = editChatState.chat || null;
             if (editChatNameInput) {
-                editChatNameInput.value = chat?.name || '';
+                editChatNameInput.value = chat && chat.name ? chat.name : '';
             }
 
             if (editChatTypeSelect) {
-                const type = chat?.type || 'group';
+                const type = chat && chat.type ? chat.type : 'group';
                 editChatTypeSelect.value = type;
             }
 
             if (editChatDepartmentGroup) {
-                if (chat?.type === 'department') {
+                if (chat && chat.type === 'department') {
                     editChatDepartmentGroup.style.display = '';
                     if (editChatDepartmentInput) {
-                        editChatDepartmentInput.value = chat?.department || '';
+                        editChatDepartmentInput.value = chat && chat.department ? chat.department : '';
                     }
                 } else {
                     editChatDepartmentGroup.style.display = 'none';
@@ -2883,7 +2961,7 @@ setupModalAccessibility();
                 return;
             }
 
-            const currentUserId = currentUser?.id;
+            const currentUserId = currentUser ? currentUser.id : undefined;
 
             currentParticipantsList.innerHTML = editChatState.participants.map(participant => {
                 const roleLabel = ROLE_LABELS[participant.user_role] || participant.user_role || '—';
@@ -2973,8 +3051,7 @@ setupModalAccessibility();
             editChatState.chatId = numericId;
 
             if (editChatModal) {
-            editChatModal.classList.add('show');
-            editChatModal.style.display = 'flex';
+                openModalElement(editChatModal, { focusTarget: editChatNameInput });
             }
 
             if (currentParticipantsList) {
@@ -3117,7 +3194,10 @@ setupModalAccessibility();
                 return;
             }
 
-            const name = (editChatNameInput?.value || '').trim();
+            const nameRaw = editChatNameInput && typeof editChatNameInput.value === 'string'
+                ? editChatNameInput.value
+                : '';
+            const name = nameRaw.trim();
 
             if (!name) {
                 showToast('Введите название чата', 'error');
@@ -3235,7 +3315,7 @@ setupModalAccessibility();
             }
 
             if (editUserModal) {
-                editUserModal.classList.add('show');
+                openModalElement(editUserModal, { focusTarget: editFullNameInput });
             }
         }
 
