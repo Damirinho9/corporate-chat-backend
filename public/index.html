@@ -2837,10 +2837,33 @@
                 }
 
                 if (activeSectionFilter === 'all' && directChats.length > 0) {
-                        html += `<div class="chat-section">
-                                        <h4>Личные чаты</h4>
-                                        <ul>${directChats.map(chat => renderChatItem(chat)).join('')}</ul>
-                                </div>`;
+                        // Собираем ID всех пользователей, которые уже показаны в отделах
+                        const usersInDepartments = new Set();
+                        departmentSections.forEach(section => {
+                                if (section.dept?.users) {
+                                        section.dept.users.forEach(user => usersInDepartments.add(user.id));
+                                }
+                        });
+
+                        // Фильтруем личные чаты: показываем только те, где есть сообщения
+                        // ИЛИ пользователь не находится в отделах
+                        const filteredDirectChats = directChats.filter(chat => {
+                                // Если есть сообщения - всегда показываем
+                                if (chat.last_message && chat.last_message.trim() !== '') {
+                                        return true;
+                                }
+
+                                // Если нет сообщений - показываем только если пользователь не в отделе
+                                const otherUserId = chat.participants?.find(p => p.id !== currentUser?.id)?.id;
+                                return otherUserId && !usersInDepartments.has(otherUserId);
+                        });
+
+                        if (filteredDirectChats.length > 0) {
+                                html += `<div class="chat-section">
+                                                <h4>Личные чаты</h4>
+                                                <ul>${filteredDirectChats.map(chat => renderChatItem(chat)).join('')}</ul>
+                                        </div>`;
+                        }
                 }
 
                 chatsList.innerHTML = html || `
