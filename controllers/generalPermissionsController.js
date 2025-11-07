@@ -33,9 +33,12 @@ const PERMISSION_CATEGORIES = {
     'messages': {
         label: 'Управление сообщениями',
         permissions: [
-            { key: 'edit_messages', label: 'Редактирование сообщений' },
-            { key: 'delete_messages', label: 'Удаление сообщений' },
-            { key: 'view_all_messages', label: 'Просмотр всех сообщений' }
+            { key: 'edit_own_messages', label: 'Редактирование своих сообщений (5 мин)' },
+            { key: 'delete_own_messages', label: 'Удаление своих сообщений (5 мин)' },
+            { key: 'delete_any_messages', label: 'Удаление любых сообщений' },
+            { key: 'delete_department_messages', label: 'Удаление сообщений в своем отделе (РОП)' },
+            { key: 'view_all_messages', label: 'Просмотр всех сообщений' },
+            { key: 'view_deletion_history', label: 'Просмотр истории удалений' }
         ]
     },
     'files': {
