@@ -19,6 +19,7 @@ CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    initial_password VARCHAR(255),
     name VARCHAR(100) NOT NULL,
     role user_role NOT NULL,
     department VARCHAR(50),
@@ -68,15 +69,37 @@ CREATE TABLE messages (
     id SERIAL PRIMARY KEY,
     chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
+    content TEXT,
+    file_id INTEGER,
+    reply_to_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+    forwarded_from_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
     is_edited BOOLEAN DEFAULT false,
     is_deleted BOOLEAN DEFAULT false,
     is_pinned BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     -- For encrypted messages (future)
     is_encrypted BOOLEAN DEFAULT false
+);
+
+CREATE TABLE files (
+    id SERIAL PRIMARY KEY,
+    filename VARCHAR(255) NOT NULL,
+    original_filename VARCHAR(255) NOT NULL,
+    mime_type VARCHAR(100) NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    path VARCHAR(500) NOT NULL,
+    thumbnail_path VARCHAR(500),
+    uploaded_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+    file_type VARCHAR(50) DEFAULT 'other',
+    scan_status VARCHAR(20) DEFAULT 'pending',
+    scan_result TEXT,
+    width INTEGER,
+    height INTEGER,
+    duration INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Admin logs table
@@ -107,9 +130,40 @@ CREATE INDEX idx_messages_user ON messages(user_id);
 CREATE INDEX idx_messages_created ON messages(created_at DESC);
 CREATE INDEX idx_messages_composite ON messages(chat_id, created_at DESC);
 CREATE INDEX idx_messages_pinned ON messages(is_pinned);
+CREATE INDEX idx_messages_file_id ON messages(file_id);
+CREATE INDEX idx_messages_reply ON messages(reply_to_id);
+CREATE INDEX idx_messages_forwarded ON messages(forwarded_from_id);
 
 CREATE INDEX idx_admin_logs_user ON admin_logs(user_id);
 CREATE INDEX idx_admin_logs_created ON admin_logs(created_at DESC);
+
+CREATE INDEX idx_files_uploaded_by ON files(uploaded_by);
+CREATE INDEX idx_files_message_id ON files(message_id);
+CREATE INDEX idx_files_created_at ON files(created_at DESC);
+CREATE INDEX idx_files_file_type ON files(file_type);
+CREATE INDEX idx_files_scan_status ON files(scan_status);
+
+CREATE TABLE reactions (
+    id SERIAL PRIMARY KEY,
+    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    emoji VARCHAR(10) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(message_id, user_id)
+);
+
+CREATE TABLE mentions (
+    id SERIAL PRIMARY KEY,
+    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(message_id, user_id)
+);
+
+CREATE INDEX idx_reactions_message ON reactions(message_id);
+CREATE INDEX idx_reactions_user ON reactions(user_id);
+CREATE INDEX idx_mentions_message ON mentions(message_id);
+CREATE INDEX idx_mentions_user ON mentions(user_id);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -213,4 +267,31 @@ COMMENT ON TABLE chats IS 'Stores chat rooms and channels';
 COMMENT ON TABLE chat_participants IS 'Many-to-many relationship between users and chats';
 COMMENT ON TABLE messages IS 'Stores all messages with support for editing and deletion';
 COMMENT ON TABLE admin_logs IS 'Logs all admin actions for audit trail';
+CREATE TABLE IF NOT EXISTS message_deletion_history (
+    id SERIAL PRIMARY KEY,
+    message_id INTEGER,
+    chat_id INTEGER NOT NULL,
+    chat_name VARCHAR(255),
+    chat_type VARCHAR(50),
+    chat_department VARCHAR(255),
+    deleted_message_user_id INTEGER,
+    deleted_message_user_name VARCHAR(255),
+    deleted_by_user_id INTEGER NOT NULL,
+    deleted_by_user_name VARCHAR(255),
+    deleted_by_role VARCHAR(50) NOT NULL,
+    deletion_scope VARCHAR(50) NOT NULL,
+    original_content TEXT,
+    file_id INTEGER,
+    deleted_message_created_at TIMESTAMP WITH TIME ZONE,
+    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_deletion_history_chat
+    ON message_deletion_history(chat_id);
+CREATE INDEX IF NOT EXISTS idx_message_deletion_history_deleted_by
+    ON message_deletion_history(deleted_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_message_deletion_history_deleted_at
+    ON message_deletion_history(deleted_at DESC);
+
+COMMENT ON TABLE message_deletion_history IS 'Stores audit history for deleted messages by administrators and department heads';
 COMMENT ON FUNCTION can_send_direct_message IS 'Checks if a user can send direct messages to another user based on hierarchy';

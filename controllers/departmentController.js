@@ -1,43 +1,91 @@
 const { query, pool } = require('../config/database');
 
+const collator = new Intl.Collator('ru-RU');
+const ROLE_SORT_ORDER = { rop: 0, operator: 1 };
+
+const normalizeDepartmentName = (value) => {
+    if (!value) {
+        return null;
+    }
+    const trimmed = String(value).trim();
+    return trimmed.length ? trimmed : null;
+};
+
+const sortDepartmentUsers = (users = []) => {
+    return [...users].sort((a, b) => {
+        const orderA = ROLE_SORT_ORDER[a.role] ?? 2;
+        const orderB = ROLE_SORT_ORDER[b.role] ?? 2;
+        if (orderA !== orderB) {
+            return orderA - orderB;
+        }
+        const nameA = (a.name || a.username || '').toLowerCase();
+        const nameB = (b.name || b.username || '').toLowerCase();
+        return collator.compare(nameA, nameB);
+    });
+};
+
 // Получить все отделы со статистикой
 const getAllDepartments = async (req, res) => {
     try {
         const result = await query(`
-            SELECT
-                d.name as department,
-                COUNT(u.id) as user_count,
-                COUNT(u.id) FILTER (WHERE u.role = 'rop') as rop_count,
-                COUNT(u.id) FILTER (WHERE u.role = 'operator') as operator_count,
-                json_agg(
-                    json_build_object(
-                        'id', u.id,
-                        'name', u.name,
-                        'role', u.role,
-                        'username', u.username,
-                        'is_active', u.is_active
-                    ) ORDER BY
-                        CASE u.role
-                            WHEN 'rop' THEN 1
-                            WHEN 'operator' THEN 2
-                            ELSE 3
-                        END,
-                        u.name
-                ) FILTER (WHERE u.id IS NOT NULL) as users
-            FROM (
-                SELECT DISTINCT department as name
-                FROM users
-                WHERE department IS NOT NULL
-            ) d
-            LEFT JOIN users u ON u.department = d.name AND u.is_active = true
-            GROUP BY d.name
-            ORDER BY d.name
+            SELECT id, username, name, role, department, is_active
+            FROM users
+            WHERE department IS NOT NULL
         `);
 
-        console.log('[getAllDepartments] SQL result.rows:', JSON.stringify(result.rows, null, 2));
-        console.log('[getAllDepartments] Sending response:', JSON.stringify({ departments: result.rows }, null, 2));
+        const departmentMap = new Map();
 
-        res.json({ departments: result.rows });
+        result.rows.forEach((row) => {
+            const normalizedName = normalizeDepartmentName(row.department);
+            if (!normalizedName) {
+                return;
+            }
+
+            if (!departmentMap.has(normalizedName)) {
+                departmentMap.set(normalizedName, {
+                    department: normalizedName,
+                    user_count: 0,
+                    rop_count: 0,
+                    operator_count: 0,
+                    users: []
+                });
+            }
+
+            if (row.is_active !== true) {
+                return;
+            }
+
+            const bucket = departmentMap.get(normalizedName);
+            bucket.user_count += 1;
+
+            if (row.role === 'rop') {
+                bucket.rop_count += 1;
+            }
+
+            if (row.role === 'operator') {
+                bucket.operator_count += 1;
+            }
+
+            bucket.users.push({
+                id: row.id,
+                name: row.name,
+                role: row.role,
+                username: row.username,
+                is_active: true
+            });
+        });
+
+        const departments = Array.from(departmentMap.values())
+            .map((entry) => ({
+                department: entry.department,
+                user_count: String(entry.user_count),
+                rop_count: String(entry.rop_count),
+                operator_count: String(entry.operator_count),
+                users: sortDepartmentUsers(entry.users)
+            }))
+            .sort((a, b) => collator.compare(a.department, b.department));
+
+        res.json({ departments });
     } catch (error) {
         console.error('Get departments error:', error);
         res.status(500).json({
@@ -101,50 +149,57 @@ const getAssistants = async (req, res) => {
 const getContactsStructured = async (req, res) => {
     try {
         // Получаем все отделы с пользователями
-        const deptResult = await query(`
-            SELECT
-                d.name as department,
-                json_agg(
-                    json_build_object(
-                        'id', u.id,
-                        'name', u.name,
-                        'role', u.role,
-                        'username', u.username,
-                        'is_active', u.is_active,
-                        'last_seen', u.last_seen
-                    ) ORDER BY
-                        CASE u.role
-                            WHEN 'rop' THEN 1
-                            WHEN 'operator' THEN 2
-                            ELSE 3
-                        END,
-                        u.name
-                ) FILTER (WHERE u.id IS NOT NULL) as users
-            FROM (
-                SELECT DISTINCT department as name
-                FROM users
-                WHERE department IS NOT NULL
-            ) d
-            LEFT JOIN users u ON u.department = d.name AND u.is_active = true
-            GROUP BY d.name
-            ORDER BY d.name
-        `);
-
-        // Получаем ассистентов
-        const assistResult = await query(`
-            SELECT
-                id, username, name, role, is_active, last_seen
+        const usersResult = await query(`
+            SELECT id, username, name, role, department, is_active, last_seen
             FROM users
-            WHERE role = 'assistant' AND is_active = true
-            ORDER BY name
         `);
 
-        // Формируем структуру
+        const departmentMap = new Map();
+        const assistants = [];
+
+        usersResult.rows.forEach((row) => {
+            if (row.role === 'assistant' && row.is_active) {
+                assistants.push({
+                    id: row.id,
+                    username: row.username,
+                    name: row.name,
+                    role: row.role,
+                    is_active: row.is_active,
+                    last_seen: row.last_seen
+                });
+            }
+
+            const normalizedName = normalizeDepartmentName(row.department);
+            if (!normalizedName || row.is_active !== true) {
+                return;
+            }
+
+            if (!departmentMap.has(normalizedName)) {
+                departmentMap.set(normalizedName, []);
+            }
+
+            departmentMap.get(normalizedName).push({
+                id: row.id,
+                name: row.name,
+                role: row.role,
+                username: row.username,
+                is_active: true,
+                last_seen: row.last_seen
+            });
+        });
+
+        const departments = Array.from(departmentMap.entries())
+            .map(([name, users]) => ({
+                department: name,
+                users: sortDepartmentUsers(users)
+            }))
+            .sort((a, b) => collator.compare(a.department, b.department));
+
         const structure = {
-            departments: deptResult.rows,
+            departments,
             assistants: {
                 name: 'Ассистенты',
-                users: assistResult.rows
+                users: assistants.sort((a, b) => collator.compare(a.name || a.username || '', b.name || b.username || ''))
             }
         };
 
@@ -170,31 +225,78 @@ const createDepartment = async (req, res) => {
             });
         }
 
-        // Проверяем, не существует ли отдел
-        const existing = await query(
-            'SELECT id FROM users WHERE department = $1 LIMIT 1',
-            [name]
-        );
+        const trimmedName = name.trim();
 
-        if (existing.rows.length > 0) {
+        if (trimmedName.length === 0) {
+            return res.status(400).json({
+                error: 'Department name is required',
+                code: 'MISSING_NAME'
+            });
+        }
+
+        // Проверяем, не существует ли отдел
+        const [existingUser, existingChat] = await Promise.all([
+            query(
+                'SELECT id FROM users WHERE department = $1 LIMIT 1',
+                [trimmedName]
+            ),
+            query(
+                `SELECT id FROM chats WHERE type = 'department' AND (department = $1 OR name = $1) LIMIT 1`,
+                [trimmedName]
+            )
+        ]);
+
+        if (existingUser.rows.length > 0 || existingChat.rows.length > 0) {
             return res.status(400).json({
                 error: 'Department already exists',
                 code: 'DEPARTMENT_EXISTS'
             });
         }
 
-        // Если указан руководитель, обновляем его
-        if (headUserId) {
-            await query(
-                'UPDATE users SET department = $1, role = $2 WHERE id = $3',
-                [name, 'rop', headUserId]
-            );
-        }
+        const client = await pool.connect();
 
-        res.json({
-            message: 'Department created successfully',
-            department: { name, headUserId }
-        });
+        try {
+            await client.query('BEGIN');
+
+            // Создаём чат отдела заранее, чтобы гарантировать связь
+            const chatResult = await client.query(
+                `INSERT INTO chats (name, type, department, created_by)
+                 VALUES ($1, 'department', $1, $2)
+                 RETURNING id`,
+                [trimmedName, headUserId || null]
+            );
+
+            const departmentChatId = chatResult.rows[0]?.id;
+
+            // Если указан руководитель, обновляем его и добавляем в чат
+            if (headUserId) {
+                await client.query(
+                    'UPDATE users SET department = $1, role = $2 WHERE id = $3',
+                    [trimmedName, 'rop', headUserId]
+                );
+
+                if (departmentChatId) {
+                    await client.query(
+                        `INSERT INTO chat_participants (chat_id, user_id)
+                         VALUES ($1, $2)
+                         ON CONFLICT DO NOTHING`,
+                        [departmentChatId, headUserId]
+                    );
+                }
+            }
+
+            await client.query('COMMIT');
+
+            res.json({
+                message: 'Department created successfully',
+                department: { name: trimmedName, headUserId }
+            });
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
     } catch (error) {
         console.error('Create department error:', error);
         res.status(500).json({
@@ -417,68 +519,111 @@ const renameDepartment = async (req, res) => {
         }
 
         const trimmedNewName = newName.trim();
+        const normalizedCurrentName = departmentName.trim();
 
-        // Проверяем, существует ли отдел
-        const deptCheck = await query(
-            'SELECT COUNT(*) as count FROM users WHERE department = $1',
-            [departmentName]
-        );
+        // Проверяем, существует ли отдел (в чатах или у пользователей)
+        const [departmentChat, deptUsers] = await Promise.all([
+            query(
+                `SELECT id, name, department FROM chats
+                 WHERE type = 'department' AND (department = $1 OR name = $1)
+                 LIMIT 1`,
+                [normalizedCurrentName]
+            ),
+            query(
+                'SELECT COUNT(*) as count FROM users WHERE department = $1',
+                [normalizedCurrentName]
+            )
+        ]);
 
-        if (deptCheck.rows[0].count === 0) {
+        if (departmentChat.rows.length === 0 && Number(deptUsers.rows[0].count) === 0) {
             return res.status(404).json({
                 error: 'Department not found',
                 code: 'DEPT_NOT_FOUND'
             });
         }
 
-        // Проверяем, не занято ли новое название
-        const existingCheck = await query(
-            'SELECT COUNT(*) as count FROM users WHERE department = $1',
-            [trimmedNewName]
-        );
+        // Проверяем, не занято ли новое название (в чатах или у пользователей)
+        if (normalizedCurrentName !== trimmedNewName) {
+            const [existingUser, existingChat] = await Promise.all([
+                query(
+                    'SELECT COUNT(*) as count FROM users WHERE department = $1',
+                    [trimmedNewName]
+                ),
+                query(
+                    `SELECT COUNT(*) as count FROM chats
+                     WHERE type = 'department' AND (department = $1 OR name = $1)`,
+                    [trimmedNewName]
+                )
+            ]);
 
-        if (existingCheck.rows[0].count > 0 && departmentName !== trimmedNewName) {
-            return res.status(400).json({
-                error: 'Department with this name already exists',
-                code: 'DEPT_EXISTS'
-            });
+            if (Number(existingUser.rows[0].count) > 0 || Number(existingChat.rows[0].count) > 0) {
+                return res.status(400).json({
+                    error: 'Department with this name already exists',
+                    code: 'DEPT_EXISTS'
+                });
+            }
         }
 
-        // Используем транзакцию для атомарности
-        await query('BEGIN');
+        const client = await pool.connect();
 
         try {
+            // Используем транзакцию для атомарности
+            await client.query('BEGIN');
+
             // 1. Обновляем department у всех пользователей отдела
-            await query(
+            await client.query(
                 'UPDATE users SET department = $1 WHERE department = $2',
-                [trimmedNewName, departmentName]
+                [trimmedNewName, normalizedCurrentName]
             );
 
             console.log('[renameDepartment] Updated users.department');
 
-            // 2. Обновляем department и name в чате отдела
-            const chatUpdateResult = await query(
+            // 2. Обновляем или создаём чат отдела
+            const chatUpdateResult = await client.query(
                 `UPDATE chats
                  SET department = $1, name = $1, updated_at = CURRENT_TIMESTAMP
-                 WHERE type = 'department' AND department = $2
+                 WHERE type = 'department' AND (department = $2 OR name = $2)
                  RETURNING id, name`,
-                [trimmedNewName, departmentName]
+                [trimmedNewName, normalizedCurrentName]
             );
 
-            console.log('[renameDepartment] Updated chat:', chatUpdateResult.rows[0]);
+            let updatedChat = chatUpdateResult.rows[0];
+            let createdNewChat = false;
 
-            await query('COMMIT');
+            if (!updatedChat) {
+                const insertResult = await client.query(
+                    `INSERT INTO chats (name, type, department)
+                     VALUES ($1, 'department', $1)
+                     RETURNING id, name`,
+                    [trimmedNewName]
+                );
+                updatedChat = insertResult.rows[0];
+                createdNewChat = true;
+            }
+
+            if (createdNewChat) {
+                await client.query(
+                    `INSERT INTO chat_participants (chat_id, user_id)
+                     SELECT $1, id FROM users WHERE department = $2
+                     ON CONFLICT DO NOTHING`,
+                    [updatedChat.id, trimmedNewName]
+                );
+            }
+
+            await client.query('COMMIT');
 
             res.json({
                 success: true,
                 message: 'Department renamed successfully',
-                oldName: departmentName,
+                oldName: normalizedCurrentName,
                 newName: trimmedNewName,
-                updatedChat: chatUpdateResult.rows[0]
+                updatedChat
             });
         } catch (error) {
-            await query('ROLLBACK');
+            await client.query('ROLLBACK');
             throw error;
+        } finally {
+            client.release();
         }
     } catch (error) {
         console.error('Rename department error:', error);
