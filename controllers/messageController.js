@@ -702,15 +702,12 @@ const getDeletionHistory = async (req, res) => {
         }
 
         const params = [];
-        const conditions = [];
-
-        const addCondition = (clause, value) => {
-            params.push(value);
-            conditions.push(`${clause} $${params.length}`);
-        };
+        const placeholders = () => `$${params.length + 1}`;
+        const whereClauses = [];
 
         if (parsedChatId) {
-            addCondition('h.chat_id =', parsedChatId);
+            whereClauses.push(`h.chat_id = ${placeholders()}`);
+            params.push(parsedChatId);
         }
 
         if (req.user.role === 'rop') {
@@ -721,7 +718,8 @@ const getDeletionHistory = async (req, res) => {
                 });
             }
 
-            addCondition('COALESCE(c.department, h.chat_department) =', req.user.department);
+            whereClauses.push(`COALESCE(c.department, h.chat_department) = ${placeholders()}`);
+            params.push(req.user.department);
 
             if (parsedChatId) {
                 const chatCheck = await query(
@@ -740,10 +738,10 @@ const getDeletionHistory = async (req, res) => {
             }
         }
 
-        const limitIndex = params.push(parsedLimit);
-        const offsetIndex = params.push(parsedOffset);
-
-        const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+        const limitPlaceholder = placeholders();
+        params.push(parsedLimit);
+        const offsetPlaceholder = placeholders();
+        params.push(parsedOffset);
 
         const result = await query(
             `SELECT
@@ -765,9 +763,9 @@ const getDeletionHistory = async (req, res) => {
                 h.deleted_at
              FROM message_deletion_history h
              LEFT JOIN chats c ON c.id = h.chat_id
-             ${whereClause}
+             ${whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''}
              ORDER BY h.deleted_at DESC
-             LIMIT $${limitIndex} OFFSET $${offsetIndex}`,
+             LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`,
             params
         );
 
@@ -776,11 +774,6 @@ const getDeletionHistory = async (req, res) => {
             count: result.rowCount
         });
     } catch (error) {
-        if (error && error.code === '42P01') { // undefined_table
-            console.warn('Deletion history table is missing, returning empty result');
-            return res.json({ history: [], count: 0 });
-        }
-
         console.error('Get deletion history error:', error);
         res.status(500).json({
             error: 'Failed to fetch deletion history',

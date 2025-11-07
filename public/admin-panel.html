@@ -205,12 +205,6 @@
             font-size: 14px;
         }
 
-        .permissions-empty {
-            text-align: center;
-            color: #a0aec0;
-            padding: 16px 0;
-        }
-
         .permissions-table th:first-child,
         .permissions-table td:first-child {
             text-align: left;
@@ -1282,8 +1276,6 @@
             }
         ];
 
-        window.PERMISSIONS_MATRIX = PERMISSIONS_MATRIX;
-
         const createUserForm = document.getElementById('createUserForm');
         const usernameInput = document.getElementById('createUsername');
         const fullNameInput = document.getElementById('createFullName');
@@ -1311,13 +1303,6 @@
         const editDepartmentSelect = document.getElementById('editDepartmentSelect');
         const editStatusSelect = document.getElementById('editStatus');
         const editPasswordInput = document.getElementById('editInitialPassword');
-
-        const modalFocusMemory = new WeakMap();
-
-        function rememberModalFocus(modal) {
-            if (!modal) {
-                return;
-            }
 
             const activeElement = document.activeElement;
             if (activeElement && activeElement instanceof HTMLElement) {
@@ -1414,7 +1399,7 @@
                     await loadDepartments();
                     break;
                 case 'permissions':
-                    renderPermissionsMatrix(window.PERMISSIONS_MATRIX);
+                    renderPermissionsMatrix();
                     break;
                 case 'deletions':
                     await loadDeletionHistory();
@@ -1425,20 +1410,11 @@
             }
         }
 
-        function renderPermissionsMatrix(matrixData) {
+        function renderPermissionsMatrix() {
             const tbody = document.getElementById('permissionsMatrixBody');
             if (!tbody) return;
 
-            const matrix = Array.isArray(matrixData)
-                ? matrixData
-                : (Array.isArray(window.PERMISSIONS_MATRIX) ? window.PERMISSIONS_MATRIX : []);
-
-            if (!matrix.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="permissions-empty">Данные о правах недоступны</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = matrix.map(row => {
+            tbody.innerHTML = PERMISSIONS_MATRIX.map(row => {
                 const columns = ROLE_ORDER.map(role => {
                     const value = row.roles[role];
 
@@ -1612,18 +1588,11 @@ async function loadChats() {
                 const data = await res.json();
                 departmentsCache = Array.isArray(data.departments)
                     ? data.departments
-                        .map((dept) => {
-                            if (dept && typeof dept.department === 'string') {
-                                return dept.department.trim();
-                            }
-                            return null;
-                        })
+                        .map(dept => (typeof dept?.department === 'string' ? dept.department.trim() : null))
                         .filter(Boolean)
                     : [];
                 populateDepartmentSelectOptions(departmentSelect, departmentSelect ? departmentSelect.value : null);
-                const editPreferredDepartment = (currentEditingUser && currentEditingUser.department)
-                    ? currentEditingUser.department
-                    : (editDepartmentSelect ? editDepartmentSelect.value : null);
+                const editPreferredDepartment = currentEditingUser?.department || (editDepartmentSelect ? editDepartmentSelect.value : null);
                 populateDepartmentSelectOptions(editDepartmentSelect, editPreferredDepartment);
                 if (roleSelect) {
                     updateDepartmentVisibility(roleSelect.value, departmentField, departmentSelect, { preserveValue: true });
@@ -1950,10 +1919,7 @@ async function loadChats() {
                     await loadDepartments();
                 } else {
                     populateDepartmentSelectOptions(departmentSelect);
-                    const editModalDepartment = (currentEditingUser && currentEditingUser.department)
-                        ? currentEditingUser.department
-                        : null;
-                    populateDepartmentSelectOptions(editDepartmentSelect, editModalDepartment);
+                    populateDepartmentSelectOptions(editDepartmentSelect, currentEditingUser?.department || null);
                 }
             } catch (error) {
                 console.warn('[showCreateUserModal] Не удалось обновить список отделов', error);
@@ -1971,7 +1937,15 @@ async function loadChats() {
                 toggleDepartmentField(roleSelect);
             }
 
-            openModalElement(document.getElementById('createUserModal'), { focusTarget: fullNameInput });
+            const modal = document.getElementById('createUserModal');
+            if (modal) {
+                modal.classList.add('show');
+                modal.style.display = 'flex';
+            }
+
+            if (fullNameInput) {
+                setTimeout(() => fullNameInput.focus(), 50);
+            }
         }
 
         function closeModal(modalId) {
@@ -1979,7 +1953,6 @@ async function loadChats() {
             if (modal) {
                 modal.classList.remove('show');
                 modal.style.display = 'none';
-                restoreModalFocus(modal);
             }
 
             if (modalId === 'createUserModal' && createUserForm) {
@@ -2049,9 +2022,7 @@ async function loadChats() {
             const uniqueDepartments = Array.from(new Set(departmentsCache))
                 .filter(Boolean)
                 .sort((a, b) => a.localeCompare(b, 'ru'));
-            const currentValue = (typeof preferredValue !== 'undefined' && preferredValue !== null)
-                ? preferredValue
-                : (targetSelect && typeof targetSelect.value === 'string' ? targetSelect.value : '');
+            const currentValue = preferredValue ?? targetSelect.value ?? '';
             const options = ['<option value="">Выберите отдел</option>'];
 
             uniqueDepartments.forEach((dept) => {
@@ -2166,7 +2137,7 @@ async function loadChats() {
         }
 
         async function resetUserPassword() {
-            const userId = Number(editUserIdInput ? editUserIdInput.value : '');
+            const userId = Number(editUserIdInput?.value);
             if (!userId) {
                 showToast('Пользователь не выбран', 'error');
                 return;
@@ -2323,9 +2294,8 @@ async function loadChats() {
                 const result = await res.json();
 
                 if (res.ok && result.success) {
-                    const displayPassword = result.password || payload.password || '';
-                    const successMessage = 'Пользователь создан. Пароль: ' + displayPassword;
-                    showToast(successMessage, 'success');
+                    const displayPassword = result.password || payload.password;
+                    showToast(`Пользователь создан. Пароль: ${displayPassword}`, 'success');
                     closeModal('createUserModal');
                     await loadUsers();
                     if (needsDepartment) {
@@ -2376,6 +2346,110 @@ async function loadChats() {
                 const isActiveValue = editStatusSelect ? editStatusSelect.value === 'true' : false;
                 const needsDept = shouldRequireDepartment(roleValue);
                 const departmentValue = needsDept && editDepartmentSelect ? (editDepartmentSelect.value || '') : '';
+                const normalizedDepartment = needsDept ? (departmentValue || null) : null;
+
+                if (!name || !usernameValue || !roleValue) {
+                    showToast('Заполните обязательные поля', 'error');
+                    return;
+                }
+
+                if (needsDept && !normalizedDepartment) {
+                    showToast('Выберите отдел для выбранной роли', 'error');
+                    return;
+                }
+
+                const updates = {};
+                const original = currentEditingUser;
+                if (original) {
+                    if (name !== original.name) updates.name = name;
+                    if (usernameValue !== original.username) updates.username = usernameValue;
+                    if (roleValue !== original.role) updates.role = roleValue;
+                    const originalDepartment = original.department || null;
+                    if ((normalizedDepartment || null) !== originalDepartment) {
+                        updates.department = normalizedDepartment;
+                    }
+                    const originalActive = original.is_active !== false;
+                    if (isActiveValue !== originalActive) {
+                        updates.isActive = isActiveValue;
+                    }
+                } else {
+                    updates.name = name;
+                    updates.username = usernameValue;
+                    updates.role = roleValue;
+                    updates.department = normalizedDepartment;
+                    updates.isActive = isActiveValue;
+                }
+
+                if (Object.keys(updates).length === 0) {
+                    showToast('Нет изменений для сохранения', 'error');
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`${API_URL}/users/${userId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updates)
+                    });
+
+                    const result = await res.json().catch(() => ({}));
+
+                    if (res.ok) {
+                        showToast('Пользователь обновлен', 'success');
+                        closeModal('editUserModal');
+                        currentEditingUser = null;
+                        await loadUsers();
+                        if (updates.role !== undefined || updates.department !== undefined) {
+                            await loadDepartments();
+                        }
+                    } else {
+                        showToast(result.error || 'Ошибка обновления пользователя', 'error');
+                    }
+                } catch (error) {
+                    console.error('[editUserForm] error:', error);
+                    showToast('Ошибка обновления пользователя', 'error');
+                }
+            });
+        }
+
+        if (editDepartmentSelect) {
+            editDepartmentSelect.addEventListener('change', () => {
+                editDepartmentSelect.dataset.lastValue = editDepartmentSelect.value;
+            });
+        }
+
+        if (editRoleSelect) {
+            editRoleSelect.addEventListener('change', (event) => {
+                const preferred = shouldRequireDepartment(event.target.value)
+                    ? (editDepartmentSelect?.dataset.lastValue || editDepartmentSelect?.value || '')
+                    : null;
+                updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
+                    preferredValue: preferred,
+                    autoSelectFirst: true,
+                    preserveValue: false
+                });
+            });
+        }
+
+        if (editUserForm) {
+            editUserForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const userId = Number(editUserIdInput?.value);
+                if (!userId) {
+                    showToast('Пользователь не выбран', 'error');
+                    return;
+                }
+
+                const name = editFullNameInput?.value.trim() || '';
+                const usernameValue = editUsernameInput?.value.trim() || '';
+                const roleValue = editRoleSelect?.value || '';
+                const isActiveValue = editStatusSelect?.value === 'true';
+                const needsDept = shouldRequireDepartment(roleValue);
+                const departmentValue = needsDept ? (editDepartmentSelect?.value || '') : '';
                 const normalizedDepartment = needsDept ? (departmentValue || null) : null;
 
                 if (!name || !usernameValue || !roleValue) {
@@ -2541,7 +2615,11 @@ async function showCreateChatModal() {
         searchInput.value = '';
     }
 
-    openModalElement(document.getElementById('createChatModal'), { focusSelector: '#participantsSearch' });
+    const modal = document.getElementById('createChatModal');
+    if (modal) {
+        modal.classList.add('show');
+        modal.style.display = 'flex';
+    }
 
     await loadUsersForChat();
 }
@@ -2551,7 +2629,6 @@ function closeCreateChatModal() {
     if (modal) {
         modal.classList.remove('show');
         modal.style.display = 'none';
-        restoreModalFocus(modal);
     }
 
     const form = document.getElementById('createChatForm');
@@ -2631,8 +2708,7 @@ function filterParticipants() {
         return;
     }
 
-    const searchValue = searchInput && typeof searchInput.value === 'string' ? searchInput.value : '';
-    const term = searchValue.trim().toLowerCase();
+    const term = (searchInput?.value || '').trim().toLowerCase();
     const items = container.querySelectorAll('[data-filter-value]');
 
     items.forEach((item) => {
@@ -2693,7 +2769,11 @@ async function createNewChat() {
 
 // ========== МОДАЛЬНОЕ ОКНО: СОЗДАТЬ ОТДЕЛ ==========
 async function showCreateDepartmentModal() {
-    openModalElement(document.getElementById('createDepartmentModal'), { focusSelector: '#newDeptName' });
+    const modal = document.getElementById('createDepartmentModal');
+    if (modal) {
+        modal.classList.add('show');
+        modal.style.display = 'flex';
+    }
     await loadHeadsForDepartment();
 }
 
@@ -2702,7 +2782,6 @@ function closeCreateDepartmentModal() {
     if (modal) {
         modal.classList.remove('show');
         modal.style.display = 'none';
-        restoreModalFocus(modal);
     }
     document.getElementById('newDeptName').value = '';
     document.getElementById('newDeptDescription').value = '';
@@ -2802,6 +2881,45 @@ function closeModalElement(modal) {
     }
 }
 
+function isModalVisible(modal) {
+    if (!modal) {
+        return false;
+    }
+
+    if (modal.classList.contains('show')) {
+        return true;
+    }
+
+    const display = modal.style.display || '';
+    return display !== '' && display !== 'none';
+}
+
+function closeModalElement(modal) {
+    if (!modal) {
+        return;
+    }
+
+    switch (modal.id) {
+        case 'createUserModal':
+        case 'editUserModal':
+            closeModal(modal.id);
+            break;
+        case 'createChatModal':
+            closeCreateChatModal();
+            break;
+        case 'editChatModal':
+            closeEditChatModal();
+            break;
+        case 'createDepartmentModal':
+            closeCreateDepartmentModal();
+            break;
+        default:
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+            break;
+    }
+}
+
 function setupModalAccessibility() {
     const modals = Array.from(document.querySelectorAll('.modal'));
 
@@ -2830,6 +2948,9 @@ function setupModalAccessibility() {
         closeModalElement(topModal);
     });
 }
+
+setupModalAccessibility();
+
 
 setupModalAccessibility();
 
@@ -2914,7 +3035,6 @@ setupModalAccessibility();
             if (editChatModal) {
                 editChatModal.classList.remove('show');
                 editChatModal.style.display = 'none';
-                restoreModalFocus(editChatModal);
             }
             resetEditChatState();
         }
@@ -2942,21 +3062,21 @@ setupModalAccessibility();
         }
 
         function applyChatHeaderState() {
-            const chat = editChatState.chat || null;
+            const chat = editChatState.chat;
             if (editChatNameInput) {
-                editChatNameInput.value = chat && chat.name ? chat.name : '';
+                editChatNameInput.value = chat?.name || '';
             }
 
             if (editChatTypeSelect) {
-                const type = chat && chat.type ? chat.type : 'group';
+                const type = chat?.type || 'group';
                 editChatTypeSelect.value = type;
             }
 
             if (editChatDepartmentGroup) {
-                if (chat && chat.type === 'department') {
+                if (chat?.type === 'department') {
                     editChatDepartmentGroup.style.display = '';
                     if (editChatDepartmentInput) {
-                        editChatDepartmentInput.value = chat && chat.department ? chat.department : '';
+                        editChatDepartmentInput.value = chat?.department || '';
                     }
                 } else {
                     editChatDepartmentGroup.style.display = 'none';
@@ -2982,7 +3102,7 @@ setupModalAccessibility();
                 return;
             }
 
-            const currentUserId = currentUser ? currentUser.id : undefined;
+            const currentUserId = currentUser?.id;
 
             currentParticipantsList.innerHTML = editChatState.participants.map(participant => {
                 const roleLabel = ROLE_LABELS[participant.user_role] || participant.user_role || '—';
@@ -3072,7 +3192,8 @@ setupModalAccessibility();
             editChatState.chatId = numericId;
 
             if (editChatModal) {
-                openModalElement(editChatModal, { focusTarget: editChatNameInput });
+            editChatModal.classList.add('show');
+            editChatModal.style.display = 'flex';
             }
 
             if (currentParticipantsList) {
@@ -3215,10 +3336,7 @@ setupModalAccessibility();
                 return;
             }
 
-            const nameRaw = editChatNameInput && typeof editChatNameInput.value === 'string'
-                ? editChatNameInput.value
-                : '';
-            const name = nameRaw.trim();
+            const name = (editChatNameInput?.value || '').trim();
 
             if (!name) {
                 showToast('Введите название чата', 'error');
@@ -3247,6 +3365,96 @@ setupModalAccessibility();
             } catch (error) {
                 console.error('[saveEditedChat] error:', error);
                 showToast(error.message || 'Не удалось обновить чат', 'error');
+            }
+        }
+
+        if (editChatForm) {
+            editChatForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                await saveEditedChat();
+            });
+        }
+
+
+        // Edit user
+        async function editUser(userId) {
+            const numericId = Number(userId);
+            if (!numericId) {
+                showToast('Некорректный идентификатор пользователя', 'error');
+                return;
+            }
+
+            let user = usersCache.find(u => u.id === numericId);
+
+            if (!user) {
+                try {
+                    const res = await fetch(`${API_URL}/users/${numericId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        user = data.user;
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        console.error('[editUser] Failed to fetch user', err);
+                    }
+                } catch (error) {
+                    console.error('[editUser] Request error', error);
+                }
+            }
+
+            if (!user) {
+                showToast('Пользователь не найден', 'error');
+                return;
+            }
+
+            currentEditingUser = user;
+
+            if (editUserIdInput) editUserIdInput.value = user.id;
+            if (editFullNameInput) editFullNameInput.value = user.name || '';
+            if (editUsernameInput) editUsernameInput.value = user.username || '';
+            if (editRoleSelect) editRoleSelect.value = user.role || '';
+            if (editStatusSelect) editStatusSelect.value = (user.is_active !== false).toString();
+            if (editPasswordInput) editPasswordInput.value = user.initial_password || '';
+
+            try {
+                if (!departmentsCache.length) {
+                    await loadDepartments();
+                } else {
+                    populateDepartmentSelectOptions(departmentSelect, departmentSelect ? departmentSelect.value : null);
+                    populateDepartmentSelectOptions(editDepartmentSelect, user.department || null);
+                    if (roleSelect) {
+                        updateDepartmentVisibility(roleSelect.value, departmentField, departmentSelect, { preserveValue: true });
+                    }
+                    if (editRoleSelect) {
+                        updateDepartmentVisibility(editRoleSelect.value, editDepartmentField, editDepartmentSelect, {
+                            preferredValue: user.department || null,
+                            preserveValue: true,
+                            autoSelectFirst: !user.department
+                        });
+                    }
+                }
+            } catch (error) {
+                console.warn('[editUser] Не удалось обновить список отделов', error);
+            }
+
+            if (editDepartmentSelect) {
+                const deptValue = user.department || '';
+                editDepartmentSelect.value = deptValue;
+                editDepartmentSelect.dataset.lastValue = deptValue;
+            }
+
+            if (editRoleSelect) {
+                updateDepartmentVisibility(editRoleSelect.value, editDepartmentField, editDepartmentSelect, {
+                    preferredValue: user.department || null,
+                    preserveValue: true,
+                    autoSelectFirst: !user.department
+                });
+            }
+
+            if (editUserModal) {
+                editUserModal.classList.add('show');
             }
         }
 
