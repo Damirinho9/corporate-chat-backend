@@ -3282,29 +3282,9 @@ function handleChatTypeChange() {
             }
         }
 
-        const initialisePermissionsMatrix = async () => {
-            const matrix = await ensurePermissionsMatrixLoaded();
-            renderPermissionsMatrix(matrix);
-        };
+        // initialisePermissionsMatrix already defined above at line 2765 - duplicate removed
 
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                initialisePermissionsMatrix();
-            }, { once: true });
-        } else {
-            initialisePermissionsMatrix();
-        }
-
-        // ========== TOAST ==========
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = `toast ${type} show`;
-            
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
+        // ========== TOAST (duplicate also removed) ==========
 
         function updateUsernameFromFullName() {
             if (!fullNameInput || manualUsernameOverride) {
@@ -3523,24 +3503,7 @@ function handleChatTypeChange() {
             }
         }
 
-        const initialisePermissionsMatrix = () => renderPermissionsMatrix(window.PERMISSIONS_MATRIX || PERMISSIONS_MATRIX);
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initialisePermissionsMatrix, { once: true });
-        } else {
-            initialisePermissionsMatrix();
-        }
-
-        // ========== TOAST ==========
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = `toast ${type} show`;
-            
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
+        // initialisePermissionsMatrix and showToast already defined above - duplicates removed
 
         // ========== LOGOUT ==========
         function logout() {
