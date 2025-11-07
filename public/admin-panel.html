@@ -1376,6 +1376,28 @@
             window.location.href = '/';
         }
 
+        function restoreModalFocus(modal) {
+            if (!modal) {
+                return;
+            }
+
+            const previousElement = modalFocusMemory.get(modal);
+            modalFocusMemory.delete(modal);
+
+            if (previousElement && typeof previousElement.focus === 'function') {
+                try {
+                    previousElement.focus();
+                } catch (error) {
+                    console.warn('[modal] Unable to restore focus', error);
+                }
+            }
+        }
+
+        // Check auth
+        if (!token || !currentUser || currentUser.role !== 'admin') {
+            window.location.href = '/';
+        }
+
         // Set admin info
         document.getElementById('adminName').textContent = currentUser.name;
         document.getElementById('adminRole').textContent = currentUser.role;
@@ -1844,6 +1866,93 @@ async function loadChats() {
             } catch (err) {
                 console.error('Add user to department error:', err);
                 showToast('Ошибка добавления пользователя', 'error');
+            }
+        }
+        async function loadDeletionHistory() {
+            const tbody = document.getElementById('deletionHistoryBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
+
+            try {
+                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.status === 403) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`Failed with status ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (!Array.isArray(data.history) || data.history.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
+                    return;
+                }
+
+                const rowsHtml = data.history.map(entry => {
+                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
+                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
+                        ? deletedAtDate.toLocaleString('ru-RU')
+                        : '—';
+
+                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
+                    const deleterCell = entry.deleted_by_user_name
+                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
+                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
+
+                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
+                    const ownerCell = entry.deleted_message_user_name
+                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
+                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
+
+                    const roleKey = entry.deleted_by_role || 'employee';
+                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
+                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
+
+                    const scopeBadge = entry.deletion_scope === 'self'
+                        ? '<span class="badge badge-scope-self">Своё</span>'
+                        : '<span class="badge badge-scope-moderator">Модерация</span>';
+                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
+
+                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
+                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
+
+                    const contentParts = [];
+                    if (entry.original_content) {
+                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
+                    }
+                    if (entry.file_id) {
+                        const fileLink = buildAttachmentLink(entry.file_id);
+                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
+                    }
+
+                    const contentCell = contentParts.length
+                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
+                        : '<span style="color:#a0aec0;">—</span>';
+
+                    return `
+                        <tr>
+                            <td>${deletedAt}</td>
+                            <td>${deleterCell}</td>
+                            <td>${roleCell}</td>
+                            <td>${chatCell}</td>
+                            <td>${ownerCell}</td>
+                            <td>${scopeCell}</td>
+                            <td>${contentCell}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                tbody.innerHTML = rowsHtml;
+            } catch (error) {
+                console.error('Failed to load deletion history:', error);
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
             }
         }
 
@@ -2614,6 +2723,14 @@ function toggleParticipant(userId, isSelected) {
     } else {
         selectedParticipants.delete(userId);
     }
+
+    const term = (searchInput?.value || '').trim().toLowerCase();
+    const items = container.querySelectorAll('[data-filter-value]');
+
+    items.forEach((item) => {
+        const value = item.getAttribute('data-filter-value') || '';
+        item.style.display = !term || value.includes(term) ? '' : 'none';
+    });
 }
 
 function filterParticipants() {

@@ -1812,6 +1812,9 @@ async function loadChats() {
                 showToast('Ошибка назначения РОПа', 'error');
             }
         }
+        async function loadDeletionHistory() {
+            const tbody = document.getElementById('deletionHistoryBody');
+            if (!tbody) return;
 
         function showAddUserToDepartmentModal(departmentName) {
             const userId = prompt(`Введите ID пользователя для добавления в ${departmentName}:`);
