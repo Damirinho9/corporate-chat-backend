@@ -14,6 +14,8 @@ const userController = require('../controllers/userController');
 const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
 const departmentController = require('../controllers/departmentController');
+const permissionsController = require('../controllers/permissionsController');
+const generalPermissionsController = require('../controllers/generalPermissionsController');
 const { PERMISSIONS_MATRIX } = require('../config/permissionsMatrix');
 
 const { authenticateToken, requireAdmin, requireHead, requireAdminOrRop } = require('../middleware/auth');
@@ -494,6 +496,45 @@ router.delete('/messages/:messageId',
     [param('messageId').isInt()],
     validate,
     messageController.deleteMessage
+);
+
+// Message reactions
+router.post('/messages/:messageId/reactions',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    messageController.addReaction
+);
+
+router.delete('/messages/:messageId/reactions',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    messageController.removeReaction
+);
+
+// Forward message
+router.post('/messages/:messageId/forward',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    messageController.forwardMessage
+);
+
+// Pin message
+router.post('/messages/:messageId/pin',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    messageController.pinMessage
+);
+
+// Add to favorites
+router.post('/messages/:messageId/favorite',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    messageController.addToFavorites
 );
 
 router.get('/chats/:chatId/messages/search',

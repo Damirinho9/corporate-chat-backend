@@ -2,7 +2,7 @@
 <html lang="ru" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Корпоративный чат</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -608,17 +608,37 @@
         }
 
         @media (max-width: 600px) {
+            /* Fix для мобильной клавиатуры */
             .chat-header {
                 padding: 12px 16px;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 10;
+                background: var(--bg-primary);
+                border-bottom: 1px solid var(--border);
+            }
+
+            .main-chat {
+                padding-top: 60px; /* Высота header */
             }
 
             .messages-container {
-                padding: 12px 12px calc(12px + var(--chat-input-offset, 120px));
+                padding: 12px 12px calc(12px + 140px); /* Увеличен отступ снизу */
+                min-height: calc(100vh - 200px); /* Минимальная высота */
             }
 
             .chat-input-container {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
                 padding: 12px 16px;
                 padding-bottom: calc(12px + var(--safe-area-bottom, 0px));
+                background: var(--bg-primary);
+                border-top: 1px solid var(--border);
+                z-index: 10;
             }
 
             .chat-input {
@@ -627,7 +647,13 @@
             }
 
             #messageInput {
-                font-size: 16px;
+                font-size: 16px; /* Предотвращает автозум на iOS */
+                min-height: 42px;
+            }
+
+            /* Предотвращение прыжков при фокусе */
+            .main-chat.keyboard-open .messages-container {
+                max-height: calc(100vh - 200px);
             }
         }
 
@@ -831,13 +857,8 @@
             position: absolute;
             top: -10px;
             right: 10px;
-            background: var(--bg-primary);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 4px;
             display: none;
             gap: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .message.own .message-actions {
@@ -846,17 +867,79 @@
         }
 
         .action-btn {
-            background: transparent;
-            border: none;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
             cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 14px;
-            transition: background 0.2s;
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .action-btn:hover {
             background: var(--bg-hover);
+            transform: scale(1.1);
+        }
+
+        .message-dropdown {
+            position: absolute;
+            top: 40px;
+            right: 0;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            min-width: 200px;
+            display: none;
+            z-index: 100;
+            padding: 4px 0;
+        }
+
+        .message-dropdown.show {
+            display: block;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .message.own .message-dropdown {
+            right: auto;
+            left: 0;
+        }
+
+        .dropdown-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .dropdown-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .dropdown-item .icon {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        .dropdown-separator {
+            height: 1px;
+            background: var(--border);
+            margin: 4px 0;
+        }
+
+        .dropdown-item.danger {
+            color: var(--danger);
         }
 
         .emoji-picker {
@@ -890,6 +973,16 @@
         .emoji-btn:hover {
             background: var(--bg-hover);
             transform: scale(1.2);
+        }
+
+        .emoji-picker-inline {
+            display: flex;
+            gap: 5px;
+            padding: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            margin: 4px 0;
+            flex-wrap: wrap;
         }
 
         .reply-preview {
@@ -1271,6 +1364,102 @@
             color: white;
             border-color: var(--accent);
         }
+
+        /* Modal styles */
+        .app-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .app-modal.show {
+            display: flex;
+        }
+
+        .app-modal-content {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .app-modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .app-modal-header h3 {
+            margin: 0;
+            color: var(--text-primary);
+            font-size: 18px;
+        }
+
+        .app-modal-close {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .app-modal-close:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .app-modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            max-height: calc(80vh - 80px);
+        }
+
+        /* Forward modal styles */
+        .forward-modal p {
+            margin: 0 0 12px 0;
+            color: var(--text-secondary);
+        }
+
+        .chat-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chat-option {
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-primary);
+        }
+
+        .chat-option:hover {
+            background: var(--bg-hover);
+            border-color: var(--accent);
+            transform: translateX(4px);
+        }
     </style>
 </head>
 <body>
@@ -1413,6 +1602,17 @@
                 </div>
             </div>
             
+        </div>
+    </div>
+
+    <!-- Modal for forward and other actions -->
+    <div id="appModal" class="app-modal">
+        <div class="app-modal-content">
+            <div class="app-modal-header">
+                <h3 id="modalTitle"></h3>
+                <button class="app-modal-close" onclick="closeModal()">×</button>
+            </div>
+            <div class="app-modal-body" id="modalBody"></div>
         </div>
     </div>
 
@@ -1655,15 +1855,6 @@
             }
         }
 
-        // Close emoji picker when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.message-actions') && !e.target.closest('.emoji-picker')) {
-                document.querySelectorAll('.emoji-picker.show').forEach(p => {
-                    p.classList.remove('show');
-                });
-            }
-        });
-
         async function addReaction(messageId, emoji) {
             try {
                 await fetch(`${API_URL}/messages/${messageId}/reactions`, {
@@ -1691,6 +1882,256 @@
                 showToast('Ошибка удаления реакции', 'error');
             }
         }
+
+        // ==================== MESSAGE MENU ====================
+        let userPermissions = {};
+
+        async function loadUserPermissions() {
+            try {
+                const response = await fetch(`${API_URL}/permissions/general`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    userPermissions = data.permissions[currentUser.role] || {};
+                    applyPermissionVisibility();
+                }
+            } catch (err) {
+                console.error('Error loading permissions:', err);
+            }
+        }
+
+        function applyPermissionVisibility() {
+            document.querySelectorAll('[data-permission]').forEach(element => {
+                const permission = element.getAttribute('data-permission');
+                if (!userPermissions[permission]) {
+                    element.style.display = 'none';
+                }
+            });
+        }
+
+        function toggleMessageMenu(messageId) {
+            // Close all other menus
+            document.querySelectorAll('.message-dropdown').forEach(menu => {
+                if (menu.id !== `message-menu-${messageId}`) {
+                    menu.style.display = 'none';
+                }
+            });
+
+            const menu = document.getElementById(`message-menu-${messageId}`);
+            if (menu) {
+                const isVisible = menu.style.display === 'block';
+                menu.style.display = isVisible ? 'none' : 'block';
+
+                if (!isVisible) {
+                    applyPermissionVisibility();
+                }
+            }
+        }
+
+        function closeAllMenus() {
+            document.querySelectorAll('.message-dropdown').forEach(menu => {
+                menu.style.display = 'none';
+            });
+            document.querySelectorAll('.emoji-picker-inline').forEach(picker => {
+                picker.style.display = 'none';
+            });
+        }
+
+        function showEmojiPickerInMenu(messageId) {
+            const picker = document.getElementById(`emoji-picker-${messageId}`);
+            if (picker) {
+                const isVisible = picker.style.display === 'flex';
+                picker.style.display = isVisible ? 'none' : 'flex';
+            }
+        }
+
+        function copyMessage(content) {
+            navigator.clipboard.writeText(content).then(() => {
+                showToast('Сообщение скопировано', 'success');
+            }).catch(err => {
+                showToast('Ошибка копирования', 'error');
+            });
+        }
+
+        function downloadFile(fileUrl, fileName) {
+            const link = document.createElement('a');
+            link.href = fileUrl;
+            link.download = fileName;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('Загрузка файла...', 'success');
+        }
+
+        async function forwardMessage(messageId) {
+            // Get all chats for forwarding
+            try {
+                const response = await fetch(`${API_URL}/chats`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const chats = await response.json();
+
+                // Show chat selection modal
+                const chatOptions = chats.map(chat =>
+                    `<div class="chat-option" onclick="confirmForward(${messageId}, ${chat.id})">${chat.name}</div>`
+                ).join('');
+
+                showModal('Переслать сообщение', `
+                    <div class="forward-modal">
+                        <p>Выберите чат для пересылки:</p>
+                        <div class="chat-list">${chatOptions}</div>
+                    </div>
+                `);
+            } catch (err) {
+                showToast('Ошибка загрузки чатов', 'error');
+            }
+        }
+
+        async function confirmForward(messageId, toChatId) {
+            try {
+                const response = await fetch(`${API_URL}/messages/${messageId}/forward`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ targetChatIds: [toChatId] })
+                });
+
+                if (response.ok) {
+                    showToast('Сообщение переслано', 'success');
+                    closeModal();
+                } else {
+                    showToast('Ошибка пересылки', 'error');
+                }
+            } catch (err) {
+                showToast('Ошибка пересылки', 'error');
+            }
+        }
+
+        async function pinMessage(messageId) {
+            try {
+                const response = await fetch(`${API_URL}/messages/${messageId}/pin`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    showToast('Сообщение закреплено', 'success');
+                    await loadMessages(currentChatId);
+                } else {
+                    const error = await response.json();
+                    showToast(error.error || 'Ошибка закрепления', 'error');
+                }
+            } catch (err) {
+                showToast('Ошибка закрепления', 'error');
+            }
+        }
+
+        async function addToFavorites(messageId) {
+            try {
+                const response = await fetch(`${API_URL}/messages/${messageId}/favorite`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    showToast('Добавлено в избранное', 'success');
+                } else {
+                    showToast('Ошибка добавления', 'error');
+                }
+            } catch (err) {
+                showToast('Ошибка добавления', 'error');
+            }
+        }
+
+        async function writeToUser(userId, userName) {
+            try {
+                // Create or get existing direct chat
+                const response = await fetch(`${API_URL}/chats/direct`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ receiverId: userId })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.isNew) {
+                        await loadChats();
+                        showToast(`Открыт чат с ${userName}`, 'success');
+                    }
+                    selectChat(data.chatId);
+                } else {
+                    showToast('Нет прав для создания чата', 'error');
+                }
+            } catch (err) {
+                showToast('Ошибка открытия чата', 'error');
+            }
+        }
+
+        async function deleteMessage(messageId) {
+            if (!confirm('Удалить это сообщение?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/messages/${messageId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    showToast('Сообщение удалено', 'success');
+                    await loadMessages(currentChatId);
+                } else {
+                    const error = await response.json();
+                    showToast(error.error || 'Ошибка удаления', 'error');
+                }
+            } catch (err) {
+                showToast('Ошибка удаления', 'error');
+            }
+        }
+
+        // Update click outside handler to close menus
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.message-actions') && !e.target.closest('.message-dropdown')) {
+                closeAllMenus();
+            }
+        });
+
+        // ==================== MODAL ====================
+        function showModal(title, bodyHtml) {
+            const modal = document.getElementById('appModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalBody = document.getElementById('modalBody');
+
+            modalTitle.textContent = title;
+            modalBody.innerHTML = bodyHtml;
+            modal.classList.add('show');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('appModal');
+            modal.classList.remove('show');
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('appModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'appModal') {
+                closeModal();
+            }
+        });
 
         // ==================== THEME ====================
         function toggleTheme() {
@@ -1777,6 +2218,7 @@
 
             connectSocket();
             loadChats();
+            loadUserPermissions();
         }
 
         function updateUserUI(user) {
@@ -2698,10 +3140,56 @@
                 </div>
                 ${!isTempSending && !message.isSending ? `
                 <div class="message-actions">
-                    <button class="action-btn" onclick="setReplyTo({id: ${message.id}, content: '${escapeHtml(message.content || '📎').replace(/'/g, "\\'")}'})" title="Ответить">↩️</button>
-                    <button class="action-btn" onclick="showEmojiPicker(${message.id})" title="Реакция">😊</button>
-                    <div class="emoji-picker" id="emoji-picker-${message.id}">
-                        ${emojis.map(e => `<span class="emoji-btn" onclick="addReaction(${message.id}, '${e}')">${e}</span>`).join('')}
+                    <button class="action-btn" onclick="toggleMessageMenu(${message.id})" title="Меню">⋮</button>
+                    <div class="message-dropdown" id="message-menu-${message.id}">
+                        <div class="dropdown-item" onclick="setReplyTo({id: ${message.id}, content: '${escapeHtml(message.content || '📎').replace(/'/g, "\\'")}'}); closeAllMenus();">
+                            <span>↩️</span>
+                            <span>Ответить</span>
+                        </div>
+                        <div class="dropdown-item" onclick="showEmojiPickerInMenu(${message.id})">
+                            <span>😊</span>
+                            <span>Реакция</span>
+                        </div>
+                        <div class="emoji-picker-inline" id="emoji-picker-${message.id}" style="display: none;">
+                            ${emojis.map(e => `<span class="emoji-btn" onclick="addReaction(${message.id}, '${e}'); closeAllMenus();">${e}</span>`).join('')}
+                        </div>
+                        <div class="dropdown-separator"></div>
+                        <div class="dropdown-item" onclick="copyMessage('${escapeHtml(message.content || '').replace(/'/g, "\\'")}'); closeAllMenus();">
+                            <span>📋</span>
+                            <span>Копировать</span>
+                        </div>
+                        ${message.file_url ? `
+                        <div class="dropdown-item" onclick="downloadFile('${message.file_url}', '${message.file_name || 'file'}'); closeAllMenus();">
+                            <span>📥</span>
+                            <span>Скачать</span>
+                        </div>
+                        ` : ''}
+                        <div class="dropdown-item" data-permission="forward_message" onclick="forwardMessage(${message.id}); closeAllMenus();">
+                            <span>➡️</span>
+                            <span>Переслать</span>
+                        </div>
+                        <div class="dropdown-item" data-permission="pin_message" onclick="pinMessage(${message.id}); closeAllMenus();">
+                            <span>📌</span>
+                            <span>Закрепить</span>
+                        </div>
+                        <div class="dropdown-item" data-permission="add_to_favorites" onclick="addToFavorites(${message.id}); closeAllMenus();">
+                            <span>⭐</span>
+                            <span>В избранное</span>
+                        </div>
+                        ${!isOwn ? `
+                        <div class="dropdown-separator"></div>
+                        <div class="dropdown-item" data-permission="write_to_user" onclick="writeToUser(${message.user_id}, '${message.user_name}'); closeAllMenus();">
+                            <span>💬</span>
+                            <span>Написать автору</span>
+                        </div>
+                        ` : ''}
+                        ${isOwn ? `
+                        <div class="dropdown-separator"></div>
+                        <div class="dropdown-item danger" data-permission="delete_own_messages" onclick="deleteMessage(${message.id}); closeAllMenus();">
+                            <span>🗑️</span>
+                            <span>Удалить</span>
+                        </div>
+                        ` : ''}
                     </div>
                 </div>
                 ` : ''}
@@ -2957,6 +3445,28 @@
                 this.style.height = (this.scrollHeight) + 'px';
                 handleTypingInput();
                 requestAnimationFrame(refreshLayoutMetrics);
+            });
+
+            // Мобильная клавиатура - добавление класса при фокусе
+            messageInput?.addEventListener('focus', () => {
+                const mainChat = document.querySelector('.main-chat');
+                if (mainChat && window.innerWidth <= 600) {
+                    mainChat.classList.add('keyboard-open');
+                    // Прокрутить вниз через небольшую задержку
+                    setTimeout(() => {
+                        const messagesContainer = document.querySelector('.messages-container');
+                        if (messagesContainer) {
+                            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                        }
+                    }, 300);
+                }
+            });
+
+            messageInput?.addEventListener('blur', () => {
+                const mainChat = document.querySelector('.main-chat');
+                if (mainChat) {
+                    mainChat.classList.remove('keyboard-open');
+                }
             });
 
             // Восстановление пользователя из localStorage
