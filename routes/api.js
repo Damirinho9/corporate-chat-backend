@@ -498,6 +498,45 @@ router.delete('/messages/:messageId',
     messageController.deleteMessage
 );
 
+// Message reactions
+router.post('/messages/:messageId/reactions',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    messageController.addReaction
+);
+
+router.delete('/messages/:messageId/reactions',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    messageController.removeReaction
+);
+
+// Forward message
+router.post('/messages/:messageId/forward',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    messageController.forwardMessage
+);
+
+// Pin message
+router.post('/messages/:messageId/pin',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    messageController.pinMessage
+);
+
+// Add to favorites
+router.post('/messages/:messageId/favorite',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    messageController.addToFavorites
+);
+
 router.get('/chats/:chatId/messages/search',
     authenticateToken,
     [

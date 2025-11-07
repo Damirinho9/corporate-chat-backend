@@ -38,7 +38,15 @@ const PERMISSION_CATEGORIES = {
             { key: 'delete_any_messages', label: 'Удаление любых сообщений' },
             { key: 'delete_department_messages', label: 'Удаление сообщений в своем отделе (РОП)' },
             { key: 'view_all_messages', label: 'Просмотр всех сообщений' },
-            { key: 'view_deletion_history', label: 'Просмотр истории удалений' }
+            { key: 'view_deletion_history', label: 'Просмотр истории удалений' },
+            { key: 'copy_message', label: 'Копирование сообщений' },
+            { key: 'forward_message', label: 'Пересылка сообщений' },
+            { key: 'reply_to_message', label: 'Ответ на сообщения' },
+            { key: 'react_to_message', label: 'Реакции на сообщения' },
+            { key: 'pin_message', label: 'Закрепление сообщений' },
+            { key: 'pin_department_message', label: 'Закрепление в своем отделе (РОП)' },
+            { key: 'add_to_favorites', label: 'Добавление в избранное' },
+            { key: 'write_to_user', label: 'Написать автору сообщения' }
         ]
     },
     'files': {
