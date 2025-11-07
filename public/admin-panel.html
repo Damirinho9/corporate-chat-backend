@@ -3274,9 +3274,13 @@ function handleChatTypeChange() {
                     showToast('User deleted successfully!', 'success');
                     loadUsers();
                 } else {
-                    converted += '';
+                    showToast(data.error || 'Failed to delete user', 'error');
                 }
+            } catch (err) {
+                console.error('Delete user error:', err);
+                showToast('Ошибка удаления пользователя', 'error');
             }
+        }
 
         const initialisePermissionsMatrix = async () => {
             const matrix = await ensurePermissionsMatrixLoaded();
