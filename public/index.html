@@ -2662,7 +2662,9 @@
                                 return;
                         }
 
-                        if (/ассист/i.test(chat.name || '')) {
+                        // Не захватываем department-type чаты в секцию ассистентов
+                        // чтобы они правильно отображались в своих отделах
+                        if (chat.type !== 'department' && /ассист/i.test(chat.name || '')) {
                                 assistants.push(chat);
                                 usedChatIds.add(chat.id);
                         }
