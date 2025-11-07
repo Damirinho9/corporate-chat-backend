@@ -1406,7 +1406,7 @@
                     await loadDepartments();
                     break;
                 case 'permissions':
-                    renderPermissionsMatrix();
+                    await loadPermissions();
                     break;
                 case 'deletions':
                     await loadDeletionHistory();
@@ -1417,34 +1417,7 @@
             }
         }
 
-        function renderPermissionsMatrix() {
-            const tbody = document.getElementById('permissionsMatrixBody');
-            if (!tbody) return;
-
-            tbody.innerHTML = PERMISSIONS_MATRIX.map(row => {
-                const columns = ROLE_ORDER.map(role => {
-                    const value = row.roles[role];
-
-                    if (value === 'department') {
-                        return `<td><span class="perm-chip perm-chip--limited" title="Только в чатах своего отдела">◐</span></td>`;
-                    }
-
-                    return `<td><span class="perm-chip ${value ? 'perm-chip--allowed' : 'perm-chip--denied'}">${value ? '✔' : '✖'}</span></td>`;
-                }).join('');
-
-                const hintRow = row.hint
-                    ? `<tr class="permission-hint"><td colspan="${ROLE_ORDER.length + 1}">${row.hint}</td></tr>`
-                    : '';
-
-                return `
-                    <tr>
-                        <th scope="row">${row.label}</th>
-                        ${columns}
-                    </tr>
-                    ${hintRow}
-                `;
-            }).join('');
-        }
+        // renderPermissionsMatrix moved to line 3309 - now loads from API instead of static data
 
         async function loadDashboard() {
             try {
