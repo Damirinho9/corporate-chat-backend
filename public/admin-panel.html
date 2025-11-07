@@ -3976,21 +3976,16 @@ async function createNewDepartment() {
     }
 
     try {
-        // Если РОП не выбран, добавляем текущего админа как участника
-        const participantIds = headId ? [parseInt(headId)] : [currentUser.id];
-
-        // Создаем чат отдела
-        const response = await fetch(`${API_URL}/chats/group`, {
+        // Используем правильный endpoint для создания отдела
+        const response = await fetch(`${API_URL}/departments`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                name: `${name} отдел`,
-                type: 'department',
-                department: name,
-                participantIds: participantIds
+                name: name,
+                headUserId: headId ? parseInt(headId) : undefined
             })
         });
         
