@@ -2620,7 +2620,11 @@ async function loadChats() {
                     departmentField.classList.add('disabled');
                 }
                 updateDepartmentVisibility('', departmentField, departmentSelect, { preserveValue: false });
+            } catch (err) {
+                console.error('Create user error:', err);
+                showToast('Ошибка создания пользователя', 'error');
             }
+        }
 
         if (editDepartmentSelect) {
             editDepartmentSelect.addEventListener('change', () => {
