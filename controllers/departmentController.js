@@ -27,7 +27,13 @@ const sortDepartmentUsers = (users = []) => {
 // Получить все отделы со статистикой
 const getAllDepartments = async (req, res) => {
     try {
-        const result = await query(`
+        // Получаем все отделы из таблицы departments
+        const deptResult = await query(`
+            SELECT name FROM departments ORDER BY name
+        `);
+
+        // Получаем всех пользователей с назначенными отделами
+        const usersResult = await query(`
             SELECT id, username, name, role, department, is_active
             FROM users
             WHERE department IS NOT NULL
@@ -35,12 +41,28 @@ const getAllDepartments = async (req, res) => {
 
         const departmentMap = new Map();
 
-        result.rows.forEach((row) => {
+        // Инициализируем все отделы из таблицы departments
+        deptResult.rows.forEach((row) => {
+            const normalizedName = normalizeDepartmentName(row.name);
+            if (normalizedName) {
+                departmentMap.set(normalizedName, {
+                    department: normalizedName,
+                    user_count: 0,
+                    rop_count: 0,
+                    operator_count: 0,
+                    users: []
+                });
+            }
+        });
+
+        // Добавляем пользователей к отделам
+        usersResult.rows.forEach((row) => {
             const normalizedName = normalizeDepartmentName(row.department);
             if (!normalizedName) {
                 return;
             }
 
+            // Создаем отдел, если его нет в departments (legacy данные)
             if (!departmentMap.has(normalizedName)) {
                 departmentMap.set(normalizedName, {
                     department: normalizedName,
@@ -258,6 +280,13 @@ const createDepartment = async (req, res) => {
         try {
             await client.query('BEGIN');
 
+            // Создаём запись в таблице departments
+            await client.query(
+                `INSERT INTO departments (name) VALUES ($1)
+                 ON CONFLICT (name) DO NOTHING`,
+                [trimmedName]
+            );
+
             // Создаём чат отдела заранее, чтобы гарантировать связь
             const chatResult = await client.query(
                 `INSERT INTO chats (name, type, department, created_by)
@@ -446,17 +475,30 @@ const addUserToDepartment = async (req, res) => {
         }
 
         // Добавляем пользователя в отдел
-        const updateRole = role || 'operator';
-        await query(
-            'UPDATE users SET department = $1, role = $2 WHERE id = $3',
-            [departmentName, updateRole, userId]
+        let updateQuery, updateParams;
+        if (role) {
+            // Если роль указана, обновляем и отдел, и роль
+            updateQuery = 'UPDATE users SET department = $1, role = $2 WHERE id = $3';
+            updateParams = [departmentName, role, userId];
+        } else {
+            // Если роль не указана, обновляем только отдел
+            updateQuery = 'UPDATE users SET department = $1 WHERE id = $2';
+            updateParams = [departmentName, userId];
+        }
+
+        await query(updateQuery, updateParams);
+
+        // Получаем обновлённые данные пользователя
+        const updatedUser = await query(
+            'SELECT role FROM users WHERE id = $1',
+            [userId]
         );
 
         res.json({
             message: 'User added to department successfully',
             userId,
             department: departmentName,
-            role: updateRole
+            role: updatedUser.rows[0]?.role
         });
     } catch (error) {
         console.error('Add user to department error:', error);
