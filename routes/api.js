@@ -79,15 +79,8 @@ router.post('/auth/refresh',
 
 router.get('/auth/profile', authenticateToken, authController.getProfile);
 
-router.put('/auth/change-password',
-    authenticateToken,
-    [
-        body('currentPassword').notEmpty(),
-        body('newPassword').isLength({ min: 6 })
-    ],
-    validate,
-    authController.changePassword
-);
+// NOTE: Users cannot change their own passwords
+// Only admins can reset passwords via POST /users/:userId/reset-password
 
 // ==================== USER ROUTES ====================
 router.get('/users', authenticateToken, requireAdmin, userController.getAllUsers);
@@ -365,6 +358,82 @@ router.get('/departments/stats',
     authenticateToken,
     requireAdmin,
     departmentController.getDepartmentStats
+);
+
+// ==================== PERMISSIONS ROUTES (Admin Only) ====================
+
+// Get all role permissions as matrix
+router.get('/permissions',
+    authenticateToken,
+    requireAdmin,
+    permissionsController.getRolePermissions
+);
+
+// Update single permission
+router.put('/permissions',
+    authenticateToken,
+    requireAdmin,
+    [
+        body('fromRole').isIn(['admin', 'assistant', 'rop', 'operator', 'employee']),
+        body('toRole').isIn(['admin', 'assistant', 'rop', 'operator', 'employee']),
+        body('canSend').isBoolean()
+    ],
+    validate,
+    permissionsController.updateRolePermission
+);
+
+// Batch update permissions
+router.post('/permissions/batch',
+    authenticateToken,
+    requireAdmin,
+    [body('permissions').isArray()],
+    validate,
+    permissionsController.batchUpdatePermissions
+);
+
+// Reset permissions to defaults
+router.post('/permissions/reset',
+    authenticateToken,
+    requireAdmin,
+    permissionsController.resetPermissions
+);
+
+// ==================== GENERAL PERMISSIONS ROUTES (Admin Only) ====================
+
+// Get all general permissions
+router.get('/permissions/general',
+    authenticateToken,
+    requireAdmin,
+    generalPermissionsController.getGeneralPermissions
+);
+
+// Update single general permission
+router.put('/permissions/general',
+    authenticateToken,
+    requireAdmin,
+    [
+        body('role').isIn(['admin', 'assistant', 'rop', 'operator', 'employee']),
+        body('permission').isString().notEmpty(),
+        body('canPerform').isBoolean()
+    ],
+    validate,
+    generalPermissionsController.updateGeneralPermission
+);
+
+// Batch update general permissions
+router.post('/permissions/general/batch',
+    authenticateToken,
+    requireAdmin,
+    [body('updates').isArray()],
+    validate,
+    generalPermissionsController.batchUpdateGeneralPermissions
+);
+
+// Reset general permissions to defaults
+router.post('/permissions/general/reset',
+    authenticateToken,
+    requireAdmin,
+    generalPermissionsController.resetGeneralPermissions
 );
 
 // ==================== MESSAGE ROUTES ====================
