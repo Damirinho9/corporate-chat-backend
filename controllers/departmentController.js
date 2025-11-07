@@ -503,12 +503,20 @@ const addUserToDepartment = async (req, res) => {
 
         if (departmentChat.rows.length > 0) {
             const chatId = departmentChat.rows[0].id;
-            await query(
-                `INSERT INTO chat_participants (chat_id, user_id)
-                 VALUES ($1, $2)
-                 ON CONFLICT DO NOTHING`,
+
+            // Проверяем, не является ли пользователь уже участником
+            const existingParticipant = await query(
+                `SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2`,
                 [chatId, userId]
             );
+
+            if (existingParticipant.rows.length === 0) {
+                // Добавляем только если ещё не участник
+                await query(
+                    `INSERT INTO chat_participants (chat_id, user_id) VALUES ($1, $2)`,
+                    [chatId, userId]
+                );
+            }
         }
 
         // Получаем обновлённые данные пользователя
