@@ -14,6 +14,8 @@ const userController = require('../controllers/userController');
 const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
 const departmentController = require('../controllers/departmentController');
+const permissionsController = require('../controllers/permissionsController');
+const generalPermissionsController = require('../controllers/generalPermissionsController');
 const { PERMISSIONS_MATRIX } = require('../config/permissionsMatrix');
 
 const { authenticateToken, requireAdmin, requireHead, requireAdminOrRop } = require('../middleware/auth');
