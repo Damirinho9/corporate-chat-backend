@@ -1,5 +1,17 @@
 const PERMISSIONS_MATRIX = [
     {
+        id: 'editOwnMessages',
+        label: 'Редактировать свои сообщения (до 5 минут после отправки)',
+        roles: {
+            admin: true,
+            assistant: true,
+            rop: true,
+            operator: true,
+            employee: true
+        },
+        hint: 'Редактирование доступно всем ролям только в течение пяти минут после отправки собственного сообщения.'
+    },
+    {
         id: 'deleteOwnMessages',
         label: 'Удалять свои сообщения (до 5 минут после отправки)',
         roles: {
@@ -9,7 +21,7 @@ const PERMISSIONS_MATRIX = [
             operator: true,
             employee: true
         },
-        hint: 'Доступно всем ролям в течение пяти минут после отправки собственного сообщения.'
+        hint: 'Удаление доступно всем ролям в течение пяти минут после отправки собственного сообщения.'
     },
     {
         id: 'deleteAnyMessages',

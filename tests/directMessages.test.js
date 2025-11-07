@@ -570,6 +570,55 @@ function createMockResponse() {
             throw new Error('Последнее сообщение не содержит ожидаемый файл');
         }
 
+        console.log('✏️ Проверка редактирования собственного сообщения в течение 5 минут...');
+        const operatorOwnMessageReq = {
+            params: { chatId },
+            body: { content: 'Сообщение для редактирования в окне 5 минут' },
+            user: { id: operator.id, role: 'operator', department: operator.department }
+        };
+        const operatorOwnMessageRes = createMockResponse();
+        await messageController.sendMessage(operatorOwnMessageReq, operatorOwnMessageRes);
+
+        if (operatorOwnMessageRes.statusCode !== 201 || !operatorOwnMessageRes.body?.message?.id) {
+            throw new Error(`Оператор не смог отправить сообщение для редактирования (статус ${operatorOwnMessageRes.statusCode})`);
+        }
+
+        const editableMessageId = operatorOwnMessageRes.body.message.id;
+
+        const editOwnReq = {
+            params: { messageId: editableMessageId },
+            body: { content: 'Обновлённое сообщение в пределах окна 5 минут' },
+            user: { id: operator.id, role: 'operator', department: operator.department }
+        };
+        const editOwnRes = createMockResponse();
+        await messageController.editMessage(editOwnReq, editOwnRes);
+
+        if (editOwnRes.statusCode !== 200) {
+            throw new Error(`Оператор не смог отредактировать сообщение в течение 5 минут (статус ${editOwnRes.statusCode})`);
+        }
+
+        const tenMinutesAgoIso = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        await query('UPDATE messages SET created_at = $1 WHERE id = $2', [tenMinutesAgoIso, editableMessageId]);
+
+        const lateEditRes = createMockResponse();
+        await messageController.editMessage(editOwnReq, lateEditRes);
+
+        if (lateEditRes.statusCode !== 403 || lateEditRes.body?.code !== 'EDIT_WINDOW_EXPIRED') {
+            throw new Error(`Редактирование после окна должно быть запрещено (статус ${lateEditRes.statusCode}, код ${lateEditRes.body?.code})`);
+        }
+
+        const adminOverrideEditReq = {
+            params: { messageId: editableMessageId },
+            body: { content: 'Администратор обновил сообщение после истечения окна' },
+            user: { id: admin.id, role: 'admin' }
+        };
+        const adminOverrideEditRes = createMockResponse();
+        await messageController.editMessage(adminOverrideEditReq, adminOverrideEditRes);
+
+        if (adminOverrideEditRes.statusCode !== 200) {
+            throw new Error(`Администратор не смог отредактировать сообщение после истечения окна (статус ${adminOverrideEditRes.statusCode})`);
+        }
+
         console.log('🕒 Проверка удаления своих сообщений с ограничением по времени...');
 
         const operatorDeptChatLookup = await query(

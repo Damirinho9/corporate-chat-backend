@@ -567,6 +567,24 @@ class InMemoryDatabase {
             return { rows: [{ id: matches[0].id }], rowCount: 1 };
         }
 
+        if (normalized.startsWith('SELECT user_id, chat_id, created_at FROM messages WHERE id =')) {
+            const messageId = toInt(params[0]);
+            const message = this.data.messages.find(m => m.id === messageId);
+
+            if (!message) {
+                return { rows: [], rowCount: 0 };
+            }
+
+            return {
+                rows: [{
+                    user_id: message.user_id,
+                    chat_id: message.chat_id,
+                    created_at: message.created_at
+                }],
+                rowCount: 1
+            };
+        }
+
         if (normalized.startsWith('SELECT id, user_id, chat_id, created_at, is_deleted FROM messages WHERE id =')) {
             const messageId = toInt(params[0]);
             const message = this.data.messages.find(m => m.id === messageId);

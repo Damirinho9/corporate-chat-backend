@@ -325,8 +325,10 @@ const editMessage = async (req, res) => {
         const { content } = req.body;
         const userId = req.user.id;
 
-        if (!content) {
-            return res.status(400).json({ 
+        const trimmedContent = typeof content === 'string' ? content.trim() : '';
+
+        if (!trimmedContent) {
+            return res.status(400).json({
                 error: 'Content is required',
                 code: 'EMPTY_CONTENT'
             });
@@ -334,30 +336,51 @@ const editMessage = async (req, res) => {
 
         // Check ownership
         const messageCheck = await query(
-            'SELECT user_id, chat_id FROM messages WHERE id = $1',
+            'SELECT user_id, chat_id, created_at FROM messages WHERE id = $1',
             [messageId]
         );
 
         if (messageCheck.rows.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 error: 'Message not found',
                 code: 'MESSAGE_NOT_FOUND'
             });
         }
 
-        if (messageCheck.rows[0].user_id !== userId && req.user.role !== 'admin') {
-            return res.status(403).json({ 
+        const messageRow = messageCheck.rows[0];
+        const isOwner = messageRow.user_id === userId;
+        const isAdmin = req.user.role === 'admin';
+
+        if (!isOwner && !isAdmin) {
+            return res.status(403).json({
                 error: 'Cannot edit this message',
                 code: 'EDIT_DENIED'
             });
         }
 
+        if (isOwner && !isAdmin) {
+            const createdAt = messageRow.created_at ? new Date(messageRow.created_at) : null;
+            const createdAtTime = createdAt && !Number.isNaN(createdAt.getTime())
+                ? createdAt.getTime()
+                : null;
+
+            const editWindowMs = 5 * 60 * 1000;
+
+            if (!createdAtTime || (Date.now() - createdAtTime) > editWindowMs) {
+                return res.status(403).json({
+                    error: 'Message can only be edited within 5 minutes of sending',
+                    code: 'EDIT_WINDOW_EXPIRED',
+                    metadata: { windowMinutes: 5 }
+                });
+            }
+        }
+
         // Update message
         await query(
-            `UPDATE messages 
+            `UPDATE messages
              SET content = $1, is_edited = true, updated_at = CURRENT_TIMESTAMP
              WHERE id = $2`,
-            [content, messageId]
+            [trimmedContent, messageId]
         );
 
         res.json({ message: 'Message edited successfully' });
