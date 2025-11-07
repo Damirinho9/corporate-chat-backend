@@ -2733,12 +2733,31 @@
                         const emoji = roleEmoji[user.role] || '👤';
                         const role = getRoleDisplayName(user.role) || user.role || '';
 
+                        // Проверяем, это текущий пользователь или нет
+                        const isCurrentUser = currentUser && Number(user.id) === Number(currentUser.id);
+
                         const contactNestingClass = nested ? ' nested-contact' : '';
                         const directChatId = directChatByUser.get(user.id);
                         const isActive =
                                 Number(directChatId) === Number(currentChatId) ||
                                 (!directChatId && currentDirectContactId && Number(user.id) === Number(currentDirectContactId));
                         const chatAttr = directChatId ? ` data-chat-id="${directChatId}"` : '';
+
+                        // Если это текущий пользователь - делаем некликабельным
+                        if (isCurrentUser) {
+                                return `
+                                        <li class="chat-item contact-item${contactNestingClass}"
+                                            style="opacity: 0.6; cursor: default;"
+                                            title="Это вы">
+                                                <div class="chat-item-header">
+                                                        <span class="chat-name">${emoji} ${escapeHtml(user.name)} <span style="color: #a0aec0; font-size: 0.85em;">(вы)</span></span>
+                                                </div>
+                                                <div class="chat-last-message">
+                                                        <span class="chat-last-message-text">${role}</span>
+                                                </div>
+                                        </li>
+                                `;
+                        }
 
                         return `
                                 <li class="chat-item contact-item${contactNestingClass}${isActive ? ' active' : ''}"
