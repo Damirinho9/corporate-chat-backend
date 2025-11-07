@@ -2624,7 +2624,7 @@ async function loadChats() {
                 console.error('Create user error:', err);
                 showToast('Ошибка создания пользователя', 'error');
             }
-        }
+        });
 
         if (editDepartmentSelect) {
             editDepartmentSelect.addEventListener('change', () => {
