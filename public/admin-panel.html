@@ -3151,7 +3151,7 @@ function handleChatTypeChange() {
                 console.error('[resetUserPassword] error:', error);
                 showToast('Не удалось сбросить пароль', 'error');
             }
-        }
+        });
 
         if (editDepartmentSelect) {
             editDepartmentSelect.addEventListener('change', () => {
