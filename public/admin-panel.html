@@ -1850,11 +1850,22 @@ async function loadChats() {
                                     <div style="margin-top: 15px;">
                                         <strong>Сотрудники:</strong>
                                         <div style="margin-top: 10px;">
-                                            ${otherUsers.map(user => `
-                                                <div style=\"background: #f7fafc; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;\">
-                                                    <span>${escapeHtml(user.name)} (${escapeHtml(user.username)}) • ${escapeHtml(ROLE_LABELS[user.role] || user.role || '—')}</span>
+                                            ${otherUsers.map(user => {
+                                                // Эмодзи в зависимости от роли
+                                                const roleEmoji = {
+                                                    'assistant': '🤝',
+                                                    'employee': '👨‍💼',
+                                                    'admin': '⚙️'
+                                                };
+                                                const emoji = roleEmoji[user.role] || '👤';
+
+                                                return `
+                                                <div style="background: #f7fafc; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                                                    <span>${emoji} ${escapeHtml(user.name)} (${escapeHtml(user.username)}) • ${escapeHtml(ROLE_LABELS[user.role] || user.role || '—')}</span>
+                                                    ${hasDepartmentIdentity ? `<button class='btn btn-sm btn-danger' onclick='removeUserFromDepartment(${user.id}, ${JSON.stringify(rawName)})'>Удалить</button>` : ''}
                                                 </div>
-                                            `).join('')}
+                                                `;
+                                            }).join('')}
                                         </div>
                                     </div>
                                 ` : ''}
