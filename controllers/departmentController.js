@@ -488,6 +488,22 @@ const addUserToDepartment = async (req, res) => {
 
         await query(updateQuery, updateParams);
 
+        // Добавляем пользователя в чат отдела
+        const departmentChat = await query(
+            `SELECT id FROM chats WHERE type = 'department' AND department = $1`,
+            [departmentName]
+        );
+
+        if (departmentChat.rows.length > 0) {
+            const chatId = departmentChat.rows[0].id;
+            await query(
+                `INSERT INTO chat_participants (chat_id, user_id)
+                 VALUES ($1, $2)
+                 ON CONFLICT DO NOTHING`,
+                [chatId, userId]
+            );
+        }
+
         // Получаем обновлённые данные пользователя
         const updatedUser = await query(
             'SELECT role FROM users WHERE id = $1',
