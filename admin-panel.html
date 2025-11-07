@@ -1303,6 +1303,38 @@
         const editDepartmentSelect = document.getElementById('editDepartmentSelect');
         const editStatusSelect = document.getElementById('editStatus');
         const editPasswordInput = document.getElementById('editInitialPassword');
+        const modalFocusMemory = new WeakMap();
+
+        function rememberModalFocus(modal) {
+            if (!(modal instanceof HTMLElement)) {
+                modalFocusMemory.set(modal, null);
+                return;
+            }
+
+            const activeElement = document.activeElement;
+            if (activeElement && modal.contains(activeElement) && typeof activeElement.focus === 'function') {
+                modalFocusMemory.set(modal, activeElement);
+            } else {
+                modalFocusMemory.set(modal, null);
+            }
+        }
+
+        function restoreModalFocus(modal) {
+            if (!modal) {
+                return;
+            }
+
+            const previousElement = modalFocusMemory.get(modal);
+            modalFocusMemory.delete(modal);
+
+            if (previousElement && typeof previousElement.focus === 'function') {
+                try {
+                    previousElement.focus();
+                } catch (error) {
+                    console.warn('[modal] Unable to restore focus', error);
+                }
+            }
+        }
 
         // Check auth
         if (!token || !currentUser || currentUser.role !== 'admin') {
