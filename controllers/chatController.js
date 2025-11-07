@@ -528,9 +528,26 @@ const getChatSettings = async (req, res) => {
         const { chatId } = req.params;
         const currentUser = req.user;
 
+        const chatColumnsInfo = await query(`
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'chats'
+        `);
+
+        const chatColumnSet = new Set(chatColumnsInfo.rows.map((row) => row.column_name));
+        const typeFragment = chatColumnSet.has('type')
+            ? 'type'
+            : `CAST('unknown' AS VARCHAR(50)) AS type`;
+        const departmentFragment = chatColumnSet.has('department')
+            ? 'department'
+            : 'CAST(NULL AS VARCHAR(255)) AS department';
+        const nameFragment = chatColumnSet.has('name')
+            ? 'name'
+            : 'CAST(NULL AS VARCHAR(255)) AS name';
+
         // Check if chat exists
         const chatCheck = await query(
-            'SELECT id, type, department, name FROM chats WHERE id = $1',
+            `SELECT id, ${typeFragment}, ${departmentFragment}, ${nameFragment} FROM chats WHERE id = $1`,
             [chatId]
         );
 
@@ -561,8 +578,11 @@ const getChatSettings = async (req, res) => {
         // Get participants with their roles
         const participants = await query(`
             SELECT
-                u.id, u.name, u.username, u.role as user_role, u.department,
-                cp.role as chat_role, cp.can_add_members, cp.can_remove_members
+                u.id,
+                u.name,
+                u.username,
+                u.role AS user_role,
+                u.department
             FROM chat_participants cp
             JOIN users u ON cp.user_id = u.id
             WHERE cp.chat_id = $1

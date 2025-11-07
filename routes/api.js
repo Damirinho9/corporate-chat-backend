@@ -14,8 +14,7 @@ const userController = require('../controllers/userController');
 const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
 const departmentController = require('../controllers/departmentController');
-const permissionsController = require('../controllers/permissionsController');
-const generalPermissionsController = require('../controllers/generalPermissionsController');
+const { PERMISSIONS_MATRIX } = require('../config/permissionsMatrix');
 
 const { authenticateToken, requireAdmin, requireHead, requireAdminOrRop } = require('../middleware/auth');
 const { canAccessChat, canSendToChat, canCreateDirectMessage } = require('../middleware/permissions');
@@ -39,6 +38,15 @@ const validate = (req, res, next) => {
 router.use('/', adminBasic);
 router.use('/', adminExtended);
 router.get('/chats/available-recipients', authenticateToken, getAvailableRecipients);
+
+// ==================== PERMISSIONS MATRIX ====================
+router.get('/permissions/matrix',
+    authenticateToken,
+    requireAdminOrRop,
+    (req, res) => {
+        res.json({ matrix: PERMISSIONS_MATRIX });
+    }
+);
 // ==================== AUTH ROUTES ====================
 router.post('/auth/register',
     authenticateToken,

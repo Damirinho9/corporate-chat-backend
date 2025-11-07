@@ -37,6 +37,13 @@ class InMemoryDatabase {
         const normalized = text.replace(/\s+/g, ' ').trim();
 
         const toInt = (value) => (typeof value === 'number' ? value : Number(value));
+        const normalizeDepartment = (value) => {
+            if (!value) {
+                return null;
+            }
+            const trimmed = String(value).trim();
+            return trimmed.length ? trimmed : null;
+        };
 
         if (!normalized) {
             return { rows: [], rowCount: 0 };
@@ -44,6 +51,51 @@ class InMemoryDatabase {
 
         if (normalized === 'SELECT 1') {
             return { rows: [{ '?column?': 1 }], rowCount: 1 };
+        }
+
+        if (normalized.startsWith("SELECT to_regclass('public.message_deletion_history')")) {
+            const tableName = Array.isArray(this.data.message_deletion_history)
+                ? 'message_deletion_history'
+                : null;
+
+            return {
+                rows: [{ table_name: tableName }],
+                rowCount: 1
+            };
+        }
+
+        if (normalized.startsWith("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'message_deletion_history'")) {
+            const columns = [
+                'id',
+                'message_id',
+                'chat_id',
+                'chat_name',
+                'chat_type',
+                'chat_department',
+                'deleted_message_user_id',
+                'deleted_message_user_name',
+                'deleted_by_user_id',
+                'deleted_by_user_name',
+                'deleted_by_role',
+                'deletion_scope',
+                'original_content',
+                'file_id',
+                'deleted_message_created_at',
+                'deleted_at'
+            ];
+
+            return {
+                rows: columns.map((name) => ({ column_name: name })),
+                rowCount: columns.length
+            };
+        }
+
+        if (normalized.startsWith("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'chats'")) {
+            const columns = ['id', 'name', 'type', 'department', 'created_by', 'is_archived', 'created_at', 'updated_at'];
+            return {
+                rows: columns.map((name) => ({ column_name: name })),
+                rowCount: columns.length
+            };
         }
 
         if (normalized === 'BEGIN' || normalized === 'COMMIT' || normalized === 'ROLLBACK') {
@@ -75,6 +127,20 @@ class InMemoryDatabase {
             const chat = this.data.chats.find(c => c.id === chatId);
             return {
                 rows: chat ? [{ department: chat.department || null, type: chat.type || null }] : [],
+                rowCount: chat ? 1 : 0
+            };
+        }
+
+        if (normalized.startsWith('SELECT id, type, department, name FROM chats WHERE id =')) {
+            const chatId = toInt(params[0]);
+            const chat = this.data.chats.find(c => c.id === chatId);
+            return {
+                rows: chat ? [{
+                    id: chat.id,
+                    type: chat.type || 'group',
+                    department: chat.department || null,
+                    name: chat.name || null
+                }] : [],
                 rowCount: chat ? 1 : 0
             };
         }
@@ -129,6 +195,64 @@ class InMemoryDatabase {
                     is_active: user.is_active !== false
                 }] : [],
                 rowCount: user ? 1 : 0
+            };
+        }
+
+        if (normalized.startsWith('SELECT id, username, name, role, department, is_active FROM users WHERE department IS NOT NULL')) {
+            const rows = this.data.users
+                .filter(u => normalizeDepartment(u.department))
+                .map(u => ({
+                    id: u.id,
+                    username: u.username,
+                    name: u.name,
+                    role: u.role,
+                    department: u.department,
+                    is_active: u.is_active !== false
+                }));
+
+            return {
+                rows,
+                rowCount: rows.length
+            };
+        }
+
+        if (normalized.startsWith('SELECT id, username, name, role, department, is_active, last_seen FROM users')) {
+            const rows = this.data.users.map(u => ({
+                id: u.id,
+                username: u.username,
+                name: u.name,
+                role: u.role,
+                department: u.department,
+                is_active: u.is_active !== false,
+                last_seen: u.last_seen || null
+            }));
+
+            return {
+                rows,
+                rowCount: rows.length
+            };
+        }
+
+        if (normalized.startsWith('SELECT u.id, u.name, u.username, u.role AS user_role, u.department FROM chat_participants cp JOIN users u ON cp.user_id = u.id WHERE cp.chat_id =')) {
+            const chatId = toInt(params[0]);
+            const participants = this.data.chat_participants
+                .filter(cp => cp.chat_id === chatId)
+                .map(cp => {
+                    const user = this.data.users.find(u => u.id === cp.user_id);
+                    return user ? {
+                        id: user.id,
+                        name: user.name,
+                        username: user.username,
+                        user_role: user.role,
+                        department: user.department
+                    } : null;
+                })
+                .filter(Boolean)
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+            return {
+                rows: participants,
+                rowCount: participants.length
             };
         }
 
@@ -443,6 +567,24 @@ class InMemoryDatabase {
             return { rows: [{ id: matches[0].id }], rowCount: 1 };
         }
 
+        if (normalized.startsWith('SELECT user_id, chat_id, created_at FROM messages WHERE id =')) {
+            const messageId = toInt(params[0]);
+            const message = this.data.messages.find(m => m.id === messageId);
+
+            if (!message) {
+                return { rows: [], rowCount: 0 };
+            }
+
+            return {
+                rows: [{
+                    user_id: message.user_id,
+                    chat_id: message.chat_id,
+                    created_at: message.created_at
+                }],
+                rowCount: 1
+            };
+        }
+
         if (normalized.startsWith('SELECT id, user_id, chat_id, created_at, is_deleted FROM messages WHERE id =')) {
             const messageId = toInt(params[0]);
             const message = this.data.messages.find(m => m.id === messageId);
@@ -579,19 +721,22 @@ class InMemoryDatabase {
                     id: entry.id,
                     message_id: entry.message_id,
                     chat_id: entry.chat_id,
-                    chat_name: (chat && chat.name) || entry.chat_name || null,
-                    chat_type: (chat && chat.type) || entry.chat_type || null,
-                    chat_department: (chat && chat.department) || entry.chat_department || null,
-                    deleted_message_user_id: entry.deleted_message_user_id,
-                    deleted_message_user_name: entry.deleted_message_user_name,
+                    stored_deleted_message_user_id: entry.deleted_message_user_id ?? null,
+                    stored_deleted_message_user_name: entry.deleted_message_user_name || null,
                     deleted_by_user_id: entry.deleted_by_user_id,
                     deleted_by_user_name: entry.deleted_by_user_name,
                     deleted_by_role: entry.deleted_by_role,
                     deletion_scope: entry.deletion_scope,
-                    original_content: entry.original_content,
-                    file_id: entry.file_id,
-                    deleted_message_created_at: entry.deleted_message_created_at,
-                    deleted_at: entry.deleted_at
+                    stored_original_content: entry.original_content || null,
+                    stored_file_id: entry.file_id ?? null,
+                    stored_deleted_message_created_at: entry.deleted_message_created_at || null,
+                    stored_chat_name: entry.chat_name || null,
+                    stored_chat_type: entry.chat_type || null,
+                    stored_chat_department: entry.chat_department || null,
+                    deleted_at: entry.deleted_at,
+                    chat_name_current: chat ? (chat.name || null) : null,
+                    chat_type_current: chat ? (chat.type || null) : null,
+                    chat_department_current: chat ? (chat.department || null) : null
                 };
             });
 

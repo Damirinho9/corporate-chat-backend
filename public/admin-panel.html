@@ -205,6 +205,12 @@
             font-size: 14px;
         }
 
+        .permissions-empty {
+            text-align: center;
+            color: #a0aec0;
+            padding: 16px 0;
+        }
+
         .permissions-table th:first-child,
         .permissions-table td:first-child {
             text-align: left;
@@ -1251,6 +1257,18 @@
 
         const PERMISSIONS_MATRIX = [
             {
+                id: 'editOwnMessages',
+                label: 'Редактировать свои сообщения (до 5 минут после отправки)',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: true,
+                    operator: true,
+                    employee: true
+                },
+                hint: 'Редактирование доступно всем ролям только в течение пяти минут после отправки собственного сообщения.'
+            },
+            {
                 id: 'deleteOwnMessages',
                 label: 'Удалять свои сообщения (до 5 минут после отправки)',
                 roles: {
@@ -1260,7 +1278,7 @@
                     operator: true,
                     employee: true
                 },
-                hint: 'Доступно всем ролям в течение пяти минут после отправки собственного сообщения.'
+                hint: 'Удаление доступно всем ролям в течение пяти минут после отправки собственного сообщения.'
             },
             {
                 id: 'deleteAnyMessages',
@@ -1275,6 +1293,9 @@
                 hint: 'РОП может удалять сообщения только в чатах своего отдела; администратор — в любых чатах.'
             }
         ];
+
+        window.PERMISSIONS_MATRIX = PERMISSIONS_MATRIX;
+        let permissionsMatrixLoaded = false;
 
         const createUserForm = document.getElementById('createUserForm');
         const usernameInput = document.getElementById('createUsername');
@@ -1418,6 +1439,39 @@
         }
 
         // renderPermissionsMatrix moved to line 3309 - now loads from API instead of static data
+
+        async function fetchPermissionsMatrix() {
+            try {
+                const response = await fetch(`${API_URL}/permissions/matrix`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Status ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data && Array.isArray(data.matrix) && data.matrix.length) {
+                    window.PERMISSIONS_MATRIX = data.matrix;
+                    return data.matrix;
+                }
+            } catch (error) {
+                console.error('[fetchPermissionsMatrix] error:', error);
+            }
+
+            return window.PERMISSIONS_MATRIX || PERMISSIONS_MATRIX;
+        }
+
+        async function ensurePermissionsMatrixLoaded() {
+            if (permissionsMatrixLoaded && window.PERMISSIONS_MATRIX) {
+                return window.PERMISSIONS_MATRIX;
+            }
+
+            const matrix = await fetchPermissionsMatrix();
+            permissionsMatrixLoaded = true;
+            return matrix;
+        }
 
         async function loadDashboard() {
             try {
@@ -1566,16 +1620,11 @@ async function loadChats() {
                 }
 
                 const data = await res.json();
-                departmentsCache = Array.isArray(data.departments)
-                    ? data.departments
-                        .map((dept) => {
-                            if (dept && typeof dept.department === 'string') {
-                                return dept.department.trim();
-                            }
-                            return null;
-                        })
-                        .filter(Boolean)
+                const sanitizedDepartments = Array.isArray(data.departments)
+                    ? data.departments.filter((dept) => dept && typeof dept.department === 'string' && dept.department.trim().length)
                     : [];
+
+                departmentsCache = sanitizedDepartments.map((dept) => dept.department.trim());
                 populateDepartmentSelectOptions(departmentSelect, departmentSelect ? departmentSelect.value : null);
                 const editPreferredDepartment = (currentEditingUser && currentEditingUser.department)
                     ? currentEditingUser.department
@@ -1591,50 +1640,51 @@ async function loadChats() {
                         autoSelectFirst: !editPreferredDepartment
                     });
                 }
-                console.log('[Departments] Raw data received:', data);
-                console.log('[Departments] data.departments type:', typeof data.departments);
-                console.log('[Departments] data.departments is array:', Array.isArray(data.departments));
-                const firstDepartment = Array.isArray(data.departments) ? data.departments[0] : null;
-                console.log('[Departments] data.departments length:', Array.isArray(data.departments) ? data.departments.length : 'n/a');
-                console.log('[Departments] First item:', firstDepartment);
-                console.log('[Departments] First item type:', firstDepartment ? typeof firstDepartment : 'undefined');
-                console.log('[Departments] First item stringified:', JSON.stringify(firstDepartment, null, 2));
-
                 const div = document.getElementById('departmentsList');
-                if (data.departments && data.departments.length > 0) {
-                    div.innerHTML = data.departments.map(dept => {
-                        console.log('[Departments] Processing dept:', dept);
-                        console.log('[Departments] dept type:', typeof dept);
-                        console.log('[Departments] dept.department value:', dept.department);
-                        console.log('[Departments] dept.users value:', dept.users);
-                        const ropUser = dept.users ? dept.users.find(u => u.role === 'rop') : null;
-                        const operators = dept.users ? dept.users.filter(u => u.role === 'operator') : [];
+                if (sanitizedDepartments.length > 0) {
+                    div.innerHTML = sanitizedDepartments.map((dept) => {
+                        const rawName = typeof dept.department === 'string' ? dept.department.trim() : '';
+                        const displayName = rawName || 'Без отдела';
+                        const safeDisplayName = escapeHtml(displayName);
+                        const hasDepartmentIdentity = Boolean(rawName);
+                        const renameButton = hasDepartmentIdentity
+                            ? `<button class="btn btn-sm" onclick='showRenameDepartmentModal(${JSON.stringify(rawName)})'
+                                    style="background: #f7fafc; border: 1px solid #e2e8f0; padding: 4px 8px;">
+                                    ✏️ Переименовать
+                               </button>`
+                            : '';
+                        const addButton = hasDepartmentIdentity
+                            ? `<button class="btn btn-sm btn-primary" onclick='showAddUserToDepartmentModal(${JSON.stringify(rawName)})'>
+                                    ➕ Добавить
+                               </button>`
+                            : '';
+                        const ropUser = Array.isArray(dept.users) ? dept.users.find(u => u.role === 'rop') : null;
+                        const operators = Array.isArray(dept.users) ? dept.users.filter(u => u.role === 'operator') : [];
+                        const otherUsers = Array.isArray(dept.users)
+                            ? dept.users.filter(u => !['rop', 'operator'].includes(u.role))
+                            : [];
+                        const headerNotice = hasDepartmentIdentity ? '' : '<span style="color: #a0aec0;">Редактирование недоступно</span>';
 
                         return `
                             <div class="card" style="margin-bottom: 20px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                     <div style="display: flex; align-items: center; gap: 10px;">
-                                        <h3>🏢 ${dept.department}</h3>
-                                        <button class="btn btn-sm" onclick="showRenameDepartmentModal('${dept.department}')"
-                                                style="background: #f7fafc; border: 1px solid #e2e8f0; padding: 4px 8px;">
-                                            ✏️ Переименовать
-                                        </button>
+                                        <h3>🏢 ${safeDisplayName}</h3>
+                                        ${renameButton || headerNotice}
                                     </div>
                                     <div>
                                         <span style="background: #e2e8f0; padding: 5px 12px; border-radius: 6px; font-size: 13px; margin-right: 10px;">
                                             ${dept.user_count || 0} человек
                                         </span>
-                                        <button class="btn btn-sm btn-primary" onclick="showAddUserToDepartmentModal('${dept.department}')">
-                                            ➕ Добавить
-                                        </button>
+                                        ${addButton}
                                     </div>
                                 </div>
 
                                 <div style="margin-bottom: 10px;">
                                     <strong>РОП:</strong> ${ropUser ?
-                                        `<span style="color: #4299e1;">${ropUser.name} (${ropUser.username})</span>` :
+                                        `<span style=\"color: #4299e1;\">${escapeHtml(ropUser.name)} (${escapeHtml(ropUser.username)})</span>` :
                                         '<span style="color: #a0aec0;">Не назначен</span>'}
-                                    ${ropUser ? '' : `<button class="btn btn-sm btn-success" onclick="showAssignHeadModal('${dept.department}')" style="margin-left: 10px;">Назначить РОПа</button>`}
+                                    ${!ropUser && hasDepartmentIdentity ? `<button class="btn btn-sm btn-success" onclick='showAssignHeadModal(${JSON.stringify(rawName)})' style="margin-left: 10px;">Назначить РОПа</button>` : ''}
                                 </div>
 
                                 ${operators.length > 0 ? `
@@ -1643,13 +1693,26 @@ async function loadChats() {
                                         <div style="margin-top: 10px;">
                                             ${operators.map(user => `
                                                 <div style="background: #f7fafc; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-                                                    <span>👤 ${user.name} (${user.username})</span>
-                                                    <button class="btn btn-sm btn-danger" onclick="removeUserFromDepartment(${user.id}, '${dept.department}')">Удалить</button>
+                                                    <span>👤 ${escapeHtml(user.name)} (${escapeHtml(user.username)})</span>
+                                                    ${hasDepartmentIdentity ? `<button class='btn btn-sm btn-danger' onclick='removeUserFromDepartment(${user.id}, ${JSON.stringify(rawName)})'>Удалить</button>` : ''}
                                                 </div>
                                             `).join('')}
                                         </div>
                                     </div>
                                 ` : '<div style="margin-top: 10px; color: #a0aec0;">Нет операторов</div>'}
+
+                                ${otherUsers.length > 0 ? `
+                                    <div style="margin-top: 15px;">
+                                        <strong>Сотрудники:</strong>
+                                        <div style="margin-top: 10px;">
+                                            ${otherUsers.map(user => `
+                                                <div style=\"background: #f7fafc; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;\">
+                                                    <span>${escapeHtml(user.name)} (${escapeHtml(user.username)}) • ${escapeHtml(ROLE_LABELS[user.role] || user.role || '—')}</span>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                ` : ''}
                             </div>
                         `;
                     }).join('');
@@ -1785,6 +1848,93 @@ async function loadChats() {
                 showToast('Ошибка добавления пользователя', 'error');
             }
         }
+        async function loadDeletionHistory() {
+            const tbody = document.getElementById('deletionHistoryBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
+
+            try {
+                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.status === 403) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`Failed with status ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (!Array.isArray(data.history) || data.history.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
+                    return;
+                }
+
+                const rowsHtml = data.history.map(entry => {
+                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
+                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
+                        ? deletedAtDate.toLocaleString('ru-RU')
+                        : '—';
+
+                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
+                    const deleterCell = entry.deleted_by_user_name
+                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
+                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
+
+                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
+                    const ownerCell = entry.deleted_message_user_name
+                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
+                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
+
+                    const roleKey = entry.deleted_by_role || 'employee';
+                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
+                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
+
+                    const scopeBadge = entry.deletion_scope === 'self'
+                        ? '<span class="badge badge-scope-self">Своё</span>'
+                        : '<span class="badge badge-scope-moderator">Модерация</span>';
+                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
+
+                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
+                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
+
+                    const contentParts = [];
+                    if (entry.original_content) {
+                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
+                    }
+                    if (entry.file_id) {
+                        const fileLink = buildAttachmentLink(entry.file_id);
+                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
+                    }
+
+                    const contentCell = contentParts.length
+                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
+                        : '<span style="color:#a0aec0;">—</span>';
+
+                    return `
+                        <tr>
+                            <td>${deletedAt}</td>
+                            <td>${deleterCell}</td>
+                            <td>${roleCell}</td>
+                            <td>${chatCell}</td>
+                            <td>${ownerCell}</td>
+                            <td>${scopeCell}</td>
+                            <td>${contentCell}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                tbody.innerHTML = rowsHtml;
+            } catch (error) {
+                console.error('Failed to load deletion history:', error);
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
+            }
+        }
 
         async function loadDeletionHistory() {
             const tbody = document.getElementById('deletionHistoryBody');
@@ -1803,10 +1953,183 @@ async function loadChats() {
                 }
 
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    console.error('[loadDeletionHistory] Error response:', errorData);
-                    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Ошибка ${response.status}: ${errorData.error || 'Не удалось загрузить историю'}</td></tr>`;
+                    throw new Error(`Failed with status ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (!Array.isArray(data.history) || data.history.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
                     return;
+                }
+
+                const rowsHtml = data.history.map(entry => {
+                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
+                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
+                        ? deletedAtDate.toLocaleString('ru-RU')
+                        : '—';
+
+                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
+                    const deleterCell = entry.deleted_by_user_name
+                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
+                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
+
+                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
+                    const ownerCell = entry.deleted_message_user_name
+                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
+                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
+
+                    const roleKey = entry.deleted_by_role || 'employee';
+                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
+                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
+
+                    const scopeBadge = entry.deletion_scope === 'self'
+                        ? '<span class="badge badge-scope-self">Своё</span>'
+                        : '<span class="badge badge-scope-moderator">Модерация</span>';
+                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
+
+                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
+                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
+
+                    const contentParts = [];
+                    if (entry.original_content) {
+                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
+                    }
+                    if (entry.file_id) {
+                        const fileLink = buildAttachmentLink(entry.file_id);
+                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
+                    }
+
+                    const contentCell = contentParts.length
+                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
+                        : '<span style="color:#a0aec0;">—</span>';
+
+                    return `
+                        <tr>
+                            <td>${deletedAt}</td>
+                            <td>${deleterCell}</td>
+                            <td>${roleCell}</td>
+                            <td>${chatCell}</td>
+                            <td>${ownerCell}</td>
+                            <td>${scopeCell}</td>
+                            <td>${contentCell}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                tbody.innerHTML = rowsHtml;
+            } catch (error) {
+                console.error('Failed to load deletion history:', error);
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
+            }
+        }
+
+        async function loadDeletionHistory() {
+            const tbody = document.getElementById('deletionHistoryBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
+
+            try {
+                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.status === 403) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`Failed with status ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (!Array.isArray(data.history) || data.history.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
+                    return;
+                }
+
+                const rowsHtml = data.history.map(entry => {
+                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
+                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
+                        ? deletedAtDate.toLocaleString('ru-RU')
+                        : '—';
+
+                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
+                    const deleterCell = entry.deleted_by_user_name
+                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
+                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
+
+                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
+                    const ownerCell = entry.deleted_message_user_name
+                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
+                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
+
+                    const roleKey = entry.deleted_by_role || 'employee';
+                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
+                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
+
+                    const scopeBadge = entry.deletion_scope === 'self'
+                        ? '<span class="badge badge-scope-self">Своё</span>'
+                        : '<span class="badge badge-scope-moderator">Модерация</span>';
+                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
+
+                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
+                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
+
+                    const contentParts = [];
+                    if (entry.original_content) {
+                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
+                    }
+                    if (entry.file_id) {
+                        const fileLink = buildAttachmentLink(entry.file_id);
+                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
+                    }
+
+                    const contentCell = contentParts.length
+                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
+                        : '<span style="color:#a0aec0;">—</span>';
+
+                    return `
+                        <tr>
+                            <td>${deletedAt}</td>
+                            <td>${deleterCell}</td>
+                            <td>${roleCell}</td>
+                            <td>${chatCell}</td>
+                            <td>${ownerCell}</td>
+                            <td>${scopeCell}</td>
+                            <td>${contentCell}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                tbody.innerHTML = rowsHtml;
+            } catch (error) {
+                console.error('Failed to load deletion history:', error);
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
+            }
+        }
+
+        async function loadDeletionHistory() {
+            const tbody = document.getElementById('deletionHistoryBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
+
+            try {
+                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.status === 403) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`Failed with status ${response.status}`);
                 }
 
                 const data = await response.json();
@@ -2270,7 +2593,7 @@ async function loadChats() {
             }
 
             try {
-                const res = await fetch(`${API_URL}/users/${userId}/reset-password`, {
+                const res = await fetch(`${API_URL}/auth/register`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -2282,8 +2605,9 @@ async function loadChats() {
                 const result = await res.json();
 
                 if (res.ok && result.success) {
-                    const displayPassword = result.password || payload.password;
-                    showToast(`Пользователь создан. Пароль: ${displayPassword}`, 'success');
+                    const displayPassword = result.password || payload.password || '';
+                    const successMessage = 'Пользователь создан. Пароль: ' + displayPassword;
+                    showToast(successMessage, 'success');
                     closeModal('createUserModal');
                     await loadUsers();
                     if (needsDepartment) {
@@ -2292,11 +2616,11 @@ async function loadChats() {
                 } else {
                     showToast(result.error || 'Failed to create user', 'error');
                 }
-            } catch (error) {
-                console.error('Create user error:', error);
-                showToast('Ошибка создания пользователя', 'error');
+                if (departmentField) {
+                    departmentField.classList.add('disabled');
+                }
+                updateDepartmentVisibility('', departmentField, departmentSelect, { preserveValue: false });
             }
-        });
 
         if (editDepartmentSelect) {
             editDepartmentSelect.addEventListener('change', () => {
@@ -2306,8 +2630,9 @@ async function loadChats() {
 
         if (editRoleSelect) {
             editRoleSelect.addEventListener('change', (event) => {
+                const lastStoredValue = editDepartmentSelect ? (editDepartmentSelect.dataset.lastValue || editDepartmentSelect.value || '') : '';
                 const preferred = shouldRequireDepartment(event.target.value)
-                    ? (editDepartmentSelect?.dataset.lastValue || editDepartmentSelect?.value || '')
+                    ? lastStoredValue
                     : null;
                 updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
                     preferredValue: preferred,
@@ -2321,18 +2646,18 @@ async function loadChats() {
             editUserForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
 
-                const userId = Number(editUserIdInput?.value);
+                const userId = Number(editUserIdInput ? editUserIdInput.value : '');
                 if (!userId) {
                     showToast('Пользователь не выбран', 'error');
                     return;
                 }
 
-                const name = editFullNameInput?.value.trim() || '';
-                const usernameValue = editUsernameInput?.value.trim() || '';
-                const roleValue = editRoleSelect?.value || '';
-                const isActiveValue = editStatusSelect?.value === 'true';
+                const name = editFullNameInput ? editFullNameInput.value.trim() : '';
+                const usernameValue = editUsernameInput ? editUsernameInput.value.trim() : '';
+                const roleValue = editRoleSelect ? editRoleSelect.value : '';
+                const isActiveValue = editStatusSelect ? editStatusSelect.value === 'true' : false;
                 const needsDept = shouldRequireDepartment(roleValue);
-                const departmentValue = needsDept ? (editDepartmentSelect?.value || '') : '';
+                const departmentValue = needsDept && editDepartmentSelect ? (editDepartmentSelect.value || '') : '';
                 const normalizedDepartment = needsDept ? (departmentValue || null) : null;
 
                 if (!name || !usernameValue || !roleValue) {
@@ -2404,332 +2729,1139 @@ async function loadChats() {
 
         // ========== DELETE USER ==========
         async function deleteUser(userId) {
-            if (!confirm('Деактивировать пользователя?')) return;
-
+            if (!confirm('Are you sure you want to delete this user?')) return;
+            
             try {
-                const res = await fetch(`${API_URL}/admin/users/${userId}`, {
+                const res = await fetch(`${API_URL}/users/${userId}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-
-                if (res.ok) {
-                    showToast('Пользователь удален', 'success');
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('User deleted successfully!', 'success');
                     loadUsers();
                 } else {
-                    showToast('Ошибка', 'error');
+                    showToast(data.error || 'Failed to delete user', 'error');
+                }
+                if (editDepartmentField) {
+                    editDepartmentField.classList.add('disabled');
+                }
+                if (editPasswordInput) {
+                    editPasswordInput.value = '';
+                }
+                updateDepartmentVisibility('', editDepartmentField, editDepartmentSelect, { preserveValue: false });
+            }
+        }
+
+        const initialisePermissionsMatrix = async () => {
+            const matrix = await ensurePermissionsMatrixLoaded();
+            renderPermissionsMatrix(matrix);
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                initialisePermissionsMatrix();
+            }, { once: true });
+        } else {
+            initialisePermissionsMatrix();
+        }
+
+        // ========== TOAST ==========
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function updateDepartmentVisibility(roleValue, fieldElement, selectElement, { preferredValue = null, autoSelectFirst = false, preserveValue = false } = {}) {
+            if (!fieldElement || !selectElement) return;
+
+            const needsDept = shouldRequireDepartment(roleValue);
+            selectElement.disabled = !needsDept;
+            selectElement.required = needsDept;
+            fieldElement.classList.toggle('disabled', !needsDept);
+
+            if (needsDept) {
+                populateDepartmentSelectOptions(selectElement, preferredValue);
+                if (preferredValue && selectElement.value !== preferredValue) {
+                    selectElement.value = preferredValue;
+                }
+                if (!selectElement.value && autoSelectFirst && selectElement.options.length > 1) {
+                    selectElement.selectedIndex = 1;
+                }
+            } else if (!preserveValue) {
+                selectElement.value = '';
+            }
+        }
+
+        function toggleDepartmentField(select) {
+            updateDepartmentVisibility(select.value, departmentField, departmentSelect, { autoSelectFirst: true });
+        }
+
+        function populateDepartmentSelectOptions(targetSelect, preferredValue) {
+            if (!targetSelect) return;
+            const uniqueDepartments = Array.from(new Set(departmentsCache))
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b, 'ru'));
+            const currentValue = (typeof preferredValue !== 'undefined' && preferredValue !== null)
+                ? preferredValue
+                : (targetSelect && typeof targetSelect.value === 'string' ? targetSelect.value : '');
+            const options = ['<option value="">Выберите отдел</option>'];
+
+async function showCreateChatModal() {
+    selectedParticipants.clear();
+    const typeSelect = document.getElementById('newChatType');
+    if (typeSelect) {
+        typeSelect.value = 'group';
+        handleChatTypeChange();
+    }
+
+    const searchInput = document.getElementById('participantsSearch');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
+    openModalElement(document.getElementById('createChatModal'), { focusSelector: '#participantsSearch' });
+
+    await loadUsersForChat();
+}
+
+function closeCreateChatModal() {
+    const modal = document.getElementById('createChatModal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        restoreModalFocus(modal);
+    }
+
+    const form = document.getElementById('createChatForm');
+    if (form) {
+        form.reset();
+    }
+
+    const participantList = document.getElementById('participantsList');
+    if (participantList) {
+        participantList.innerHTML = '<p class="chat-participants-empty">Выберите участников</p>';
+    }
+
+    selectedParticipants.clear();
+}
+
+function handleChatTypeChange() {
+    const typeSelect = document.getElementById('newChatType');
+    const deptGroup = document.getElementById('chatDepartmentGroup');
+
+    if (!typeSelect || !deptGroup) {
+        return;
+    }
+
+    const type = typeSelect.value;
+
+    if (type === 'department') {
+        deptGroup.style.display = 'block';
+    } else {
+        deptGroup.style.display = 'none';
+    }
+}
+
+            if (currentValue) {
+                const hasMatch = Array.from(targetSelect.options).some(opt => opt.value === currentValue);
+                targetSelect.value = hasMatch ? currentValue : '';
+            } else {
+                targetSelect.value = '';
+            }
+        }
+
+        function generateStrongPassword(length = 12) {
+            const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()_+';
+            const chars = [];
+
+            if (window.crypto && window.crypto.getRandomValues) {
+                const buffer = new Uint32Array(length);
+                window.crypto.getRandomValues(buffer);
+                for (let i = 0; i < length; i++) {
+                    chars.push(alphabet[buffer[i] % alphabet.length]);
+                }
+            } else {
+                for (let i = 0; i < length; i++) {
+                    chars.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
+                }
+            }
+
+            return chars.join('');
+        }
+
+        function regeneratePassword(silent = false) {
+            if (!passwordInput) return '';
+            const password = generateStrongPassword();
+            passwordInput.value = password;
+
+            if (!silent) {
+                showToast('Новый пароль сгенерирован', 'success');
+            }
+
+            return password;
+        }
+
+        function copyGeneratedPassword(targetInput = passwordInput) {
+            if (!targetInput || !targetInput.value) {
+                showToast('Нет пароля для копирования', 'error');
+                return;
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(targetInput.value)
+                    .then(() => showToast('Пароль скопирован', 'success'))
+                    .catch(() => showToast('Не удалось скопировать пароль', 'error'));
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = targetInput.value;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+
+                try {
+                    const success = document.execCommand('copy');
+                    showToast(success ? 'Пароль скопирован' : 'Не удалось скопировать пароль', success ? 'success' : 'error');
+                } catch (error) {
+                    showToast('Не удалось скопировать пароль', 'error');
+                }
+
+                document.body.removeChild(textarea);
+            }
+        }
+
+        function escapeHtml(value) {
+            if (value === null || value === undefined) {
+                return '';
+            }
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function truncateText(value, maxLength = 120) {
+            if (!value) {
+                return '';
+            }
+            const text = String(value);
+            return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+        }
+
+        function buildAttachmentLink(fileId) {
+            if (!fileId) {
+                return '#';
+            }
+            const encodedToken = encodeURIComponent(token || '');
+            return `${window.location.origin}/api/files/${fileId}${encodedToken ? `?token=${encodedToken}` : ''}`;
+        }
+
+        function copyEditPassword() {
+            copyGeneratedPassword(editPasswordInput);
+        }
+
+        async function resetUserPassword() {
+            const userId = Number(editUserIdInput ? editUserIdInput.value : '');
+            if (!userId) {
+                showToast('Пользователь не выбран', 'error');
+                return;
+            }
+
+            const newPassword = generateStrongPassword();
+
+            try {
+                const res = await fetch(`${API_URL}/users/${userId}/reset-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ newPassword })
+                });
+
+                const result = await res.json().catch(() => ({}));
+
+                if (res.ok) {
+                    if (editPasswordInput) {
+                        editPasswordInput.value = newPassword;
+                    }
+                    if (currentEditingUser) {
+                        currentEditingUser.initial_password = newPassword;
+                    }
+                    showToast('Пароль обновлен', 'success');
+                    await loadUsers();
+                    const updated = usersCache.find(u => u.id === userId);
+                    if (updated) {
+                        currentEditingUser = updated;
+                        if (editPasswordInput) {
+                            editPasswordInput.value = updated.initial_password || '';
+                        }
+                    }
+                } else {
+                    showToast(result.error || 'Не удалось сбросить пароль', 'error');
+                }
+            } catch (error) {
+                console.error('[resetUserPassword] error:', error);
+                showToast('Не удалось сбросить пароль', 'error');
+            }
+        }
+
+        function buildUsernameFromFullName(fullName) {
+            if (!fullName) {
+                return '';
+            }
+
+            const map = {
+                'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh', 'з': 'z',
+                'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r',
+                'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+                'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+            };
+
+            const lower = fullName.toLowerCase();
+            let converted = '';
+
+            for (const char of lower) {
+                if (map[char] !== undefined) {
+                    converted += map[char];
+                } else if (/[a-z0-9]/.test(char)) {
+                    converted += char;
+                } else if (/[\s._-]/.test(char)) {
+                    converted += '.';
+                } else {
+                    converted += '';
+                }
+            }
+
+            converted = converted.replace(/[^a-z0-9.]/g, '.');
+            converted = converted.replace(/\.+/g, '.').replace(/^\.+|\.+$/g, '');
+
+            if (!converted) {
+                return '';
+            }
+
+            if (/^[0-9]/.test(converted)) {
+                converted = `u${converted}`;
+            }
+
+            return converted.slice(0, 24);
+        }
+
+        function updateUsernameFromFullName() {
+            if (!fullNameInput || manualUsernameOverride) {
+                return;
+            }
+
+            usernameInput.value = buildUsernameFromFullName(fullNameInput.value);
+        }
+
+        if (fullNameInput) {
+            fullNameInput.addEventListener('input', () => {
+                updateUsernameFromFullName();
+            });
+        }
+
+        if (usernameInput) {
+            usernameInput.addEventListener('input', () => {
+                manualUsernameOverride = true;
+            });
+            usernameInput.addEventListener('focus', () => {
+                if (!usernameInput.value) {
+                    manualUsernameOverride = false;
+                    updateUsernameFromFullName();
+                }
+            });
+        }
+
+        if (roleSelect) {
+            roleSelect.addEventListener('change', (event) => toggleDepartmentField(event.target));
+        }
+
+        createUserForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const payload = {
+                username: usernameInput.value.trim(),
+                password: passwordInput.value.trim(),
+                name: fullNameInput.value.trim(),
+                role: roleSelect.value,
+                department: departmentSelect.value || null
+            };
+
+            if (!payload.username || !payload.name || !payload.role) {
+                showToast('Заполните обязательные поля', 'error');
+                return;
+            }
+
+            const needsDepartment = shouldRequireDepartment(payload.role);
+            if (!needsDepartment) {
+                payload.department = null;
+            } else if (!payload.department) {
+                showToast('Выберите отдел для выбранной роли', 'error');
+                return;
+            }
+
+            if (!payload.password) {
+                payload.password = regeneratePassword(true);
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/users/${userId}/reset-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await res.json();
+
+                if (res.ok && result.success) {
+                    const displayPassword = result.password || payload.password || '';
+                    const successMessage = 'Пользователь создан. Пароль: ' + displayPassword;
+                    showToast(successMessage, 'success');
+                    closeModal('createUserModal');
+                    await loadUsers();
+                    if (needsDepartment) {
+                        await loadDepartments();
+                    }
+                } else {
+                    showToast(result.error || 'Не удалось сбросить пароль', 'error');
+                }
+            } catch (error) {
+                console.error('[resetUserPassword] error:', error);
+                showToast('Не удалось сбросить пароль', 'error');
+            }
+        }
+
+        if (editDepartmentSelect) {
+            editDepartmentSelect.addEventListener('change', () => {
+                editDepartmentSelect.dataset.lastValue = editDepartmentSelect.value;
+            });
+        }
+
+        if (editRoleSelect) {
+            editRoleSelect.addEventListener('change', (event) => {
+                const lastStoredValue = editDepartmentSelect ? (editDepartmentSelect.dataset.lastValue || editDepartmentSelect.value || '') : '';
+                const preferred = shouldRequireDepartment(event.target.value)
+                    ? lastStoredValue
+                    : null;
+                updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
+                    preferredValue: preferred,
+                    autoSelectFirst: true,
+                    preserveValue: false
+                });
+            });
+        }
+
+        if (editUserForm) {
+            editUserForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const userId = Number(editUserIdInput ? editUserIdInput.value : '');
+                if (!userId) {
+                    showToast('Пользователь не выбран', 'error');
+                    return;
+                }
+
+                const name = editFullNameInput ? editFullNameInput.value.trim() : '';
+                const usernameValue = editUsernameInput ? editUsernameInput.value.trim() : '';
+                const roleValue = editRoleSelect ? editRoleSelect.value : '';
+                const isActiveValue = editStatusSelect ? editStatusSelect.value === 'true' : false;
+                const needsDept = shouldRequireDepartment(roleValue);
+                const departmentValue = needsDept && editDepartmentSelect ? (editDepartmentSelect.value || '') : '';
+                const normalizedDepartment = needsDept ? (departmentValue || null) : null;
+
+                if (!name || !usernameValue || !roleValue) {
+                    showToast('Заполните обязательные поля', 'error');
+                    return;
+                }
+
+                if (needsDept && !normalizedDepartment) {
+                    showToast('Выберите отдел для выбранной роли', 'error');
+                    return;
+                }
+
+                const updates = {};
+                const original = currentEditingUser;
+                if (original) {
+                    if (name !== original.name) updates.name = name;
+                    if (usernameValue !== original.username) updates.username = usernameValue;
+                    if (roleValue !== original.role) updates.role = roleValue;
+                    const originalDepartment = original.department || null;
+                    if ((normalizedDepartment || null) !== originalDepartment) {
+                        updates.department = normalizedDepartment;
+                    }
+                    const originalActive = original.is_active !== false;
+                    if (isActiveValue !== originalActive) {
+                        updates.isActive = isActiveValue;
+                    }
+                } else {
+                    updates.name = name;
+                    updates.username = usernameValue;
+                    updates.role = roleValue;
+                    updates.department = normalizedDepartment;
+                    updates.isActive = isActiveValue;
+                }
+
+                if (Object.keys(updates).length === 0) {
+                    showToast('Нет изменений для сохранения', 'error');
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`${API_URL}/users/${userId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updates)
+                    });
+
+                    const result = await res.json().catch(() => ({}));
+
+                    if (res.ok) {
+                        showToast('Пользователь обновлен', 'success');
+                        closeModal('editUserModal');
+                        currentEditingUser = null;
+                        await loadUsers();
+                        if (updates.role !== undefined || updates.department !== undefined) {
+                            await loadDepartments();
+                        }
+                    } else {
+                        showToast(result.error || 'Ошибка обновления пользователя', 'error');
+                    }
+                } catch (error) {
+                    console.error('[editUserForm] error:', error);
+                    showToast('Ошибка обновления пользователя', 'error');
+                }
+            });
+        }
+
+        // ========== DELETE USER ==========
+        async function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user?')) return;
+            
+            try {
+                const res = await fetch(`${API_URL}/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('User deleted successfully!', 'success');
+                    loadUsers();
+                } else {
+                    converted += '';
+                }
+            }
+
+        const initialisePermissionsMatrix = async () => {
+            const matrix = await ensurePermissionsMatrixLoaded();
+            renderPermissionsMatrix(matrix);
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                initialisePermissionsMatrix();
+            }, { once: true });
+        } else {
+            initialisePermissionsMatrix();
+        }
+
+        // ========== TOAST ==========
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function updateUsernameFromFullName() {
+            if (!fullNameInput || manualUsernameOverride) {
+                return;
+            }
+
+            usernameInput.value = buildUsernameFromFullName(fullNameInput.value);
+        }
+
+        if (fullNameInput) {
+            fullNameInput.addEventListener('input', () => {
+                updateUsernameFromFullName();
+            });
+        }
+
+        if (usernameInput) {
+            usernameInput.addEventListener('input', () => {
+                manualUsernameOverride = true;
+            });
+            usernameInput.addEventListener('focus', () => {
+                if (!usernameInput.value) {
+                    manualUsernameOverride = false;
+                    updateUsernameFromFullName();
+                }
+            });
+        }
+
+        if (roleSelect) {
+            roleSelect.addEventListener('change', (event) => toggleDepartmentField(event.target));
+        }
+
+        createUserForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const payload = {
+                username: usernameInput.value.trim(),
+                password: passwordInput.value.trim(),
+                name: fullNameInput.value.trim(),
+                role: roleSelect.value,
+                department: departmentSelect.value || null
+            };
+
+            if (!payload.username || !payload.name || !payload.role) {
+                showToast('Заполните обязательные поля', 'error');
+                return;
+            }
+
+            const needsDepartment = shouldRequireDepartment(payload.role);
+            if (!needsDepartment) {
+                payload.department = null;
+            } else if (!payload.department) {
+                showToast('Выберите отдел для выбранной роли', 'error');
+                return;
+            }
+
+            if (!payload.password) {
+                payload.password = regeneratePassword(true);
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await res.json();
+
+                if (res.ok && result.success) {
+                    const displayPassword = result.password || payload.password || '';
+                    const successMessage = 'Пользователь создан. Пароль: ' + displayPassword;
+                    showToast(successMessage, 'success');
+                    closeModal('createUserModal');
+                    await loadUsers();
+                    if (needsDepartment) {
+                        await loadDepartments();
+                    }
+                } else {
+                    showToast(result.error || 'Failed to create user', 'error');
                 }
             } catch (err) {
-                showToast('Ошибка', 'error');
+                console.error('Create user error:', err);
+                showToast('Failed to create user', 'error');
             }
-        }
+        });
 
-        // ========== CREATE CHAT MODAL ==========
-        async function showCreateChatModal() {
-            selectedParticipants.clear();
-            const typeSelect = document.getElementById('newChatType');
-            if (typeSelect) {
-                typeSelect.value = 'group';
-                handleChatTypeChange();
-            }
-
-            const searchInput = document.getElementById('participantsSearch');
-            if (searchInput) {
-                searchInput.value = '';
-            }
-
-            openModalElement(document.getElementById('createChatModal'), { focusSelector: '#participantsSearch' });
-
-            await loadUsersForChat();
-        }
-
-        function closeCreateChatModal() {
-            const modal = document.getElementById('createChatModal');
-            if (modal) {
-                modal.classList.remove('show');
-                modal.style.display = 'none';
-                restoreModalFocus(modal);
-            }
-
-            const form = document.getElementById('createChatForm');
-            if (form) {
-                form.reset();
-            }
-
-            const participantList = document.getElementById('participantsList');
-            if (participantList) {
-                participantList.innerHTML = '<p class="chat-participants-empty">Выберите участников</p>';
-            }
-
-            selectedParticipants.clear();
-        }
-
-        function handleChatTypeChange() {
-            const typeSelect = document.getElementById('newChatType');
-            const deptGroup = document.getElementById('chatDepartmentGroup');
-
-            if (!typeSelect || !deptGroup) {
-                return;
-            }
-
-            const type = typeSelect.value;
-
-            if (type === 'department') {
-                deptGroup.style.display = 'block';
-            } else {
-                deptGroup.style.display = 'none';
-            }
-        }
-
-        async function loadUsersForChat() {
-        try {
-            const response = await fetch(`${API_URL}/users`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+        if (editDepartmentSelect) {
+            editDepartmentSelect.addEventListener('change', () => {
+                editDepartmentSelect.dataset.lastValue = editDepartmentSelect.value;
             });
-            const data = await response.json();
+        }
+
+        if (editRoleSelect) {
+            editRoleSelect.addEventListener('change', (event) => {
+                const lastStoredValue = editDepartmentSelect ? (editDepartmentSelect.dataset.lastValue || editDepartmentSelect.value || '') : '';
+                const preferred = shouldRequireDepartment(event.target.value)
+                    ? lastStoredValue
+                    : null;
+                updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
+                    preferredValue: preferred,
+                    autoSelectFirst: true,
+                    preserveValue: false
+                });
+            });
+        }
+
+        if (editUserForm) {
+            editUserForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const userId = Number(editUserIdInput ? editUserIdInput.value : '');
+                if (!userId) {
+                    showToast('Пользователь не выбран', 'error');
+                    return;
+                }
+
+                const name = editFullNameInput ? editFullNameInput.value.trim() : '';
+                const usernameValue = editUsernameInput ? editUsernameInput.value.trim() : '';
+                const roleValue = editRoleSelect ? editRoleSelect.value : '';
+                const isActiveValue = editStatusSelect ? editStatusSelect.value === 'true' : false;
+                const needsDept = shouldRequireDepartment(roleValue);
+                const departmentValue = needsDept && editDepartmentSelect ? (editDepartmentSelect.value || '') : '';
+                const normalizedDepartment = needsDept ? (departmentValue || null) : null;
+
+                if (!name || !usernameValue || !roleValue) {
+                    showToast('Заполните обязательные поля', 'error');
+                    return;
+                }
+
+                if (needsDept && !normalizedDepartment) {
+                    showToast('Выберите отдел для выбранной роли', 'error');
+                    return;
+                }
+
+                const updates = {};
+                const original = currentEditingUser;
+                if (original) {
+                    if (name !== original.name) updates.name = name;
+                    if (usernameValue !== original.username) updates.username = usernameValue;
+                    if (roleValue !== original.role) updates.role = roleValue;
+                    const originalDepartment = original.department || null;
+                    if ((normalizedDepartment || null) !== originalDepartment) {
+                        updates.department = normalizedDepartment;
+                    }
+                    const originalActive = original.is_active !== false;
+                    if (isActiveValue !== originalActive) {
+                        updates.isActive = isActiveValue;
+                    }
+                } else {
+                    updates.name = name;
+                    updates.username = usernameValue;
+                    updates.role = roleValue;
+                    updates.department = normalizedDepartment;
+                    updates.isActive = isActiveValue;
+                }
+
+                if (Object.keys(updates).length === 0) {
+                    showToast('Нет изменений для сохранения', 'error');
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`${API_URL}/users/${userId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updates)
+                    });
+
+                    const result = await res.json().catch(() => ({}));
+
+                    if (res.ok) {
+                        showToast('Пользователь обновлен', 'success');
+                        closeModal('editUserModal');
+                        currentEditingUser = null;
+                        await loadUsers();
+                        if (updates.role !== undefined || updates.department !== undefined) {
+                            await loadDepartments();
+                        }
+                    } else {
+                        showToast(result.error || 'Ошибка обновления пользователя', 'error');
+                    }
+                } catch (error) {
+                    console.error('[editUserForm] error:', error);
+                    showToast('Ошибка обновления пользователя', 'error');
+                }
+            });
+        }
+
+        // ========== DELETE USER ==========
+        async function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user?')) return;
             
-            const container = document.getElementById('participantsList');
-            if (!container) {
-                return;
+            try {
+                const res = await fetch(`${API_URL}/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('User deleted successfully!', 'success');
+                    loadUsers();
+                } else {
+                    showToast(data.error || 'Failed to delete user', 'error');
+                }
+            } catch (err) {
+                console.error('Delete user error:', err);
+                showToast('Failed to delete user', 'error');
             }
-
-            container.innerHTML = data.users.map(user => {
-                const descriptor = `${(user.name || '').toLowerCase()} ${(user.username || '').toLowerCase()}`.trim();
-                const checked = selectedParticipants.has(user.id) ? 'checked' : '';
-                return `
-                    <label class="chat-participant-select" data-filter-value="${escapeHtml(descriptor)}">
-                        <input type="checkbox" value="${user.id}" ${checked} onchange="toggleParticipant(${user.id}, this.checked)">
-                        <div class="chat-participant-details">
-                            <span class="chat-participant-name">${escapeHtml(user.name || user.username || 'Без имени')}</span>
-                            <span class="chat-participant-meta">${escapeHtml(`${user.username} • ${ROLE_LABELS[user.role] || user.role || '—'}`)}</span>
-                        </div>
-                    </label>
-                `;
-            }).join('');
-        } catch (error) {
-            console.error('Load users error:', error);
-            document.getElementById('participantsList').innerHTML = '<p style="color: #e53e3e;">Ошибка загрузки пользователей</p>';
         }
-}
 
-function toggleParticipant(userId, isSelected) {
-        if (isSelected) {
-            selectedParticipants.add(userId);
+        const initialisePermissionsMatrix = () => renderPermissionsMatrix(window.PERMISSIONS_MATRIX || PERMISSIONS_MATRIX);
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initialisePermissionsMatrix, { once: true });
         } else {
-            selectedParticipants.delete(userId);
+            initialisePermissionsMatrix();
         }
+
+        // ========== TOAST ==========
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // ========== LOGOUT ==========
+        function logout() {
+            if (confirm('Logout?')) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = '/';
+            }
+        }
+
+        // ========== INIT ==========
+        loadDashboard();
+    
+
+// ========== МОДАЛЬНОЕ ОКНО: СОЗДАТЬ ЧАТ ==========
+let selectedParticipants = new Set();
+
+async function showCreateChatModal() {
+    selectedParticipants.clear();
+    const typeSelect = document.getElementById('newChatType');
+    if (typeSelect) {
+        typeSelect.value = 'group';
+        handleChatTypeChange();
+    }
+
+    const searchInput = document.getElementById('participantsSearch');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
+    openModalElement(document.getElementById('createChatModal'), { focusSelector: '#participantsSearch' });
+
+    await loadUsersForChat();
 }
 
-function filterParticipants() {
-        const searchInput = document.getElementById('participantsSearch');
-        const container = document.getElementById('participantsList');
+function closeCreateChatModal() {
+    const modal = document.getElementById('createChatModal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        restoreModalFocus(modal);
+    }
 
+    const form = document.getElementById('createChatForm');
+    if (form) {
+        form.reset();
+    }
+
+    const participantList = document.getElementById('participantsList');
+    if (participantList) {
+        participantList.innerHTML = '<p class="chat-participants-empty">Выберите участников</p>';
+    }
+
+    selectedParticipants.clear();
+}
+
+function handleChatTypeChange() {
+    const typeSelect = document.getElementById('newChatType');
+    const deptGroup = document.getElementById('chatDepartmentGroup');
+
+    if (!typeSelect || !deptGroup) {
+        return;
+    }
+
+    const type = typeSelect.value;
+
+    if (type === 'department') {
+        deptGroup.style.display = 'block';
+    } else {
+        deptGroup.style.display = 'none';
+    }
+}
+
+async function loadUsersForChat() {
+    try {
+        const response = await fetch(`${API_URL}/users`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        const container = document.getElementById('participantsList');
         if (!container) {
             return;
         }
 
-        const searchValue = searchInput && typeof searchInput.value === 'string' ? searchInput.value : '';
-        const term = searchValue.trim().toLowerCase();
-        const items = container.querySelectorAll('[data-filter-value]');
+        container.innerHTML = data.users.map(user => {
+            const descriptor = `${(user.name || '').toLowerCase()} ${(user.username || '').toLowerCase()}`.trim();
+            const checked = selectedParticipants.has(user.id) ? 'checked' : '';
+            return `
+                <label class="chat-participant-select" data-filter-value="${escapeHtml(descriptor)}">
+                    <input type="checkbox" value="${user.id}" ${checked} onchange="toggleParticipant(${user.id}, this.checked)">
+                    <div class="chat-participant-details">
+                        <span class="chat-participant-name">${escapeHtml(user.name || user.username || 'Без имени')}</span>
+                        <span class="chat-participant-meta">${escapeHtml(`${user.username} • ${ROLE_LABELS[user.role] || user.role || '—'}`)}</span>
+                    </div>
+                </label>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Load users error:', error);
+        document.getElementById('participantsList').innerHTML = '<p style="color: #e53e3e;">Ошибка загрузки пользователей</p>';
+    }
+}
 
-        items.forEach((item) => {
-            const value = item.getAttribute('data-filter-value') || '';
-            item.style.display = !term || value.includes(term) ? '' : 'none';
-        });
+function toggleParticipant(userId, isSelected) {
+    if (isSelected) {
+        selectedParticipants.add(userId);
+    } else {
+        selectedParticipants.delete(userId);
+    }
+
+    const searchValue = searchInput && typeof searchInput.value === 'string' ? searchInput.value : '';
+    const term = searchValue.trim().toLowerCase();
+    const items = container.querySelectorAll('[data-filter-value]');
+
+    items.forEach((item) => {
+        const value = item.getAttribute('data-filter-value') || '';
+        item.style.display = !term || value.includes(term) ? '' : 'none';
+    });
+}
+
+function filterParticipants() {
+    const searchInput = document.getElementById('participantsSearch');
+    const container = document.getElementById('participantsList');
+
+    if (!container) {
+        return;
+    }
+
+    const searchValue = searchInput && typeof searchInput.value === 'string' ? searchInput.value : '';
+    const term = searchValue.trim().toLowerCase();
+    const items = container.querySelectorAll('[data-filter-value]');
+
+    items.forEach((item) => {
+        const value = item.getAttribute('data-filter-value') || '';
+        item.style.display = !term || value.includes(term) ? '' : 'none';
+    });
 }
 
 async function createNewChat() {
-        const name = document.getElementById('newChatName').value.trim();
-        const type = document.getElementById('newChatType').value;
-        const department = type === 'department' ? document.getElementById('newChatDepartment').value : null;
+    const name = document.getElementById('newChatName').value.trim();
+    const type = document.getElementById('newChatType').value;
+    const department = type === 'department' ? document.getElementById('newChatDepartment').value : null;
+    
+    if (!name) {
+        alert('Введите название чата');
+        return;
+    }
+    
+    if (selectedParticipants.size === 0) {
+        alert('Выберите хотя бы одного участника');
+        return;
+    }
+    
+    if (type === 'department' && !department) {
+        alert('Выберите отдел');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/chats/group`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: name,
+                type: type,
+                department: department,
+                participantIds: Array.from(selectedParticipants)
+            })
+        });
         
-        if (!name) {
-            alert('Введите название чата');
-            return;
-        }
+        const data = await response.json();
         
-        if (selectedParticipants.size === 0) {
-            alert('Выберите хотя бы одного участника');
-            return;
+        if (response.ok) {
+            alert('Чат успешно создан!');
+            closeCreateChatModal();
+            loadChats();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Не удалось создать чат'));
         }
-        
-        if (type === 'department' && !department) {
-            alert('Выберите отдел');
-            return;
-        }
-        
-        try {
-            const response = await fetch(`${API_URL}/chats/group`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    name: name,
-                    type: type,
-                    department: department,
-                    participantIds: Array.from(selectedParticipants)
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (response.ok) {
-                alert('Чат успешно создан!');
-                closeCreateChatModal();
-                loadChats();
-            } else {
-                alert('Ошибка: ' + (data.error || 'Не удалось создать чат'));
-            }
-        } catch (error) {
-            console.error('Create chat error:', error);
-            alert('Ошибка создания чата');
-        }
+    } catch (error) {
+        console.error('Create chat error:', error);
+        alert('Ошибка создания чата');
+    }
 }
 
 // ========== МОДАЛЬНОЕ ОКНО: СОЗДАТЬ ОТДЕЛ ==========
 async function showCreateDepartmentModal() {
-        openModalElement(document.getElementById('createDepartmentModal'), { focusSelector: '#newDeptName' });
-        await loadHeadsForDepartment();
+    openModalElement(document.getElementById('createDepartmentModal'), { focusSelector: '#newDeptName' });
+    await loadHeadsForDepartment();
 }
 
 function closeCreateDepartmentModal() {
-        const modal = document.getElementById('createDepartmentModal');
-        if (modal) {
-            modal.classList.remove('show');
-            modal.style.display = 'none';
-            restoreModalFocus(modal);
-        }
-        document.getElementById('newDeptName').value = '';
-        document.getElementById('newDeptDescription').value = '';
-        document.getElementById('newDeptHead').value = '';
+    const modal = document.getElementById('createDepartmentModal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        restoreModalFocus(modal);
+    }
+    document.getElementById('newDeptName').value = '';
+    document.getElementById('newDeptDescription').value = '';
+    document.getElementById('newDeptHead').value = '';
 }
 
 async function loadHeadsForDepartment() {
-        try {
-            const response = await fetch(`${API_URL}/users`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await response.json();
-            
-            const select = document.getElementById('newDeptHead');
-            const heads = data.users.filter(u => u.role === 'rop' || u.role === 'admin');
-            
-            select.innerHTML = '<option value="">Выберите руководителя</option>' +
-                heads.map(user => `<option value="${user.id}">${user.name} (${user.username})</option>`).join('');
-        } catch (error) {
-            console.error('Load heads error:', error);
-        }
+    try {
+        const response = await fetch(`${API_URL}/users`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        const select = document.getElementById('newDeptHead');
+        const heads = data.users.filter(u => u.role === 'rop' || u.role === 'admin');
+        
+        select.innerHTML = '<option value="">Выберите руководителя</option>' +
+            heads.map(user => `<option value="${user.id}">${user.name} (${user.username})</option>`).join('');
+    } catch (error) {
+        console.error('Load heads error:', error);
+    }
 }
 
 async function createNewDepartment() {
-        const name = document.getElementById('newDeptName').value.trim();
-        const description = document.getElementById('newDeptDescription').value.trim();
-        const headId = document.getElementById('newDeptHead').value;
+    const name = document.getElementById('newDeptName').value.trim();
+    const description = document.getElementById('newDeptDescription').value.trim();
+    const headId = document.getElementById('newDeptHead').value;
 
-        if (!name) {
-            alert('Введите название отдела');
-            return;
-        }
+    if (!name) {
+        alert('Введите название отдела');
+        return;
+    }
+    
+    try {
+        // Создаем чат отдела
+        const response = await fetch(`${API_URL}/chats/group`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: `${name} отдел`,
+                type: 'department',
+                department: name,
+                participantIds: headId ? [parseInt(headId)] : []
+            })
+        });
         
-        try {
-            // Создаем чат отдела
-            const response = await fetch(`${API_URL}/chats/group`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    name: `${name} отдел`,
-                    type: 'department',
-                    department: name,
-                    participantIds: headId ? [parseInt(headId)] : []
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (response.ok) {
-                alert(`Отдел "${name}" успешно создан!`);
-                closeCreateDepartmentModal();
-                loadDepartments();
-            } else {
-                alert('Ошибка: ' + (data.error || 'Не удалось создать отдел'));
-            }
-        } catch (error) {
-            console.error('Create department error:', error);
-            alert('Ошибка создания отдела');
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert(`Отдел "${name}" успешно создан!`);
+            closeCreateDepartmentModal();
+            loadDepartments();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Не удалось создать отдел'));
         }
+    } catch (error) {
+        console.error('Create department error:', error);
+        alert('Ошибка создания отдела');
+    }
 }
 
 function isModalVisible(modal) {
-        if (!modal) {
-            return false;
-        }
+    if (!modal) {
+        return false;
+    }
 
-        if (modal.classList.contains('show')) {
-            return true;
-        }
+    if (modal.classList.contains('show')) {
+        return true;
+    }
 
-        const display = modal.style.display || '';
-        return display !== '' && display !== 'none';
+    const display = modal.style.display || '';
+    return display !== '' && display !== 'none';
 }
 
 function closeModalElement(modal) {
-        if (!modal) {
-            return;
-        }
+    if (!modal) {
+        return;
+    }
 
-        switch (modal.id) {
-            case 'createUserModal':
-            case 'editUserModal':
-                closeModal(modal.id);
-                break;
-            case 'createChatModal':
-                closeCreateChatModal();
-                break;
-            case 'editChatModal':
-                closeEditChatModal();
-                break;
-            case 'createDepartmentModal':
-                closeCreateDepartmentModal();
-                break;
-            default:
-                modal.classList.remove('show');
-                modal.style.display = 'none';
-                restoreModalFocus(modal);
-                break;
-        }
+    switch (modal.id) {
+        case 'createUserModal':
+        case 'editUserModal':
+            closeModal(modal.id);
+            break;
+        case 'createChatModal':
+            closeCreateChatModal();
+            break;
+        case 'editChatModal':
+            closeEditChatModal();
+            break;
+        case 'createDepartmentModal':
+            closeCreateDepartmentModal();
+            break;
+        default:
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+            restoreModalFocus(modal);
+            break;
+    }
 }
 
 function setupModalAccessibility() {
-        const modals = Array.from(document.querySelectorAll('.modal'));
+    const modals = Array.from(document.querySelectorAll('.modal'));
 
-        modals.forEach((modal) => {
-            modal.setAttribute('role', modal.getAttribute('role') || 'dialog');
-            modal.setAttribute('aria-modal', 'true');
-            modal.addEventListener('click', (event) => {
-                if (event.target === modal) {
-                    closeModalElement(modal);
-                }
-            });
-        });
-
-        document.addEventListener('keydown', (event) => {
-            if (event.key !== 'Escape') {
-                return;
+    modals.forEach((modal) => {
+        modal.setAttribute('role', modal.getAttribute('role') || 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModalElement(modal);
             }
-
-            const openModals = Array.from(document.querySelectorAll('.modal')).filter(isModalVisible);
-            if (!openModals.length) {
-                return;
-            }
-
-            event.preventDefault();
-            const topModal = openModals[openModals.length - 1];
-            closeModalElement(topModal);
         });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+            return;
+        }
+
+        const openModals = Array.from(document.querySelectorAll('.modal')).filter(isModalVisible);
+        if (!openModals.length) {
+            return;
+        }
+
+        event.preventDefault();
+        const topModal = openModals[openModals.length - 1];
+        closeModalElement(topModal);
+    });
 }
 
 setupModalAccessibility();
@@ -2737,150 +3869,150 @@ setupModalAccessibility();
 
 
 
-            // ========== CHAT MANAGEMENT ==========
-            async function deleteChat(chatId) {
-                if (!confirm('Удалить чат?')) return;
-                try {
-                    const res = await fetch(`${API_URL}/admin/chats/${chatId}`, {
-                        method: 'DELETE',
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (res.ok) {
-                        showToast('Чат удалён', 'success');
-                        await loadChats();
-                    } else {
-                        const err = await res.json().catch(() => ({}));
-                        showToast(err.error || 'Ошибка удаления чата', 'error');
-                    }
-                } catch (err) {
-                    console.error('[deleteChat] error:', err);
-                    showToast('Ошибка удаления чата', 'error');
+        // ========== CHAT MANAGEMENT ==========
+        async function deleteChat(chatId) {
+            if (!confirm('Удалить чат?')) return;
+            try {
+                const res = await fetch(`${API_URL}/admin/chats/${chatId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    showToast('Чат удалён', 'success');
+                    await loadChats();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showToast(err.error || 'Ошибка удаления чата', 'error');
                 }
+            } catch (err) {
+                console.error('[deleteChat] error:', err);
+                showToast('Ошибка удаления чата', 'error');
+            }
+        }
+
+        function resetEditChatState() {
+            editChatState = {
+                chatId: null,
+                chat: null,
+                participants: [],
+                availableUsers: [],
+                pendingAdditions: new Set(),
+                filter: ''
+            };
+
+            if (currentParticipantsList) {
+                currentParticipantsList.innerHTML = '<p class="chat-participants-empty">Выберите чат для редактирования</p>';
             }
 
-            function resetEditChatState() {
-                editChatState = {
-                    chatId: null,
-                    chat: null,
-                    participants: [],
-                    availableUsers: [],
-                    pendingAdditions: new Set(),
-                    filter: ''
-                };
-
-                if (currentParticipantsList) {
-                    currentParticipantsList.innerHTML = '<p class="chat-participants-empty">Выберите чат для редактирования</p>';
-                }
-
-                if (availableParticipantsList) {
-                    availableParticipantsList.innerHTML = '<p class="chat-participants-empty">Нет доступных пользователей</p>';
-                }
-
-                if (editParticipantsSearchInput) {
-                    editParticipantsSearchInput.value = '';
-                }
-
-                if (editChatNameInput) {
-                    editChatNameInput.value = '';
-                }
-
-                if (editChatIdInput) {
-                    editChatIdInput.value = '';
-                }
+            if (availableParticipantsList) {
+                availableParticipantsList.innerHTML = '<p class="chat-participants-empty">Нет доступных пользователей</p>';
             }
 
-            function closeEditChatModal() {
-                if (editChatModal) {
-                    editChatModal.classList.remove('show');
-                    editChatModal.style.display = 'none';
-                    restoreModalFocus(editChatModal);
-                }
-                resetEditChatState();
+            if (editParticipantsSearchInput) {
+                editParticipantsSearchInput.value = '';
             }
 
-            async function ensureUsersCacheLoaded() {
-                if (usersCache.length > 0) {
-                    return usersCache;
-                }
+            if (editChatNameInput) {
+                editChatNameInput.value = '';
+            }
 
-                try {
-                    const res = await fetch(`${API_URL}/users`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (!res.ok) {
-                        throw new Error(`Status ${res.status}`);
-                    }
-                    const data = await res.json();
-                    usersCache = Array.isArray(data.users) ? data.users : [];
-                } catch (error) {
-                    console.error('[ensureUsersCacheLoaded] error:', error);
-                    usersCache = [];
-                }
+            if (editChatIdInput) {
+                editChatIdInput.value = '';
+            }
+        }
 
+        function closeEditChatModal() {
+            if (editChatModal) {
+                editChatModal.classList.remove('show');
+                editChatModal.style.display = 'none';
+                restoreModalFocus(editChatModal);
+            }
+            resetEditChatState();
+        }
+
+        async function ensureUsersCacheLoaded() {
+            if (usersCache.length > 0) {
                 return usersCache;
             }
 
-            function applyChatHeaderState() {
-                const chat = editChatState.chat || null;
-                if (editChatNameInput) {
-                    editChatNameInput.value = chat && chat.name ? chat.name : '';
+            try {
+                const res = await fetch(`${API_URL}/users`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`Status ${res.status}`);
                 }
+                const data = await res.json();
+                usersCache = Array.isArray(data.users) ? data.users : [];
+            } catch (error) {
+                console.error('[ensureUsersCacheLoaded] error:', error);
+                usersCache = [];
+            }
 
-                if (editChatTypeSelect) {
-                    const type = chat && chat.type ? chat.type : 'group';
-                    editChatTypeSelect.value = type;
-                }
+            return usersCache;
+        }
 
-                if (editChatDepartmentGroup) {
-                    if (chat && chat.type === 'department') {
-                        editChatDepartmentGroup.style.display = '';
-                        if (editChatDepartmentInput) {
-                            editChatDepartmentInput.value = chat && chat.department ? chat.department : '';
-                        }
-                    } else {
-                        editChatDepartmentGroup.style.display = 'none';
-                        if (editChatDepartmentInput) {
-                            editChatDepartmentInput.value = '';
-                        }
+        function applyChatHeaderState() {
+            const chat = editChatState.chat || null;
+            if (editChatNameInput) {
+                editChatNameInput.value = chat && chat.name ? chat.name : '';
+            }
+
+            if (editChatTypeSelect) {
+                const type = chat && chat.type ? chat.type : 'group';
+                editChatTypeSelect.value = type;
+            }
+
+            if (editChatDepartmentGroup) {
+                if (chat && chat.type === 'department') {
+                    editChatDepartmentGroup.style.display = '';
+                    if (editChatDepartmentInput) {
+                        editChatDepartmentInput.value = chat && chat.department ? chat.department : '';
+                    }
+                } else {
+                    editChatDepartmentGroup.style.display = 'none';
+                    if (editChatDepartmentInput) {
+                        editChatDepartmentInput.value = '';
                     }
                 }
             }
+        }
 
-            function refreshEditChatAvailableUsers() {
-                const participantIds = new Set(editChatState.participants.map(p => p.id));
-                editChatState.availableUsers = usersCache.filter(user => !participantIds.has(user.id));
+        function refreshEditChatAvailableUsers() {
+            const participantIds = new Set(editChatState.participants.map(p => p.id));
+            editChatState.availableUsers = usersCache.filter(user => !participantIds.has(user.id));
+        }
+
+        function renderCurrentParticipants() {
+            if (!currentParticipantsList) {
+                return;
             }
 
-            function renderCurrentParticipants() {
-                if (!currentParticipantsList) {
-                    return;
-                }
+            if (!editChatState.participants.length) {
+                currentParticipantsList.innerHTML = '<p class="chat-participants-empty">Нет участников</p>';
+                return;
+            }
 
-                if (!editChatState.participants.length) {
-                    currentParticipantsList.innerHTML = '<p class="chat-participants-empty">Нет участников</p>';
-                    return;
-                }
+            const currentUserId = currentUser ? currentUser.id : undefined;
 
-                const currentUserId = currentUser ? currentUser.id : undefined;
+            currentParticipantsList.innerHTML = editChatState.participants.map(participant => {
+                const roleLabel = ROLE_LABELS[participant.user_role] || participant.user_role || '—';
+                const info = [participant.username, roleLabel].filter(Boolean).join(' • ');
+                const disableRemoval = participant.id === currentUserId;
+                const actions = disableRemoval
+                    ? '<span class="chat-participant-badge">Вы</span>'
+                    : `<button type="button" class="btn btn-sm btn-danger" onclick="removeParticipantFromChat(${editChatState.chatId}, ${participant.id})">Удалить</button>`;
 
-                currentParticipantsList.innerHTML = editChatState.participants.map(participant => {
-                    const roleLabel = ROLE_LABELS[participant.user_role] || participant.user_role || '—';
-                    const info = [participant.username, roleLabel].filter(Boolean).join(' • ');
-                    const disableRemoval = participant.id === currentUserId;
-                    const actions = disableRemoval
-                        ? '<span class="chat-participant-badge">Вы</span>'
-                        : `<button type="button" class="btn btn-sm btn-danger" onclick="removeParticipantFromChat(${editChatState.chatId}, ${participant.id})">Удалить</button>`;
-
-                    return `
-                        <div class="chat-participant-item">
-                            <div class="chat-participant-details">
-                                <span class="chat-participant-name">${escapeHtml(participant.name || participant.username || 'Без имени')}</span>
-                                <span class="chat-participant-meta">${escapeHtml(info)}</span>
-                            </div>
-                            <div class="chat-participant-actions">${actions}</div>
+                return `
+                    <div class="chat-participant-item">
+                        <div class="chat-participant-details">
+                            <span class="chat-participant-name">${escapeHtml(participant.name || participant.username || 'Без имени')}</span>
+                            <span class="chat-participant-meta">${escapeHtml(info)}</span>
                         </div>
-                    `;
-                }).join('');
+                        <div class="chat-participant-actions">${actions}</div>
+                    </div>
+                `;
+            }).join('');
         }
 
         function renderAvailableParticipants() {
@@ -3237,271 +4369,6 @@ setupModalAccessibility();
                 }
             } catch (err) {
                 showToast('Ошибка', 'error');
-            }
-        }
-
-        // ========== PERMISSIONS MANAGEMENT ==========
-        let permissionsData = null;
-
-        async function loadPermissions() {
-            try {
-                // Load messaging permissions
-                console.log('[loadPermissions] Fetching from:', `${API_URL}/permissions`);
-                const res = await fetch(`${API_URL}/permissions`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                console.log('[loadPermissions] Response status:', res.status);
-
-                if (!res.ok) {
-                    const errorData = await res.json().catch(() => ({}));
-                    console.error('[loadPermissions] Error:', res.status, errorData);
-                    throw new Error(`Failed to load permissions: ${errorData.error || res.statusText}`);
-                }
-
-                permissionsData = await res.json();
-                console.log('[loadPermissions] Received data:', permissionsData);
-
-                if (!permissionsData) {
-                    throw new Error('Permissions data is null or undefined');
-                }
-
-                renderPermissionsMatrix(permissionsData);
-
-                // Load general permissions
-                await loadGeneralPermissions();
-            } catch (err) {
-                console.error('Load permissions error:', err);
-                const tbody = document.getElementById('permissionsMatrixBody');
-                if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #f56565;">Ошибка загрузки прав доступа</td></tr>';
-                }
-            }
-        }
-
-        function renderPermissionsMatrix(data) {
-            const tbody = document.getElementById('permissionsMatrixBody');
-            if (!tbody) {
-                console.error('[renderPermissionsMatrix] Element permissionsMatrixBody not found');
-                return;
-            }
-
-            if (!data || !data.matrix || !data.roles) {
-                console.error('[renderPermissionsMatrix] Invalid data:', data);
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #f56565;">Ошибка: данные не получены</td></tr>';
-                return;
-            }
-
-            const { matrix, roles } = data;
-            const roleLabels = {
-                'admin': 'Админ',
-                'assistant': 'Ассистент',
-                'rop': 'РОП',
-                'operator': 'Оператор',
-                'employee': 'Сотрудник'
-            };
-
-            let html = '';
-
-            // Data rows
-            roles.forEach(fromRole => {
-                html += `<tr><td style="padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; font-weight: 600;">
-                    <span class="badge badge-${fromRole}">${roleLabels[fromRole]}</span>
-                </td>`;
-
-                roles.forEach(toRole => {
-                    const canSend = matrix[fromRole] && matrix[fromRole][toRole] !== undefined
-                        ? matrix[fromRole][toRole]
-                        : true;
-
-                    html += `<td style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">
-                        <input type="checkbox"
-                               data-from="${fromRole}"
-                               data-to="${toRole}"
-                               ${canSend ? 'checked' : ''}
-                               style="width: 20px; height: 20px; cursor: pointer;"
-                               onchange="markPermissionChanged(this)">
-                    </td>`;
-                });
-
-                html += '</tr>';
-            });
-
-            tbody.innerHTML = html;
-        }
-
-        function markPermissionChanged(checkbox) {
-            checkbox.style.outline = '2px solid #4299e1';
-        }
-
-        async function resetPermissions() {
-            if (!confirm('Вы уверены, что хотите сбросить все права доступа к настройкам по умолчанию?')) {
-                return;
-            }
-
-            try {
-                const res = await fetch(`${API_URL}/permissions/reset`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (res.ok) {
-                    showToast('Права доступа сброшены к настройкам по умолчанию', 'success');
-                    await loadPermissions();
-                } else {
-                    const err = await res.json();
-                    showToast(err.error || 'Ошибка сброса прав', 'error');
-                }
-            } catch (err) {
-                console.error('Reset permissions error:', err);
-                showToast('Ошибка сброса прав доступа', 'error');
-            }
-        }
-
-        // ========== GENERAL PERMISSIONS MANAGEMENT ==========
-        let generalPermissionsData = null;
-
-        async function loadGeneralPermissions() {
-            try {
-                const res = await fetch(`${API_URL}/permissions/general`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (!res.ok) {
-                    throw new Error('Failed to load general permissions');
-                }
-
-                generalPermissionsData = await res.json();
-                renderGeneralPermissionsMatrix(generalPermissionsData);
-            } catch (err) {
-                console.error('Load general permissions error:', err);
-                document.getElementById('generalPermissionsMatrix').innerHTML =
-                    '<p style="color: #f56565; text-align: center;">Ошибка загрузки общих прав</p>';
-            }
-        }
-
-        function renderGeneralPermissionsMatrix(data) {
-            const { permissions, categories, roles } = data;
-            const roleLabels = {
-                'admin': 'Админ',
-                'assistant': 'Ассистент',
-                'rop': 'РОП',
-                'operator': 'Оператор',
-                'employee': 'Сотрудник'
-            };
-
-            let html = '';
-
-            // Render each category
-            Object.keys(categories).forEach(categoryKey => {
-                const category = categories[categoryKey];
-
-                html += `<div style="margin-bottom: 30px;">`;
-                html += `<h4 style="margin-bottom: 15px; color: #2d3748; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0;">${category.label}</h4>`;
-                html += `<table style="border-collapse: collapse; width: 100%;">`;
-
-                // Header
-                html += '<thead><tr><th style="padding: 10px; background: #f7fafc; border: 1px solid #e2e8f0;">Право</th>';
-                roles.forEach(role => {
-                    html += `<th style="padding: 10px; background: #f7fafc; border: 1px solid #e2e8f0; text-align: center;">
-                        <span class="badge badge-${role}">${roleLabels[role]}</span>
-                    </th>`;
-                });
-                html += '</tr></thead>';
-
-                // Permission rows
-                html += '<tbody>';
-                category.permissions.forEach(perm => {
-                    html += `<tr><td style="padding: 10px; border: 1px solid #e2e8f0;">${perm.label}</td>`;
-
-                    roles.forEach(role => {
-                        const canPerform = permissions[role] && permissions[role][perm.key] !== undefined
-                            ? permissions[role][perm.key]
-                            : false;
-
-                        html += `<td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center;">
-                            <input type="checkbox"
-                                   data-role="${role}"
-                                   data-permission="${perm.key}"
-                                   ${canPerform ? 'checked' : ''}
-                                   style="width: 18px; height: 18px; cursor: pointer;"
-                                   onchange="markGeneralPermissionChanged(this)">
-                        </td>`;
-                    });
-
-                    html += '</tr>';
-                });
-                html += '</tbody>';
-                html += '</table>';
-                html += '</div>';
-            });
-
-            document.getElementById('generalPermissionsMatrix').innerHTML = html;
-        }
-
-        function markGeneralPermissionChanged(checkbox) {
-            checkbox.style.outline = '2px solid #4299e1';
-        }
-
-        async function savePermissions() {
-            try {
-                // Save messaging permissions
-                const msgCheckboxes = document.querySelectorAll('#permissionsMatrix input[type="checkbox"]');
-                const msgUpdates = [];
-
-                msgCheckboxes.forEach(cb => {
-                    msgUpdates.push({
-                        fromRole: cb.dataset.from,
-                        toRole: cb.dataset.to,
-                        canSend: cb.checked
-                    });
-                });
-
-                const msgRes = await fetch(`${API_URL}/permissions/batch`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ permissions: msgUpdates })
-                });
-
-                // Save general permissions
-                const genCheckboxes = document.querySelectorAll('#generalPermissionsMatrix input[type="checkbox"]');
-                const genUpdates = [];
-
-                genCheckboxes.forEach(cb => {
-                    genUpdates.push({
-                        role: cb.dataset.role,
-                        permission: cb.dataset.permission,
-                        canPerform: cb.checked
-                    });
-                });
-
-                const genRes = await fetch(`${API_URL}/permissions/general/batch`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ updates: genUpdates })
-                });
-
-                if (msgRes.ok && genRes.ok) {
-                    showToast('Все права доступа сохранены успешно!', 'success');
-                    // Remove outlines
-                    msgCheckboxes.forEach(cb => cb.style.outline = 'none');
-                    genCheckboxes.forEach(cb => cb.style.outline = 'none');
-                    await loadPermissions();
-                } else {
-                    showToast('Ошибка сохранения некоторых прав', 'error');
-                }
-            } catch (err) {
-                console.error('Save permissions error:', err);
-                showToast('Ошибка сохранения прав доступа', 'error');
             }
         }
 

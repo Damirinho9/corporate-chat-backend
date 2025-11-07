@@ -325,8 +325,10 @@ const editMessage = async (req, res) => {
         const { content } = req.body;
         const userId = req.user.id;
 
-        if (!content) {
-            return res.status(400).json({ 
+        const trimmedContent = typeof content === 'string' ? content.trim() : '';
+
+        if (!trimmedContent) {
+            return res.status(400).json({
                 error: 'Content is required',
                 code: 'EMPTY_CONTENT'
             });
@@ -334,30 +336,51 @@ const editMessage = async (req, res) => {
 
         // Check ownership
         const messageCheck = await query(
-            'SELECT user_id, chat_id FROM messages WHERE id = $1',
+            'SELECT user_id, chat_id, created_at FROM messages WHERE id = $1',
             [messageId]
         );
 
         if (messageCheck.rows.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 error: 'Message not found',
                 code: 'MESSAGE_NOT_FOUND'
             });
         }
 
-        if (messageCheck.rows[0].user_id !== userId && req.user.role !== 'admin') {
-            return res.status(403).json({ 
+        const messageRow = messageCheck.rows[0];
+        const isOwner = messageRow.user_id === userId;
+        const isAdmin = req.user.role === 'admin';
+
+        if (!isOwner && !isAdmin) {
+            return res.status(403).json({
                 error: 'Cannot edit this message',
                 code: 'EDIT_DENIED'
             });
         }
 
+        if (isOwner && !isAdmin) {
+            const createdAt = messageRow.created_at ? new Date(messageRow.created_at) : null;
+            const createdAtTime = createdAt && !Number.isNaN(createdAt.getTime())
+                ? createdAt.getTime()
+                : null;
+
+            const editWindowMs = 5 * 60 * 1000;
+
+            if (!createdAtTime || (Date.now() - createdAtTime) > editWindowMs) {
+                return res.status(403).json({
+                    error: 'Message can only be edited within 5 minutes of sending',
+                    code: 'EDIT_WINDOW_EXPIRED',
+                    metadata: { windowMinutes: 5 }
+                });
+            }
+        }
+
         // Update message
         await query(
-            `UPDATE messages 
+            `UPDATE messages
              SET content = $1, is_edited = true, updated_at = CURRENT_TIMESTAMP
              WHERE id = $2`,
-            [content, messageId]
+            [trimmedContent, messageId]
         );
 
         res.json({ message: 'Message edited successfully' });
@@ -686,7 +709,6 @@ const searchMessages = async (req, res) => {
 };
 
 const getDeletionHistory = async (req, res) => {
-    console.log('[getDeletionHistory] Request received from user:', req.user.id, req.user.role);
     try {
         const { limit = 50, offset = 0, chatId } = req.query;
         const parsedLimitRaw = parseInt(limit, 10);
@@ -694,8 +716,6 @@ const getDeletionHistory = async (req, res) => {
         const parsedLimit = Number.isNaN(parsedLimitRaw) ? 50 : Math.min(Math.max(parsedLimitRaw, 1), 500);
         const parsedOffset = Number.isNaN(parsedOffsetRaw) ? 0 : Math.max(parsedOffsetRaw, 0);
         const parsedChatId = chatId ? Number(chatId) : null;
-
-        console.log('[getDeletionHistory] Params:', { parsedLimit, parsedOffset, parsedChatId });
 
         if (parsedChatId && Number.isNaN(parsedChatId)) {
             return res.status(400).json({
@@ -705,12 +725,16 @@ const getDeletionHistory = async (req, res) => {
         }
 
         const params = [];
-        const placeholders = () => `$${params.length + 1}`;
-        const whereClauses = [];
+        const conditions = [];
+        let pendingDepartmentFilter = null;
+
+        const addCondition = (clause, value) => {
+            params.push(value);
+            conditions.push(`${clause} $${params.length}`);
+        };
 
         if (parsedChatId) {
-            whereClauses.push(`h.chat_id = ${placeholders()}`);
-            params.push(parsedChatId);
+            addCondition('h.chat_id =', parsedChatId);
         }
 
         if (req.user.role === 'rop') {
@@ -721,8 +745,7 @@ const getDeletionHistory = async (req, res) => {
                 });
             }
 
-            whereClauses.push(`COALESCE(c.department, h.chat_department) = ${placeholders()}`);
-            params.push(req.user.department);
+            pendingDepartmentFilter = req.user.department;
 
             if (parsedChatId) {
                 const chatCheck = await query(
@@ -741,52 +764,138 @@ const getDeletionHistory = async (req, res) => {
             }
         }
 
-        const limitPlaceholder = placeholders();
-        params.push(parsedLimit);
-        const offsetPlaceholder = placeholders();
-        params.push(parsedOffset);
+        const historyTableCheck = await query(
+            "SELECT to_regclass('public.message_deletion_history') AS table_name"
+        );
 
-        console.log('[getDeletionHistory] Query params:', params);
-        console.log('[getDeletionHistory] Where clauses:', whereClauses);
+        const tableExists = historyTableCheck.rows[0] && historyTableCheck.rows[0].table_name;
+
+        if (!tableExists) {
+            return res.json({ history: [], count: 0 });
+        }
+
+        const columnInfo = await query(`
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'message_deletion_history'
+        `);
+
+        const availableColumns = new Set(columnInfo.rows.map((row) => row.column_name));
+        const hasStoredChatDepartment = availableColumns.has('chat_department');
+
+        const chatColumnsInfo = await query(`
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'chats'
+        `);
+
+        const chatColumnSet = new Set(chatColumnsInfo.rows.map((row) => row.column_name));
+
+        const departmentExpressionForFilter = (() => {
+            if (chatColumnSet.has('department') && hasStoredChatDepartment) {
+                return 'COALESCE(c.department, h.chat_department)';
+            }
+            if (chatColumnSet.has('department')) {
+                return 'c.department';
+            }
+            if (hasStoredChatDepartment) {
+                return 'h.chat_department';
+            }
+            return null;
+        })();
+
+        if (pendingDepartmentFilter) {
+            if (departmentExpressionForFilter) {
+                addCondition(`${departmentExpressionForFilter} =`, pendingDepartmentFilter);
+            } else {
+                return res.status(403).json({
+                    error: 'Department filtering unavailable for this installation',
+                    code: 'DEPARTMENT_FILTER_UNAVAILABLE'
+                });
+            }
+        }
+
+        const limitIndex = params.push(parsedLimit);
+        const offsetIndex = params.push(parsedOffset);
+
+        const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        const storedOrNull = (columnName, castType) => (
+            availableColumns.has(columnName)
+                ? `h.${columnName}`
+                : `CAST(NULL AS ${castType})`
+        );
+
+        const chatNameExpr = chatColumnSet.has('name') ? 'c.name' : 'CAST(NULL AS TEXT)';
+        const chatTypeExpr = chatColumnSet.has('type') ? 'c.type' : "CAST('unknown' AS TEXT)";
+        const chatDepartmentExpr = chatColumnSet.has('department') ? 'c.department' : 'CAST(NULL AS TEXT)';
+
+        const selectFragments = [
+            'h.id',
+            'h.message_id',
+            'h.chat_id',
+            `${storedOrNull('deleted_message_user_id', 'INTEGER')} AS stored_deleted_message_user_id`,
+            `${storedOrNull('deleted_message_user_name', 'TEXT')} AS stored_deleted_message_user_name`,
+            'h.deleted_by_user_id',
+            'h.deleted_by_user_name',
+            'h.deleted_by_role',
+            'h.deletion_scope',
+            `${storedOrNull('original_content', 'TEXT')} AS stored_original_content`,
+            `${storedOrNull('file_id', 'INTEGER')} AS stored_file_id`,
+            `${storedOrNull('deleted_message_created_at', 'TIMESTAMP WITH TIME ZONE')} AS stored_deleted_message_created_at`,
+            `${storedOrNull('chat_name', 'TEXT')} AS stored_chat_name`,
+            `${storedOrNull('chat_type', 'TEXT')} AS stored_chat_type`,
+            `${storedOrNull('chat_department', 'TEXT')} AS stored_chat_department`,
+            'h.deleted_at',
+            `${chatNameExpr} AS chat_name_current`,
+            `${chatTypeExpr} AS chat_type_current`,
+            `${chatDepartmentExpr} AS chat_department_current`
+        ];
 
         const result = await query(
             `SELECT
-                h.id,
-                h.message_id,
-                h.chat_id,
-                COALESCE(c.name, h.chat_name) AS chat_name,
-                COALESCE(c.type::text, h.chat_type) AS chat_type,
-                COALESCE(c.department, h.chat_department) AS chat_department,
-                h.deleted_message_user_id,
-                h.deleted_message_user_name,
-                h.deleted_by_user_id,
-                h.deleted_by_user_name,
-                h.deleted_by_role,
-                h.deletion_scope,
-                h.original_content,
-                h.file_id,
-                h.deleted_message_created_at,
-                h.deleted_at
+                ${selectFragments.join(',\n                ')}
              FROM message_deletion_history h
              LEFT JOIN chats c ON c.id = h.chat_id
-             ${whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''}
+             ${whereClause}
              ORDER BY h.deleted_at DESC
-             LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`,
+             LIMIT $${limitIndex} OFFSET $${offsetIndex}`,
             params
         );
 
-        console.log('[getDeletionHistory] Query result:', result.rowCount, 'rows');
+        const history = result.rows.map((row) => ({
+            id: row.id,
+            message_id: row.message_id,
+            chat_id: row.chat_id,
+            chat_name: row.chat_name_current || row.stored_chat_name || null,
+            chat_type: row.chat_type_current || row.stored_chat_type || null,
+            chat_department: row.chat_department_current || row.stored_chat_department || null,
+            deleted_message_user_id: row.stored_deleted_message_user_id ?? null,
+            deleted_message_user_name: row.stored_deleted_message_user_name || null,
+            deleted_by_user_id: row.deleted_by_user_id,
+            deleted_by_user_name: row.deleted_by_user_name,
+            deleted_by_role: row.deleted_by_role,
+            deletion_scope: row.deletion_scope,
+            original_content: row.stored_original_content || null,
+            file_id: row.stored_file_id ?? null,
+            deleted_message_created_at: row.stored_deleted_message_created_at || null,
+            deleted_at: row.deleted_at
+        }));
+
         res.json({
-            history: result.rows,
-            count: result.rowCount
+            history,
+            count: history.length
         });
     } catch (error) {
-        console.error('[getDeletionHistory] ERROR:', error);
-        console.error('[getDeletionHistory] Stack:', error.stack);
+        if (error && (error.code === '42P01' || error.code === '42703')) { // undefined_table or undefined_column
+            console.warn('Deletion history table is missing, returning empty result');
+            return res.json({ history: [], count: 0 });
+        }
+
+        console.error('Get deletion history error:', error);
         res.status(500).json({
             error: 'Failed to fetch deletion history',
-            code: 'GET_DELETION_HISTORY_ERROR',
-            details: error.message
+            code: 'GET_DELETION_HISTORY_ERROR'
         });
     }
 };
