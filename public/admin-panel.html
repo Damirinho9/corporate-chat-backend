@@ -1592,10 +1592,21 @@ async function loadChats() {
 
                 const tbody = document.querySelector('#chatsTable tbody');
                 if (chatsCache.length > 0) {
-                    tbody.innerHTML = chatsCache.map(chat => `
+                    tbody.innerHTML = chatsCache.map(chat => {
+                        // For direct chats, show participant names instead of "Unnamed"
+                        let displayName = chat.name || 'Unnamed';
+                        if (chat.type === 'direct' && !chat.name) {
+                            if (chat.participants && Array.isArray(chat.participants) && chat.participants.length > 0) {
+                                displayName = '💬 ' + chat.participants.map(p => p.name).join(' ↔ ');
+                            } else {
+                                displayName = `💬 ЛС (ID: ${chat.id})`;
+                            }
+                        }
+
+                        return `
                         <tr>
                             <td>${chat.id}</td>
-                            <td>${chat.name || 'Unnamed'}</td>
+                            <td>${displayName}</td>
                             <td>${chat.type || 'N/A'}</td>
                             <td>${chat.department_name || 'N/A'}</td>
                             <td>${chat.participant_count || 0}</td>
@@ -1604,7 +1615,8 @@ async function loadChats() {
                                 <button class="btn-delete" onclick="deleteChat(${chat.id})">Удалить</button>
                             </td>
                         </tr>
-                    `).join('');
+                        `;
+                    }).join('');
                 } else {
                     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#a0aec0;">No chats found</td></tr>';
                 }
