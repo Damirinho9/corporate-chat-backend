@@ -1745,6 +1745,11 @@ async function loadChats() {
                 showToast('Ошибка добавления пользователя', 'error');
             }
         }
+    } catch (error) {
+        console.error('Create chat error:', error);
+        alert('Ошибка создания чата');
+    }
+}
 
         async function loadDeletionHistory() {
             const tbody = document.getElementById('deletionHistoryBody');
