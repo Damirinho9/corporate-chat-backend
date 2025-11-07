@@ -474,6 +474,13 @@ const addUserToDepartment = async (req, res) => {
             }
         }
 
+        // Создаём запись в departments если её нет (для legacy отделов)
+        await query(
+            `INSERT INTO departments (name) VALUES ($1)
+             ON CONFLICT (name) DO NOTHING`,
+            [departmentName]
+        );
+
         // Добавляем пользователя в отдел
         let updateQuery, updateParams;
         if (role) {
