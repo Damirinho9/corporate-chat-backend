@@ -340,7 +340,7 @@ router.post('/departments/:departmentName/users',
     [
         param('departmentName').trim().notEmpty(),
         body('userId').isInt(),
-        body('role').optional().isIn(['rop', 'operator', 'employee'])
+        body('role').optional().isIn(['rop', 'operator', 'employee', 'assistant'])
     ],
     validate,
     departmentController.addUserToDepartment
