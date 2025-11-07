@@ -280,6 +280,13 @@ const createDepartment = async (req, res) => {
         try {
             await client.query('BEGIN');
 
+            // Создаём запись в таблице departments
+            await client.query(
+                `INSERT INTO departments (name) VALUES ($1)
+                 ON CONFLICT (name) DO NOTHING`,
+                [trimmedName]
+            );
+
             // Создаём чат отдела заранее, чтобы гарантировать связь
             const chatResult = await client.query(
                 `INSERT INTO chats (name, type, department, created_by)
