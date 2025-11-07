@@ -72,7 +72,7 @@ const uploadFile = async (req, res) => {
 
 const getFile = async (req, res) => {
     try {
-        const { fileId } = req.params;
+        const fileId = req.params.id;
         const userId = req.user.id;
         
         const result = await query('SELECT * FROM files WHERE id = $1', [fileId]);
@@ -117,7 +117,7 @@ const getFile = async (req, res) => {
 
 const getFileThumbnail = async (req, res) => {
     try {
-        const { fileId } = req.params;
+        const fileId = req.params.id;
         const result = await query('SELECT * FROM files WHERE id = $1', [fileId]);
         
         if (result.rows.length === 0) {
@@ -146,7 +146,7 @@ const getFileThumbnail = async (req, res) => {
 
 const deleteFile = async (req, res) => {
     try {
-        const { fileId } = req.params;
+        const fileId = req.params.id;
         const userId = req.user.id;
         
         const result = await query('SELECT * FROM files WHERE id = $1', [fileId]);
