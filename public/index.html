@@ -2662,7 +2662,9 @@
                                 return;
                         }
 
-                        if (/ассист/i.test(chat.name || '')) {
+                        // Не захватываем department-type чаты в секцию ассистентов
+                        // чтобы они правильно отображались в своих отделах
+                        if (chat.type !== 'department' && /ассист/i.test(chat.name || '')) {
                                 assistants.push(chat);
                                 usedChatIds.add(chat.id);
                         }
@@ -2824,20 +2826,8 @@
                 }
 
                 if (activeSectionFilter === 'all' || activeSectionFilter === 'Ассистенты') {
-                        // Отображаем ассистентов из API контактов
-                        if (contacts.assistants && contacts.assistants.users && contacts.assistants.users.length > 0) {
-                                html += `<div class="chat-section">
-                                        <h4>Ассистенты</h4>
-                                        <ul>`;
-
-                                contacts.assistants.users.forEach(user => {
-                                        html += renderContactItem(user);
-                                });
-
-                                html += `</ul></div>`;
-                        }
-
-                        // Также показываем групповой чат ассистентов если есть
+                        // Убрали отдельную секцию "Ассистенты" с контактами, т.к. они уже показываются в отделе "Ассистенты"
+                        // Оставляем только групповые чаты ассистентов, которые не являются department-type
                         if (assistants.length > 0) {
                                 html += `<div class="chat-section">
                                         <h4>Ассистенты (Групповой чат)</h4>
