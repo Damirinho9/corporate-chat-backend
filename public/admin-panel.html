@@ -3974,8 +3974,11 @@ async function createNewDepartment() {
         alert('Введите название отдела');
         return;
     }
-    
+
     try {
+        // Если РОП не выбран, добавляем текущего админа как участника
+        const participantIds = headId ? [parseInt(headId)] : [currentUser.id];
+
         // Создаем чат отдела
         const response = await fetch(`${API_URL}/chats/group`, {
             method: 'POST',
@@ -3987,7 +3990,7 @@ async function createNewDepartment() {
                 name: `${name} отдел`,
                 type: 'department',
                 department: name,
-                participantIds: headId ? [parseInt(headId)] : []
+                participantIds: participantIds
             })
         });
         
