@@ -65,8 +65,8 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--bg-secondary);
             color: var(--text-primary);
-            height: var(--app-height);
-            min-height: 100vh;
+            height: 100vh;
+            height: 100dvh; /* Dynamic Viewport Height */
             overflow: hidden;
             transition: background 0.3s ease;
             max-width: 100vw;
@@ -218,8 +218,8 @@
             display: grid;
             grid-template-columns: minmax(280px, 350px) 1fr;
             width: 100vw;
-            height: var(--app-height);
-            min-height: 100vh;
+            height: 100vh;
+            height: 100dvh; /* Dynamic Viewport Height - учитывает клавиатуру */
             overflow: hidden;
         }
 
@@ -232,8 +232,8 @@
                 top: 0;
                 left: 0;
                 width: 100%;
-                height: var(--app-height);
-                min-height: 100vh;
+                height: 100vh;
+                height: 100dvh;
                 background: var(--bg-primary);
                 z-index: 20;
                 transition: transform 0.3s ease;
@@ -609,24 +609,51 @@
 
         @media (max-width: 600px) {
             /* Fix для мобильной клавиатуры */
+            html, body {
+                position: fixed;
+                overflow: hidden;
+                width: 100%;
+                height: 100vh;
+                height: 100dvh;
+            }
+
+            .chat-container {
+                height: 100vh;
+                height: 100dvh;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+            }
+
             .chat-header {
                 padding: 12px 16px;
                 position: fixed;
                 top: 0;
                 left: 0;
                 right: 0;
-                z-index: 10;
+                z-index: 100;
                 background: var(--bg-primary);
                 border-bottom: 1px solid var(--border);
             }
 
             .main-chat {
+                height: 100vh;
+                height: 100dvh;
                 padding-top: 60px; /* Высота header */
+                padding-bottom: 0;
+                display: flex;
+                flex-direction: column;
+                position: relative;
             }
 
             .messages-container {
-                padding: 12px 12px calc(12px + 140px); /* Увеличен отступ снизу */
-                min-height: calc(100vh - 200px); /* Минимальная высота */
+                flex: 1;
+                overflow-y: auto;
+                padding: 12px 12px calc(12px + 140px);
+                -webkit-overflow-scrolling: touch; /* Плавный скролл на iOS */
+                overscroll-behavior: contain; /* Предотвращает "bouncing" */
             }
 
             .chat-input-container {
@@ -635,10 +662,10 @@
                 left: 0;
                 right: 0;
                 padding: 12px 16px;
-                padding-bottom: calc(12px + var(--safe-area-bottom, 0px));
+                padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
                 background: var(--bg-primary);
                 border-top: 1px solid var(--border);
-                z-index: 10;
+                z-index: 100;
             }
 
             .chat-input {
@@ -649,11 +676,6 @@
             #messageInput {
                 font-size: 16px; /* Предотвращает автозум на iOS */
                 min-height: 42px;
-            }
-
-            /* Предотвращение прыжков при фокусе */
-            .main-chat.keyboard-open .messages-container {
-                max-height: calc(100vh - 200px);
             }
         }
 
@@ -1158,6 +1180,7 @@
             bottom: 0;
             z-index: 5;
             padding-bottom: calc(15px + var(--safe-area-bottom, 0px));
+            transition: transform 0.2s ease-out;
         }
 
         .chat-input-wrapper {
@@ -1644,11 +1667,43 @@
             refreshLayoutMetrics();
         }
 
+        // Улучшенная обработка клавиатуры для мобильных устройств
+        function handleKeyboardResize() {
+            if (window.innerWidth > 600) return; // Только для мобильных
+
+            const viewport = window.visualViewport;
+            if (!viewport) return;
+
+            const inputContainer = document.querySelector('.chat-input-container');
+            if (!inputContainer) return;
+
+            // Вычисляем сдвиг клавиатуры
+            const offsetTop = viewport.offsetTop;
+            const viewportHeight = viewport.height;
+
+            // Позиционируем input относительно видимой области
+            if (offsetTop > 0) {
+                inputContainer.style.transform = `translateY(${-offsetTop}px)`;
+            } else {
+                inputContainer.style.transform = 'translateY(0)';
+            }
+        }
+
         setAppHeight();
         window.addEventListener('resize', () => requestAnimationFrame(setAppHeight));
         window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 100));
-        window.visualViewport?.addEventListener('resize', setAppHeight);
-        window.visualViewport?.addEventListener('scroll', setAppHeight);
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                requestAnimationFrame(() => {
+                    setAppHeight();
+                    handleKeyboardResize();
+                });
+            });
+            window.visualViewport.addEventListener('scroll', () => {
+                requestAnimationFrame(handleKeyboardResize);
+            });
+        }
         const expandedDepartments = new Set();
         let selectedFiles = [];
         let replyToMessage = null;
@@ -3427,18 +3482,33 @@
                 requestAnimationFrame(refreshLayoutMetrics);
             });
 
-            // Мобильная клавиатура - добавление класса при фокусе
+            // Мобильная клавиатура - улучшенная обработка фокуса
             messageInput?.addEventListener('focus', () => {
+                if (window.innerWidth > 600) return;
+
                 const mainChat = document.querySelector('.main-chat');
-                if (mainChat && window.innerWidth <= 600) {
+                const messagesContainer = document.querySelector('.messages-container');
+
+                if (mainChat) {
                     mainChat.classList.add('keyboard-open');
-                    // Прокрутить вниз через небольшую задержку
+                }
+
+                // Прокрутить вниз с задержкой для ожидания открытия клавиатуры
+                setTimeout(() => {
+                    if (messagesContainer) {
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }
+                    // Вызываем обработку клавиатуры
+                    handleKeyboardResize();
+                }, 300);
+
+                // Дополнительная прокрутка для iOS
+                if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
                     setTimeout(() => {
-                        const messagesContainer = document.querySelector('.messages-container');
                         if (messagesContainer) {
                             messagesContainer.scrollTop = messagesContainer.scrollHeight;
                         }
-                    }, 300);
+                    }, 500);
                 }
             });
 
@@ -3446,6 +3516,19 @@
                 const mainChat = document.querySelector('.main-chat');
                 if (mainChat) {
                     mainChat.classList.remove('keyboard-open');
+                }
+
+                // Восстановление позиции для iOS
+                if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                    setTimeout(() => {
+                        window.scrollTo(0, 0);
+                    }, 100);
+                }
+
+                // Сброс transform
+                const inputContainer = document.querySelector('.chat-input-container');
+                if (inputContainer) {
+                    inputContainer.style.transform = 'translateY(0)';
                 }
             });
 
