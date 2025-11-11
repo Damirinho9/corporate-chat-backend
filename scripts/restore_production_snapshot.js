@@ -11,27 +11,27 @@ const USERS = [
     isActive: true,
   },
   {
-    username: 'assist1',
-    name: 'Ассистент 1',
-    role: 'assistant',
-    department: null,
-    password: 'Xf6DSC^qjXQ+',
-    isActive: true,
-  },
-  {
-    username: 'assist2',
-    name: 'Ассистент 2',
-    role: 'assistant',
-    department: null,
-    password: 'Qaf4Ez8x(*&5',
-    isActive: true,
-  },
-  {
     username: 'rop1',
-    name: 'РОП 1',
+    name: 'Виктор РОП 4 отдел',
     role: 'rop',
     department: '4 отдел',
     password: 'mYHsF#GkuZhF',
+    isActive: true,
+  },
+  {
+    username: 'rop2',
+    name: 'Наталья Ерофеева РОП 2 отдел',
+    role: 'rop',
+    department: '2 отдел',
+    password: 'GC##!DC$by_Y',
+    isActive: true,
+  },
+  {
+    username: 'rop3',
+    name: 'РОП 3',
+    role: 'rop',
+    department: '3 отдел',
+    password: 'LxF39kSFV73r',
     isActive: true,
   },
   {
@@ -51,14 +51,6 @@ const USERS = [
     isActive: true,
   },
   {
-    username: 'rop2',
-    name: 'РОП 2',
-    role: 'rop',
-    department: '2 отдел',
-    password: 'GC##!DC$by_Y',
-    isActive: true,
-  },
-  {
     username: 'op2a',
     name: 'Оператор 2А',
     role: 'operator',
@@ -67,27 +59,43 @@ const USERS = [
     isActive: true,
   },
   {
-    username: 'rop3',
-    name: 'РОП 3',
-    role: 'rop',
-    department: 'Отдел 3',
-    password: 'LxF39kSFV73r',
-    isActive: true,
-  },
-  {
     username: 'op3a',
     name: 'Оператор 3А',
     role: 'operator',
-    department: 'Отдел 3',
+    department: '3 отдел',
     password: '(jgcLe2jNwEp',
+    isActive: true,
+  },
+  {
+    username: 'assist1',
+    name: 'Ассистент 1',
+    role: 'assistant',
+    department: null,
+    password: 'Xf6DSC^qjXQ+',
+    isActive: true,
+  },
+  {
+    username: 'assist2',
+    name: 'Ассистент 2',
+    role: 'assistant',
+    department: null,
+    password: 'Qaf4Ez8x(*&5',
+    isActive: true,
+  },
+  {
+    username: 'Александр',
+    name: 'Александр',
+    role: 'assistant',
+    department: null,
+    password: 'TempPass123!',
     isActive: true,
   },
 ];
 
 const DEPARTMENT_CHATS = [
   { name: '2 отдел', department: '2 отдел', members: ['rop2', 'op2a'] },
+  { name: '3 отдел', department: '3 отдел', members: ['rop3', 'op3a'] },
   { name: '4 отдел', department: '4 отдел', members: ['rop1', 'op1a', 'op1b'] },
-  { name: 'Отдел 3', department: 'Отдел 3', members: ['rop3', 'op3a'] },
 ];
 
 function buildPlaceholders(rowSize, rowCount) {
