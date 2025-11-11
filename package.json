@@ -9,7 +9,8 @@
     "seed": "node database/seed.js",
     "postbuild": "node database/seed.js",
     "test": "node tests/directMessages.test.js",
-    "db:init": "psql -U postgres -d corporate_chat -f database/schema.sql"
+    "db:init": "psql -U postgres -d corporate_chat -f database/schema.sql",
+    "restore:snapshot": "node scripts/restore_production_snapshot.js"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -27,13 +27,7 @@ const sortDepartmentUsers = (users = []) => {
 // Получить все отделы со статистикой
 const getAllDepartments = async (req, res) => {
     try {
-        // Получаем все отделы из таблицы departments
-        const deptResult = await query(`
-            SELECT name FROM departments ORDER BY name
-        `);
-
-        // Получаем всех пользователей с назначенными отделами
-        const usersResult = await query(`
+        const result = await query(`
             SELECT id, username, name, role, department, is_active
             FROM users
             WHERE department IS NOT NULL
@@ -41,28 +35,12 @@ const getAllDepartments = async (req, res) => {
 
         const departmentMap = new Map();
 
-        // Инициализируем все отделы из таблицы departments
-        deptResult.rows.forEach((row) => {
-            const normalizedName = normalizeDepartmentName(row.name);
-            if (normalizedName) {
-                departmentMap.set(normalizedName, {
-                    department: normalizedName,
-                    user_count: 0,
-                    rop_count: 0,
-                    operator_count: 0,
-                    users: []
-                });
-            }
-        });
-
-        // Добавляем пользователей к отделам
-        usersResult.rows.forEach((row) => {
+        result.rows.forEach((row) => {
             const normalizedName = normalizeDepartmentName(row.department);
             if (!normalizedName) {
                 return;
             }
 
-            // Создаем отдел, если его нет в departments (legacy данные)
             if (!departmentMap.has(normalizedName)) {
                 departmentMap.set(normalizedName, {
                     department: normalizedName,
@@ -279,13 +257,6 @@ const createDepartment = async (req, res) => {
 
         try {
             await client.query('BEGIN');
-
-            // Создаём запись в таблице departments
-            await client.query(
-                `INSERT INTO departments (name) VALUES ($1)
-                 ON CONFLICT (name) DO NOTHING`,
-                [trimmedName]
-            );
 
             // Создаём чат отдела заранее, чтобы гарантировать связь
             const chatResult = await client.query(
