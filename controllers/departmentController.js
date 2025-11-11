@@ -446,17 +446,30 @@ const addUserToDepartment = async (req, res) => {
         }
 
         // Добавляем пользователя в отдел
-        const updateRole = role || 'operator';
-        await query(
-            'UPDATE users SET department = $1, role = $2 WHERE id = $3',
-            [departmentName, updateRole, userId]
+        let updateQuery, updateParams;
+        if (role) {
+            // Если роль указана, обновляем и отдел, и роль
+            updateQuery = 'UPDATE users SET department = $1, role = $2 WHERE id = $3';
+            updateParams = [departmentName, role, userId];
+        } else {
+            // Если роль не указана, обновляем только отдел
+            updateQuery = 'UPDATE users SET department = $1 WHERE id = $2';
+            updateParams = [departmentName, userId];
+        }
+
+        await query(updateQuery, updateParams);
+
+        // Получаем обновлённые данные пользователя
+        const updatedUser = await query(
+            'SELECT role FROM users WHERE id = $1',
+            [userId]
         );
 
         res.json({
             message: 'User added to department successfully',
             userId,
             department: departmentName,
-            role: updateRole
+            role: updatedUser.rows[0]?.role
         });
     } catch (error) {
         console.error('Add user to department error:', error);

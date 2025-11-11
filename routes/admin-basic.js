@@ -220,13 +220,19 @@ router.get('/admin/chats', authenticateToken, async (req, res) => {
         }
         
         const result = await query(`
-            SELECT 
+            SELECT
                 c.id,
                 c.name,
                 c.type,
                 c.created_at,
                 COUNT(DISTINCT cp.user_id) as participant_count,
-                COUNT(DISTINCT m.id) as message_count
+                COUNT(DISTINCT m.id) as message_count,
+                (
+                    SELECT json_agg(json_build_object('id', u.id, 'name', u.name, 'role', u.role))
+                    FROM chat_participants cp2
+                    JOIN users u ON cp2.user_id = u.id
+                    WHERE cp2.chat_id = c.id
+                ) AS participants
             FROM chats c
             LEFT JOIN chat_participants cp ON c.id = cp.chat_id
             LEFT JOIN messages m ON c.id = m.chat_id

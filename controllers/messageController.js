@@ -168,7 +168,12 @@ const sendMessage = async (req, res) => {
         if (!normalizedContent && !normalizedFileId) {
             return res.status(400).json({
                 error: 'Message content or file is required',
-                code: 'EMPTY_MESSAGE'
+                code: 'EMPTY_MESSAGE',
+                debug: {
+                    receivedContent: content,
+                    receivedFileId: fileId,
+                    bodyKeys: Object.keys(req.body)
+                }
             });
         }
 
@@ -971,6 +976,138 @@ const getMessageStats = async (req, res) => {
     }
 };
 
+// Pin message
+const pinMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user.id;
+        const userRole = req.user.role;
+
+        // Get message and chat info
+        const messageResult = await query(
+            `SELECT m.*, c.id as chat_id, c.department_id
+             FROM messages m
+             JOIN chats c ON m.chat_id = c.id
+             WHERE m.id = $1`,
+            [messageId]
+        );
+
+        if (messageResult.rows.length === 0) {
+            return res.status(404).json({
+                error: 'Message not found',
+                code: 'MESSAGE_NOT_FOUND'
+            });
+        }
+
+        const message = messageResult.rows[0];
+
+        // Check permissions
+        if (userRole === 'admin') {
+            // Admin can pin anywhere
+        } else if (userRole === 'rop') {
+            // ROP can only pin in their department chats
+            const userDepartment = await query(
+                'SELECT department_id FROM users WHERE id = $1',
+                [userId]
+            );
+            if (userDepartment.rows.length === 0 ||
+                userDepartment.rows[0].department_id !== message.department_id) {
+                return res.status(403).json({
+                    error: 'You can only pin messages in your department',
+                    code: 'INSUFFICIENT_PERMISSIONS'
+                });
+            }
+        } else {
+            // Others cannot pin
+            return res.status(403).json({
+                error: 'Insufficient permissions to pin messages',
+                code: 'INSUFFICIENT_PERMISSIONS'
+            });
+        }
+
+        // Check if already pinned
+        const existingPin = await query(
+            'SELECT id FROM pinned_messages WHERE message_id = $1',
+            [messageId]
+        );
+
+        if (existingPin.rows.length > 0) {
+            return res.status(400).json({
+                error: 'Message is already pinned',
+                code: 'ALREADY_PINNED'
+            });
+        }
+
+        // Pin the message
+        await query(
+            'INSERT INTO pinned_messages (message_id, chat_id, pinned_by, pinned_at) VALUES ($1, $2, $3, NOW())',
+            [messageId, message.chat_id, userId]
+        );
+
+        res.json({
+            message: 'Message pinned successfully',
+            messageId
+        });
+    } catch (error) {
+        console.error('Pin message error:', error);
+        res.status(500).json({
+            error: 'Failed to pin message',
+            code: 'PIN_MESSAGE_ERROR'
+        });
+    }
+};
+
+// Add message to favorites
+const addToFavorites = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user.id;
+
+        // Check if message exists
+        const messageResult = await query(
+            'SELECT id FROM messages WHERE id = $1',
+            [messageId]
+        );
+
+        if (messageResult.rows.length === 0) {
+            return res.status(404).json({
+                error: 'Message not found',
+                code: 'MESSAGE_NOT_FOUND'
+            });
+        }
+
+        // Check if already in favorites
+        const existingFavorite = await query(
+            'SELECT id FROM favorite_messages WHERE message_id = $1 AND user_id = $2',
+            [messageId, userId]
+        );
+
+        if (existingFavorite.rows.length > 0) {
+            return res.status(400).json({
+                error: 'Message is already in favorites',
+                code: 'ALREADY_FAVORITED'
+            });
+        }
+
+        // Add to favorites
+        await query(
+            'INSERT INTO favorite_messages (message_id, user_id, created_at) VALUES ($1, $2, NOW())',
+            [messageId, userId]
+        );
+
+        res.json({
+            message: 'Message added to favorites',
+            messageId
+        });
+    } catch (error) {
+        console.error('Add to favorites error:', error);
+        res.status(500).json({
+            error: 'Failed to add message to favorites',
+            code: 'ADD_FAVORITE_ERROR'
+        });
+    }
+};
+
 module.exports = {
     getMessages,
     sendMessage,
@@ -982,5 +1119,7 @@ module.exports = {
     getDeletionHistory,
     searchMessages,
     getAllMessages,
-    getMessageStats
+    getMessageStats,
+    pinMessage,
+    addToFavorites
 };
