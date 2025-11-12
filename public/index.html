@@ -721,6 +721,148 @@
             color: var(--text-secondary);
         }
 
+        /* Search Toggle Button */
+        .search-toggle-btn {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .search-toggle-btn:hover {
+            background: var(--bg-hover);
+        }
+
+        /* Message Search Panel */
+        .message-search-panel {
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 20px;
+            max-height: 400px;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .message-search-panel.hidden {
+            display: none;
+        }
+
+        .search-panel-header {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .search-panel-header input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .search-panel-header input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .search-close-btn {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .search-close-btn:hover {
+            background: var(--bg-hover);
+        }
+
+        .search-results {
+            overflow-y: auto;
+            max-height: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .search-results::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .search-results::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        .search-result-item {
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border: 1px solid var(--border);
+        }
+
+        .search-result-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .search-result-user {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+
+        .search-result-content {
+            font-size: 14px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .search-result-content mark {
+            background: #ffd54f;
+            color: #000;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .search-result-date {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 3px;
+        }
+
+        .search-no-results {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        /* Highlight searched message in chat */
+        .message.search-highlight {
+            background: rgba(255, 213, 79, 0.2);
+            animation: highlightPulse 2s ease-in-out;
+        }
+
+        @keyframes highlightPulse {
+            0%, 100% {
+                background: rgba(255, 213, 79, 0.2);
+            }
+            50% {
+                background: rgba(255, 213, 79, 0.4);
+            }
+        }
+
         .messages-container {
             flex: 1;
             overflow-y: auto;
@@ -1584,8 +1726,20 @@
                             <p id="chatSubtitle"></p>
                         </div>
                     </div>
+                    <button class="search-toggle-btn" id="searchToggleBtn" title="Поиск по сообщениям">
+                        🔍
+                    </button>
                 </div>
-                
+
+                <!-- Search Panel -->
+                <div class="message-search-panel hidden" id="messageSearchPanel">
+                    <div class="search-panel-header">
+                        <input type="text" id="messageSearchInput" placeholder="Поиск по сообщениям..." autocomplete="off">
+                        <button class="search-close-btn" id="searchCloseBtn">✕</button>
+                    </div>
+                    <div class="search-results" id="searchResults"></div>
+                </div>
+
                 <div class="messages-container" id="messagesContainer">
                     <div class="empty-state">
                         <div class="empty-state-icon">💬</div>
@@ -3118,6 +3272,140 @@
             }
         }
 
+        // ==================== MESSAGE SEARCH ====================
+        let searchTimeout = null;
+
+        function toggleSearchPanel() {
+            const panel = document.getElementById('messageSearchPanel');
+            const searchInput = document.getElementById('messageSearchInput');
+            const searchResults = document.getElementById('searchResults');
+
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                searchInput.focus();
+            } else {
+                panel.classList.add('hidden');
+                searchInput.value = '';
+                searchResults.innerHTML = '';
+            }
+        }
+
+        function closeSearchPanel() {
+            const panel = document.getElementById('messageSearchPanel');
+            const searchInput = document.getElementById('messageSearchInput');
+            const searchResults = document.getElementById('searchResults');
+
+            panel.classList.add('hidden');
+            searchInput.value = '';
+            searchResults.innerHTML = '';
+        }
+
+        async function searchMessagesInChat(searchQuery) {
+            if (!currentChatId || !searchQuery || searchQuery.trim().length < 2) {
+                const searchResults = document.getElementById('searchResults');
+                if (searchQuery && searchQuery.trim().length < 2) {
+                    searchResults.innerHTML = '<div class="search-no-results">Введите минимум 2 символа</div>';
+                } else {
+                    searchResults.innerHTML = '';
+                }
+                return;
+            }
+
+            try {
+                const response = await fetch(
+                    `${API_URL}/chats/${currentChatId}/messages/search?query=${encodeURIComponent(searchQuery.trim())}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+
+                if (!response.ok) {
+                    throw new Error('Search failed');
+                }
+
+                const data = await response.json();
+                displaySearchResults(data.messages, searchQuery.trim());
+            } catch (error) {
+                console.error('Search error:', error);
+                const searchResults = document.getElementById('searchResults');
+                searchResults.innerHTML = '<div class="search-no-results">Ошибка поиска</div>';
+            }
+        }
+
+        function displaySearchResults(messages, searchQuery) {
+            const searchResults = document.getElementById('searchResults');
+
+            if (!messages || messages.length === 0) {
+                searchResults.innerHTML = '<div class="search-no-results">Ничего не найдено</div>';
+                return;
+            }
+
+            const resultsHTML = messages.map(msg => {
+                const content = msg.content || '';
+                // Highlight search query in content
+                const highlighted = highlightText(escapeHtml(content), searchQuery);
+                const date = formatTimestamp(msg.created_at);
+
+                return `
+                    <div class="search-result-item" onclick="jumpToMessage(${msg.id})">
+                        <div class="search-result-user">${escapeHtml(msg.user_name || 'Неизвестный')}</div>
+                        <div class="search-result-content">${highlighted}</div>
+                        <div class="search-result-date">${date}</div>
+                    </div>
+                `;
+            }).join('');
+
+            searchResults.innerHTML = resultsHTML;
+        }
+
+        function highlightText(text, query) {
+            if (!query) return text;
+            const regex = new RegExp(`(${escapeRegex(query)})`, 'gi');
+            return text.replace(regex, '<mark>$1</mark>');
+        }
+
+        function escapeRegex(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        async function jumpToMessage(messageId) {
+            // Close search panel
+            closeSearchPanel();
+
+            // Check if message is already in view
+            const existingMessage = document.querySelector(`[data-message-id="${messageId}"]`);
+
+            if (existingMessage) {
+                // Message is already loaded, just scroll to it
+                scrollToMessage(existingMessage);
+            } else {
+                // Need to reload messages (message might be outside current view)
+                await loadMessages(currentChatId);
+
+                // Try again after loading
+                const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+                if (messageElement) {
+                    scrollToMessage(messageElement);
+                }
+            }
+        }
+
+        function scrollToMessage(messageElement) {
+            // Remove previous highlights
+            document.querySelectorAll('.message.search-highlight').forEach(el => {
+                el.classList.remove('search-highlight');
+            });
+
+            // Add highlight to target message
+            messageElement.classList.add('search-highlight');
+
+            // Scroll to message
+            messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Remove highlight after animation
+            setTimeout(() => {
+                messageElement.classList.remove('search-highlight');
+            }, 3000);
+        }
+
         // ==================== RESTORE LAST CHAT ====================
         function restoreLastActiveChat() {
             const lastChatId = localStorage.getItem('lastActiveChatId');
@@ -3264,9 +3552,7 @@
 
             const messageEl = document.createElement('div');
             messageEl.className = `message ${isOwn ? 'own' : ''} ${isTempSending || message.isSending ? 'sending' : ''}`;
-            if (isTempSending || message.isSending) {
-                messageEl.setAttribute('data-message-id', message.id);
-            }
+            messageEl.setAttribute('data-message-id', message.id); // Always set message ID for search navigation
             messageEl.innerHTML = `
                 <div class="message-avatar" style="background: ${avatarColor};">${initials}</div>
                 <div class="message-content">
@@ -3562,6 +3848,26 @@
             document.getElementById('logoutBtn')?.addEventListener('click', logout);
             document.getElementById('sendBtn')?.addEventListener('click', sendMessage);
             document.getElementById('mobileBackBtn')?.addEventListener('click', closeMobileChat);
+
+            // Message search
+            document.getElementById('searchToggleBtn')?.addEventListener('click', toggleSearchPanel);
+            document.getElementById('searchCloseBtn')?.addEventListener('click', closeSearchPanel);
+
+            const messageSearchInput = document.getElementById('messageSearchInput');
+            messageSearchInput?.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    searchMessagesInChat(e.target.value);
+                }, 500); // Debounce 500ms
+            });
+
+            messageSearchInput?.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    clearTimeout(searchTimeout);
+                    searchMessagesInChat(e.target.value);
+                }
+            });
 
             // Chat search
             const chatSearchInput = document.getElementById('chatSearchInput');
