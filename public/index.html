@@ -4289,9 +4289,10 @@
                 const filename = `voice-${Date.now()}.webm`;
                 const file = new File([audioBlob], filename, { type: audioBlob.type });
 
-                // Upload file
+                // Upload file and create message in one request
                 const formData = new FormData();
                 formData.append('file', file);
+                formData.append('content', `🎤 Голосовое сообщение (${formatVoiceDuration(duration)})`);
 
                 const uploadResponse = await fetch(`${API_URL}/chats/${currentChatId}/upload`, {
                     method: 'POST',
@@ -4302,31 +4303,17 @@
                 });
 
                 if (!uploadResponse.ok) {
-                    throw new Error('Upload failed');
+                    const errorText = await uploadResponse.text();
+                    console.error('Upload failed:', uploadResponse.status, errorText);
+                    throw new Error(`Upload failed: ${uploadResponse.status}`);
                 }
 
                 const uploadData = await uploadResponse.json();
-                const fileId = uploadData.file?.id;
 
-                if (!fileId) {
-                    throw new Error('File ID not received');
-                }
-
-                // Send message with file
-                const messageResponse = await fetch(`${API_URL}/chats/${currentChatId}/messages`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        content: `🎤 Голосовое сообщение (${formatVoiceDuration(duration)})`,
-                        fileId: fileId
-                    })
-                });
-
-                if (!messageResponse.ok) {
-                    throw new Error('Failed to send message');
+                // Check if message was created successfully
+                if (!uploadData.message && !uploadData.file) {
+                    console.error('Unexpected response:', uploadData);
+                    throw new Error('Invalid response from server');
                 }
 
                 showToast('Голосовое сообщение отправлено', 'success');
