@@ -2672,7 +2672,9 @@
             connectSocket();
             loadChats();
             loadUserPermissions();
-            loadOnlineUsers();
+
+            // Load online users with delay to ensure backend is ready
+            setTimeout(() => loadOnlineUsers(), 2000);
         }
 
         function updateUserUI(user) {
@@ -2766,9 +2768,13 @@
                         onlineUsers.add(user.id);
                         updateUserOnlineStatus(user.id, true);
                     });
+                } else {
+                    // Endpoint not available yet, will use WebSocket events only
+                    console.warn('Online status endpoint not available, using WebSocket events only');
                 }
             } catch (error) {
-                console.error('Failed to load online users:', error);
+                // Silent fail - online status will work via WebSocket events
+                console.warn('Online status API unavailable, using real-time updates only');
             }
         }
 
