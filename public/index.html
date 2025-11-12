@@ -4102,15 +4102,21 @@
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: true
+                        autoGainControl: true,
+                        sampleRate: 48000,        // High quality sample rate
+                        channelCount: 1,          // Mono для голоса
+                        sampleSize: 16            // 16-bit audio
                     }
                 });
 
                 audioChunks = [];
                 voiceRecordingSeconds = 0;
 
-                // Setup MediaRecorder
-                const options = { mimeType: 'audio/webm;codecs=opus' };
+                // Setup MediaRecorder with high quality settings
+                const options = {
+                    mimeType: 'audio/webm;codecs=opus',
+                    audioBitsPerSecond: 128000  // 128 kbps - высокое качество для голоса
+                };
 
                 // Fallback for browsers that don't support webm
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
@@ -4119,9 +4125,12 @@
 
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                     options.mimeType = 'audio/webm';
+                    options.audioBitsPerSecond = 128000;
                 }
 
                 mediaRecorder = new MediaRecorder(stream, options);
+
+                console.log('🎤 Recording with:', options.mimeType, 'at', options.audioBitsPerSecond / 1000, 'kbps');
 
                 mediaRecorder.addEventListener('dataavailable', event => {
                     if (event.data.size > 0) {
@@ -4137,7 +4146,8 @@
                     stopWaveformVisualization();
                 });
 
-                mediaRecorder.start();
+                // Start recording with 1 second timeslice for better quality
+                mediaRecorder.start(1000);
 
                 // Setup waveform visualization
                 setupWaveformVisualization(stream);
