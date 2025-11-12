@@ -4100,37 +4100,42 @@
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true,
-                        sampleRate: 48000,        // High quality sample rate
-                        channelCount: 1,          // Mono для голоса
-                        sampleSize: 16            // 16-bit audio
+                        echoCancellation: false,      // Выключаем - может приглушать
+                        noiseSuppression: false,      // Выключаем - может портить качество
+                        autoGainControl: true,        // Авто-громкость оставляем
+                        sampleRate: 48000,            // High quality sample rate
+                        channelCount: 1,              // Mono для голоса
+                        sampleSize: 16,               // 16-bit audio
+                        latency: 0,                   // Низкая задержка
+                        volume: 1.0                   // Максимальная громкость
                     }
                 });
 
                 audioChunks = [];
                 voiceRecordingSeconds = 0;
 
-                // Setup MediaRecorder with high quality settings
+                // Setup MediaRecorder with MAXIMUM quality settings
                 const options = {
                     mimeType: 'audio/webm;codecs=opus',
-                    audioBitsPerSecond: 128000  // 128 kbps - высокое качество для голоса
+                    audioBitsPerSecond: 256000  // 256 kbps - максимальное качество!
                 };
 
                 // Fallback for browsers that don't support webm
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                     options.mimeType = 'audio/ogg;codecs=opus';
+                    options.audioBitsPerSecond = 256000;
                 }
 
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                     options.mimeType = 'audio/webm';
-                    options.audioBitsPerSecond = 128000;
+                    options.audioBitsPerSecond = 256000;
                 }
 
                 mediaRecorder = new MediaRecorder(stream, options);
 
+                // Log actual settings
                 console.log('🎤 Recording with:', options.mimeType, 'at', options.audioBitsPerSecond / 1000, 'kbps');
+                console.log('📊 Stream settings:', stream.getAudioTracks()[0].getSettings());
 
                 mediaRecorder.addEventListener('dataavailable', event => {
                     if (event.data.size > 0) {
