@@ -1044,6 +1044,48 @@
         </div>
     </div>
 
+    <!-- Modal for Add User to Department -->
+    <div id="addUserToDepartmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Добавить пользователя в отдел</h2>
+                <button class="close-btn" onclick="closeAddUserToDepartmentModal()">×</button>
+            </div>
+            <form id="addUserToDepartmentForm" onsubmit="event.preventDefault(); addUserToDepartmentSubmit();">
+                <div class="modal-body">
+                    <input type="hidden" id="addUserDepartmentName">
+
+                    <div class="form-group">
+                        <label>Отдел</label>
+                        <input type="text" id="addUserDepartmentDisplay" disabled>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Пользователь *</label>
+                        <select id="addUserSelectUser" required>
+                            <option value="">Выберите пользователя...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Роль (опционально)</label>
+                        <select id="addUserSelectRole">
+                            <option value="">Не менять роль</option>
+                            <option value="rop">РОП</option>
+                            <option value="operator">Оператор</option>
+                            <option value="employee">Сотрудник</option>
+                        </select>
+                        <small class="form-hint">Если выбрано, роль пользователя будет изменена при добавлении в отдел</small>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddUserToDepartmentModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Добавить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal for Edit Chat -->
     <div id="editChatModal" class="modal">
         <div class="modal-content">
