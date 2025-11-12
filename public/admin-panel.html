@@ -1437,31 +1437,6 @@
                     <button type="submit" class="btn btn-primary">Сохранить изменения</button>
                 </div>
             </form>
-        </div>
-    </div>
-
-    <!-- Toast -->
-    <div id="toast" class="toast"></div>
-
-    <script>
-        const API_URL = window.location.origin + '/api';
-        let token = localStorage.getItem('token') || '';
-        let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
-        let departmentsCache = [];
-        let manualUsernameOverride = false;
-        let usersCache = [];
-        let chatsCache = [];
-        let currentEditingUser = null;
-        let editChatState = {
-            chatId: null,
-            chat: null,
-            participants: [],
-            availableUsers: [],
-            pendingAdditions: new Set(),
-            filter: ''
-        };
-
-        const ROLE_ORDER = ['admin', 'assistant', 'rop', 'operator', 'employee'];
         const ROLE_LABELS = {
             admin: 'Админ',
             assistant: 'Ассистент',
