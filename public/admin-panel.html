@@ -2746,53 +2746,6 @@ async function loadChats() {
             roleSelect.addEventListener('change', (event) => toggleDepartmentField(event.target));
         }
 
-        createUserForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const payload = {
-                username: usernameInput.value.trim(),
-                password: passwordInput.value.trim(),
-                name: fullNameInput.value.trim(),
-                role: roleSelect.value,
-                department: departmentSelect.value || null
-            };
-
-            if (!payload.username || !payload.name || !payload.role) {
-                showToast('Заполните обязательные поля', 'error');
-                return;
-            }
-
-            const needsDepartment = shouldRequireDepartment(payload.role);
-            if (!needsDepartment) {
-                payload.department = null;
-            } else if (!payload.department) {
-                showToast('Выберите отдел для выбранной роли', 'error');
-                return;
-            }
-
-            if (!payload.password) {
-                payload.password = regeneratePassword(true);
-            }
-
-            try {
-                const res = await fetch(`${API_URL}/users/${userId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                const data = await res.json();
-                
-                if (data.success) {
-                    showToast('User deleted successfully!', 'success');
-                    loadUsers();
-                } else {
-                    showToast(data.error || 'Failed to delete user', 'error');
-                }
-            } catch (err) {
-                console.error('Delete user error:', err);
-                showToast('Ошибка удаления пользователя', 'error');
-            }
-        }
 
         // initialisePermissionsMatrix already defined above at line 2765 - duplicate removed
 
