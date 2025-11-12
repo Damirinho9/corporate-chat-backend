@@ -1620,12 +1620,16 @@ async function loadChats() {
 
                 const tbody = document.querySelector('#chatsTable tbody');
                 if (chatsCache.length > 0) {
-                    tbody.innerHTML = chatsCache.map(chat => `
+                    tbody.innerHTML = chatsCache.map(chat => {
+                        const chatName = escapeHtml(chat.name || 'N/A');
+                        const chatType = escapeHtml(chat.type || 'N/A');
+                        const deptName = escapeHtml(chat.department_name || 'N/A');
+                        return `
                         <tr>
                             <td>${chat.id}</td>
-                            <td>${chat.name || 'N/A'}</td>
-                            <td>${chat.type || 'N/A'}</td>
-                            <td>${chat.department_name || 'N/A'}</td>
+                            <td>${chatName}</td>
+                            <td>${chatType}</td>
+                            <td>${deptName}</td>
                             <td>${chat.participant_count || 0}</td>
                             <td>
                                 <button class="btn-edit" onclick="openEditChatModal(${chat.id})">Редактировать</button>
