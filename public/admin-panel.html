@@ -874,6 +874,9 @@
             <div id="permissions" class="content-section">
                 <div class="header">
                     <h2>🛡️ Права и действия</h2>
+                    <button class="btn btn-primary" onclick="showAddPermissionModal()">
+                        ➕ Добавить право
+                    </button>
                 </div>
 
                 <div class="card">
@@ -893,11 +896,12 @@
                                     <th>РОП</th>
                                     <th>Оператор</th>
                                     <th>Сотрудник</th>
+                                    <th>Действия</th>
                                 </tr>
                             </thead>
                             <tbody id="permissionsMatrixBody">
                                 <tr>
-                                    <td colspan="6" style="text-align: center; color: #a0aec0;">Загрузка...</td>
+                                    <td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1081,6 +1085,89 @@
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeAddUserToDepartmentModal()">Отмена</button>
                     <button type="submit" class="btn btn-primary">Добавить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Edit Permission -->
+    <div id="editPermissionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="editPermissionModalTitle">✏️ Редактировать право</h2>
+                <button class="close-btn" onclick="closeEditPermissionModal()">×</button>
+            </div>
+            <form id="editPermissionForm" onsubmit="event.preventDefault(); savePermission();">
+                <div class="modal-body">
+                    <input type="hidden" id="editPermissionId">
+
+                    <div class="form-group">
+                        <label>ID права *</label>
+                        <input type="text" id="editPermissionIdField" required placeholder="editOwnMessages">
+                        <small class="form-hint">Уникальный идентификатор (camelCase, только латиница)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Название действия *</label>
+                        <input type="text" id="editPermissionLabel" required placeholder="Редактировать свои сообщения">
+                        <small class="form-hint">Описание действия для отображения в таблице</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Подсказка</label>
+                        <textarea id="editPermissionHint" rows="2" placeholder="Дополнительное описание правила"></textarea>
+                        <small class="form-hint">Опциональное пояснение, которое будет показано под правом</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Права для ролей</label>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <select id="editPermissionAdmin" style="width: 150px;">
+                                    <option value="false">✖ Запрещено</option>
+                                    <option value="true">✔ Разрешено</option>
+                                    <option value="department">◐ Только свой отдел</option>
+                                </select>
+                                <span>Админ</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <select id="editPermissionAssistant" style="width: 150px;">
+                                    <option value="false">✖ Запрещено</option>
+                                    <option value="true">✔ Разрешено</option>
+                                    <option value="department">◐ Только свой отдел</option>
+                                </select>
+                                <span>Ассистент</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <select id="editPermissionRop" style="width: 150px;">
+                                    <option value="false">✖ Запрещено</option>
+                                    <option value="true">✔ Разрешено</option>
+                                    <option value="department">◐ Только свой отдел</option>
+                                </select>
+                                <span>РОП</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <select id="editPermissionOperator" style="width: 150px;">
+                                    <option value="false">✖ Запрещено</option>
+                                    <option value="true">✔ Разрешено</option>
+                                    <option value="department">◐ Только свой отдел</option>
+                                </select>
+                                <span>Оператор</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <select id="editPermissionEmployee" style="width: 150px;">
+                                    <option value="false">✖ Запрещено</option>
+                                    <option value="true">✔ Разрешено</option>
+                                    <option value="department">◐ Только свой отдел</option>
+                                </select>
+                                <span>Сотрудник</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditPermissionModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
                 </div>
             </form>
         </div>
@@ -1301,38 +1388,98 @@
             {
                 id: 'editOwnMessages',
                 label: 'Редактировать свои сообщения (до 5 минут после отправки)',
-                roles: {
-                    admin: true,
-                    assistant: true,
-                    rop: true,
-                    operator: true,
-                    employee: true
-                },
+                roles: { admin: true, assistant: true, rop: true, operator: true, employee: true },
                 hint: 'Редактирование доступно всем ролям только в течение пяти минут после отправки собственного сообщения.'
             },
             {
                 id: 'deleteOwnMessages',
                 label: 'Удалять свои сообщения (до 5 минут после отправки)',
-                roles: {
-                    admin: true,
-                    assistant: true,
-                    rop: true,
-                    operator: true,
-                    employee: true
-                },
+                roles: { admin: true, assistant: true, rop: true, operator: true, employee: true },
                 hint: 'Удаление доступно всем ролям в течение пяти минут после отправки собственного сообщения.'
             },
             {
                 id: 'deleteAnyMessages',
                 label: 'Удалять сообщения других участников',
-                roles: {
-                    admin: true,
-                    assistant: false,
-                    rop: 'department',
-                    operator: false,
-                    employee: false
-                },
+                roles: { admin: true, assistant: false, rop: 'department', operator: false, employee: false },
                 hint: 'РОП может удалять сообщения только в чатах своего отдела; администратор — в любых чатах.'
+            },
+            {
+                id: 'pinMessages',
+                label: 'Закреплять сообщения в чате',
+                roles: { admin: true, assistant: true, rop: 'department', operator: false, employee: false },
+                hint: 'РОП может закреплять сообщения только в чатах своего отдела.'
+            },
+            {
+                id: 'forwardMessages',
+                label: 'Пересылать сообщения в другие чаты',
+                roles: { admin: true, assistant: true, rop: true, operator: true, employee: true },
+                hint: 'Все роли могут пересылать сообщения.'
+            },
+            {
+                id: 'reactToMessages',
+                label: 'Ставить реакции (эмодзи) на сообщения',
+                roles: { admin: true, assistant: true, rop: true, operator: true, employee: true },
+                hint: 'Все роли могут реагировать на сообщения.'
+            },
+            {
+                id: 'createChats',
+                label: 'Создавать новые чаты',
+                roles: { admin: true, assistant: true, rop: 'department', operator: false, employee: false },
+                hint: 'РОП может создавать чаты только для своего отдела.'
+            },
+            {
+                id: 'deleteChats',
+                label: 'Удалять чаты',
+                roles: { admin: true, assistant: false, rop: false, operator: false, employee: false },
+                hint: 'Только администраторы могут удалять чаты.'
+            },
+            {
+                id: 'editChatSettings',
+                label: 'Редактировать настройки чата (название, описание)',
+                roles: { admin: true, assistant: true, rop: 'department', operator: false, employee: false },
+                hint: 'РОП может редактировать только чаты своего отдела.'
+            },
+            {
+                id: 'addRemoveParticipants',
+                label: 'Добавлять и удалять участников чата',
+                roles: { admin: true, assistant: true, rop: 'department', operator: false, employee: false },
+                hint: 'РОП может управлять участниками только в чатах своего отдела.'
+            },
+            {
+                id: 'manageDepartments',
+                label: 'Управлять отделами (создание, редактирование, удаление)',
+                roles: { admin: true, assistant: false, rop: false, operator: false, employee: false },
+                hint: 'Только администраторы могут управлять отделами.'
+            },
+            {
+                id: 'assignRoles',
+                label: 'Назначать роли пользователям',
+                roles: { admin: true, assistant: false, rop: false, operator: false, employee: false },
+                hint: 'Только администраторы могут изменять роли пользователей.'
+            },
+            {
+                id: 'viewAllChats',
+                label: 'Просматривать все чаты в системе',
+                roles: { admin: true, assistant: true, rop: 'department', operator: false, employee: false },
+                hint: 'РОП видит только чаты своего отдела.'
+            },
+            {
+                id: 'sendFiles',
+                label: 'Отправлять файлы и вложения',
+                roles: { admin: true, assistant: true, rop: true, operator: true, employee: true },
+                hint: 'Все роли могут отправлять файлы.'
+            },
+            {
+                id: 'createUserAccounts',
+                label: 'Создавать новые учётные записи пользователей',
+                roles: { admin: true, assistant: false, rop: false, operator: false, employee: false },
+                hint: 'Только администраторы могут создавать пользователей.'
+            },
+            {
+                id: 'viewLogs',
+                label: 'Просматривать логи и историю действий',
+                roles: { admin: true, assistant: true, rop: false, operator: false, employee: false },
+                hint: 'Администраторы и ассистенты имеют доступ к логам.'
             }
         ];
 
@@ -1494,7 +1641,7 @@
                     : PERMISSIONS_MATRIX);
 
             if (!matrix.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="permissions-empty">Данные о правах недоступны</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="permissions-empty">Данные о правах недоступны</td></tr>';
                 return;
             }
 
@@ -1509,18 +1656,115 @@
                     return `<td><span class="perm-chip ${value ? 'perm-chip--allowed' : 'perm-chip--denied'}">${value ? '✔' : '✖'}</span></td>`;
                 }).join('');
 
+                const actions = `<td>
+                    <button class="btn btn-sm" style="background: #4299e1; color: white; margin-right: 5px;" onclick='editPermission(${JSON.stringify(row.id)})'>✏️</button>
+                    <button class="btn btn-sm btn-danger" onclick='deletePermission(${JSON.stringify(row.id)})'>🗑️</button>
+                </td>`;
+
                 const hintRow = row.hint
-                    ? `<tr class="permission-hint"><td colspan="${ROLE_ORDER.length + 1}">${row.hint}</td></tr>`
+                    ? `<tr class="permission-hint"><td colspan="${ROLE_ORDER.length + 2}">${row.hint}</td></tr>`
                     : '';
 
                 return `
                     <tr>
                         <th scope="row">${row.label}</th>
                         ${columns}
+                        ${actions}
                     </tr>
                     ${hintRow}
                 `;
             }).join('');
+        }
+
+        function showAddPermissionModal() {
+            document.getElementById('editPermissionModalTitle').textContent = '➕ Добавить право';
+            document.getElementById('editPermissionId').value = '';
+            document.getElementById('editPermissionIdField').value = '';
+            document.getElementById('editPermissionIdField').disabled = false;
+            document.getElementById('editPermissionLabel').value = '';
+            document.getElementById('editPermissionHint').value = '';
+
+            // Reset all role selects to false
+            ROLE_ORDER.forEach(role => {
+                const select = document.getElementById(`editPermission${role.charAt(0).toUpperCase() + role.slice(1)}`);
+                if (select) select.value = 'false';
+            });
+
+            openModalElement(document.getElementById('editPermissionModal'));
+        }
+
+        function closeEditPermissionModal() {
+            const modal = document.getElementById('editPermissionModal');
+            if (modal) {
+                modal.classList.remove('show');
+                modal.style.display = 'none';
+            }
+        }
+
+        function editPermission(permissionId) {
+            const permission = window.PERMISSIONS_MATRIX.find(p => p.id === permissionId);
+            if (!permission) return;
+
+            document.getElementById('editPermissionModalTitle').textContent = '✏️ Редактировать право';
+            document.getElementById('editPermissionId').value = permission.id;
+            document.getElementById('editPermissionIdField').value = permission.id;
+            document.getElementById('editPermissionIdField').disabled = true;
+            document.getElementById('editPermissionLabel').value = permission.label;
+            document.getElementById('editPermissionHint').value = permission.hint || '';
+
+            ROLE_ORDER.forEach(role => {
+                const select = document.getElementById(`editPermission${role.charAt(0).toUpperCase() + role.slice(1)}`);
+                if (select) {
+                    const value = permission.roles[role];
+                    select.value = value === 'department' ? 'department' : (value ? 'true' : 'false');
+                }
+            });
+
+            openModalElement(document.getElementById('editPermissionModal'));
+        }
+
+        function deletePermission(permissionId) {
+            if (!confirm('Удалить это право?')) return;
+
+            const index = window.PERMISSIONS_MATRIX.findIndex(p => p.id === permissionId);
+            if (index !== -1) {
+                window.PERMISSIONS_MATRIX.splice(index, 1);
+                renderPermissionsMatrix(window.PERMISSIONS_MATRIX);
+                showToast('Право удалено', 'success');
+            }
+        }
+
+        function savePermission() {
+            const id = document.getElementById('editPermissionIdField').value.trim();
+            const label = document.getElementById('editPermissionLabel').value.trim();
+            const hint = document.getElementById('editPermissionHint').value.trim();
+
+            if (!id || !label) {
+                showToast('Заполните обязательные поля', 'error');
+                return;
+            }
+
+            const roles = {};
+            ROLE_ORDER.forEach(role => {
+                const select = document.getElementById(`editPermission${role.charAt(0).toUpperCase() + role.slice(1)}`);
+                if (select) {
+                    const value = select.value;
+                    roles[role] = value === 'department' ? 'department' : (value === 'true');
+                }
+            });
+
+            const existingIndex = window.PERMISSIONS_MATRIX.findIndex(p => p.id === id);
+            const permission = { id, label, roles, hint: hint || undefined };
+
+            if (existingIndex !== -1) {
+                window.PERMISSIONS_MATRIX[existingIndex] = permission;
+            } else {
+                window.PERMISSIONS_MATRIX.push(permission);
+            }
+
+            renderPermissionsMatrix(window.PERMISSIONS_MATRIX);
+            closeEditPermissionModal();
+            showToast(existingIndex !== -1 ? 'Право обновлено' : 'Право добавлено', 'success');
         }
 
         async function fetchPermissionsMatrix() {
