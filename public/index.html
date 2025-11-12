@@ -6,6 +6,9 @@
     <title>Корпоративный чат</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <!-- Markdown support -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <style>
         :root[data-theme="light"] {
             --bg-primary: #ffffff;
@@ -971,6 +974,93 @@
             color: white;
         }
 
+        /* Markdown styling */
+        .markdown-content p {
+            margin: 0 0 8px 0;
+        }
+
+        .markdown-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .markdown-content strong, .markdown-content b {
+            font-weight: 700;
+        }
+
+        .markdown-content em, .markdown-content i {
+            font-style: italic;
+        }
+
+        .markdown-content code {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .message.own .markdown-content code {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .markdown-content pre {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 10px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+
+        .message.own .markdown-content pre {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .markdown-content pre code {
+            background: transparent;
+            padding: 0;
+        }
+
+        .markdown-content blockquote {
+            border-left: 3px solid var(--accent);
+            padding-left: 12px;
+            margin: 8px 0;
+            font-style: italic;
+            opacity: 0.9;
+        }
+
+        .markdown-content ul, .markdown-content ol {
+            padding-left: 20px;
+            margin: 8px 0;
+        }
+
+        .markdown-content li {
+            margin: 4px 0;
+        }
+
+        .markdown-content a {
+            color: var(--accent);
+            text-decoration: underline;
+        }
+
+        .message.own .markdown-content a {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .markdown-content hr {
+            border: none;
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+            margin: 12px 0;
+        }
+
+        .message.own .markdown-content hr {
+            border-top-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .markdown-content del {
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+
         .message-reply-to {
             background: rgba(0,0,0,0.05);
             padding: 6px 10px;
@@ -1335,8 +1425,49 @@
 
         .chat-input-wrapper {
             display: flex;
-            gap: 10px;
-            align-items: flex-end;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .markdown-toolbar {
+            display: flex;
+            gap: 4px;
+            padding: 4px 8px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .md-btn {
+            background: transparent;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--text-primary);
+            transition: background 0.2s;
+            min-width: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .md-btn:hover {
+            background: var(--bg-hover);
+        }
+
+        .md-btn strong {
+            font-weight: 700;
+        }
+
+        .md-btn em {
+            font-style: italic;
+        }
+
+        .md-btn code {
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 12px;
         }
 
         .chat-input {
@@ -1956,6 +2087,14 @@
                 
                 <div class="chat-input-container" id="chatInputContainer">
                     <div class="chat-input-wrapper">
+                        <div class="markdown-toolbar" id="markdownToolbar" style="display: none;">
+                            <button class="md-btn" onclick="insertMarkdown('**', '**')" title="Жирный (Ctrl+B)"><strong>B</strong></button>
+                            <button class="md-btn" onclick="insertMarkdown('*', '*')" title="Курсив (Ctrl+I)"><em>I</em></button>
+                            <button class="md-btn" onclick="insertMarkdown('`', '`')" title="Код (Ctrl+E)"><code>{'}</code></button>
+                            <button class="md-btn" onclick="insertMarkdown('```\n', '\n```')" title="Блок кода">{ }</button>
+                            <button class="md-btn" onclick="insertMarkdown('> ', '')" title="Цитата">"</button>
+                            <button class="md-btn" onclick="insertMarkdown('- ', '')" title="Список">•</button>
+                        </div>
                         <div class="chat-input">
                             <button class="icon-btn" onclick="toggleFileUpload()" title="Прикрепить файл" id="attachBtn">📎</button>
                             <button class="icon-btn" onclick="toggleVoiceRecorder()" title="Голосовое сообщение" id="voiceBtn">🎤</button>
@@ -2129,6 +2268,53 @@
             document.getElementById('replyPreview').classList.remove('show');
             requestAnimationFrame(refreshLayoutMetrics);
         }
+
+        // ==================== MARKDOWN FORMATTING ====================
+        function insertMarkdown(before, after) {
+            const input = document.getElementById('messageInput');
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            const text = input.value;
+            const selectedText = text.substring(start, end);
+
+            // If text is selected, wrap it
+            if (selectedText) {
+                const newText = text.substring(0, start) + before + selectedText + after + text.substring(end);
+                input.value = newText;
+                // Set cursor after the formatted text
+                input.selectionStart = input.selectionEnd = start + before.length + selectedText.length + after.length;
+            } else {
+                // If no selection, insert markdown syntax and place cursor in the middle
+                const placeholder = before === '```\n' ? 'код' : 'текст';
+                const newText = text.substring(0, start) + before + placeholder + after + text.substring(end);
+                input.value = newText;
+                // Select the placeholder text
+                input.selectionStart = start + before.length;
+                input.selectionEnd = start + before.length + placeholder.length;
+            }
+
+            input.focus();
+        }
+
+        // Keyboard shortcuts for markdown
+        document.getElementById('messageInput').addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key.toLowerCase()) {
+                    case 'b':
+                        e.preventDefault();
+                        insertMarkdown('**', '**');
+                        break;
+                    case 'i':
+                        e.preventDefault();
+                        insertMarkdown('*', '*');
+                        break;
+                    case 'e':
+                        e.preventDefault();
+                        insertMarkdown('`', '`');
+                        break;
+                }
+            }
+        });
 
         // ==================== FILE UPLOAD ====================
         const fileInput = document.getElementById('fileInput');
@@ -3462,6 +3648,9 @@
                 sendBtn.disabled = false;
                 attachBtn.disabled = false;
 
+                // Show markdown toolbar
+                document.getElementById('markdownToolbar').style.display = 'flex';
+
                 // Refresh layout metrics after showing chat header
                 requestAnimationFrame(refreshLayoutMetrics);
 
@@ -3799,8 +3988,8 @@
                     </div>
                     ${forwardHtml}
                     ${replyHtml}
-                    <div class="message-bubble">
-                        ${escapeHtml(message.content || '')}
+                    <div class="message-bubble markdown-content">
+                        ${renderMarkdown(message.content || '')}
                         ${renderMessageFile(message)}
                     </div>
                     ${reactionsHtml}
@@ -3879,6 +4068,29 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // Render markdown with XSS protection
+        function renderMarkdown(text) {
+            if (!text) return '';
+
+            // Configure marked for safe rendering
+            marked.setOptions({
+                breaks: true,  // Convert \n to <br>
+                gfm: true,     // GitHub Flavored Markdown
+                headerIds: false,
+                mangle: false
+            });
+
+            // Parse markdown
+            const html = marked.parse(text);
+
+            // Sanitize with DOMPurify to prevent XSS
+            return DOMPurify.sanitize(html, {
+                ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'code', 'pre', 'p', 'br', 'ul', 'ol', 'li', 'a', 'blockquote', 'del', 'hr'],
+                ALLOWED_ATTR: ['href', 'title', 'target'],
+                ALLOW_DATA_ATTR: false
+            });
         }
 
         // Generate avatar color from name
