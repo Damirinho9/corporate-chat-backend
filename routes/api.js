@@ -614,17 +614,21 @@ router.use('/files', fileRoutes);
 const { getOnlineUsers, isUserOnline } = require('../socket/socketHandler');
 
 router.get('/users/online', authenticateToken, async (req, res) => {
+    console.log('📊 GET /users/online - Request received');
     try {
         const onlineUserIds = getOnlineUsers();
+        console.log('📊 Online user IDs:', onlineUserIds);
 
         // If no users online, return empty array
         if (!onlineUserIds || onlineUserIds.length === 0) {
+            console.log('📊 No users online, returning empty array');
             return res.json({
                 online: [],
                 count: 0
             });
         }
 
+        console.log('📊 Querying database for', onlineUserIds.length, 'users');
         // Get user details for online users
         const result = await query(
             `SELECT id, username, name, role, department, last_seen
@@ -634,12 +638,13 @@ router.get('/users/online', authenticateToken, async (req, res) => {
             [onlineUserIds]
         );
 
+        console.log('📊 Found', result.rows.length, 'online users');
         res.json({
             online: result.rows,
             count: result.rows.length
         });
     } catch (error) {
-        console.error('Get online users error:', error);
+        console.error('❌ Get online users error:', error);
         res.status(500).json({ error: 'Failed to get online users' });
     }
 });
