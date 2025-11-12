@@ -2,7 +2,7 @@
 <html lang="ru" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Корпоративный чат</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -47,6 +47,12 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+        }
+
+        html, body {
+            overscroll-behavior: none;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
         }
 
         html {
@@ -246,6 +252,25 @@
                 height: var(--app-height);
                 min-height: 100vh;
                 overflow: hidden;
+            }
+            .chat-header {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 10;
+            }
+            .chat-input-container {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 10;
+            }
+            .messages-container {
+                margin-top: 60px;
+                margin-bottom: 0;
+                height: calc(var(--app-height) - var(--header-height, 60px) - var(--input-height, 80px));
             }
         }
 
@@ -1598,31 +1623,76 @@
 
         function refreshLayoutMetrics() {
             const inputContainer = document.getElementById('chatInputContainer');
+            const chatHeader = document.getElementById('chatHeader');
+
             if (!inputContainer) {
                 return;
             }
 
-            const styles = window.getComputedStyle(inputContainer);
-            const marginTop = parseFloat(styles.marginTop) || 0;
-            const marginBottom = parseFloat(styles.marginBottom) || 0;
-            const offset = Math.max(80, inputContainer.offsetHeight + marginTop + marginBottom);
-            document.documentElement.style.setProperty('--chat-input-offset', `${offset}px`);
+            // Calculate input container height
+            const inputStyles = window.getComputedStyle(inputContainer);
+            const inputMarginTop = parseFloat(inputStyles.marginTop) || 0;
+            const inputMarginBottom = parseFloat(inputStyles.marginBottom) || 0;
+            const inputHeight = inputContainer.offsetHeight + inputMarginTop + inputMarginBottom;
+            document.documentElement.style.setProperty('--input-height', `${inputHeight}px`);
+            document.documentElement.style.setProperty('--chat-input-offset', `${Math.max(80, inputHeight)}px`);
+
+            // Calculate header height
+            if (chatHeader && !chatHeader.classList.contains('hidden')) {
+                const headerHeight = chatHeader.offsetHeight;
+                document.documentElement.style.setProperty('--header-height', `${headerHeight}px`);
+            }
         }
 
         function setAppHeight() {
             const viewport = window.visualViewport;
             const height = viewport ? viewport.height : window.innerHeight;
+
             if (height) {
                 document.documentElement.style.setProperty('--app-height', `${height}px`);
             }
-            refreshLayoutMetrics();
+
+            // Force layout recalculation on mobile
+            if (window.innerWidth <= 768) {
+                requestAnimationFrame(refreshLayoutMetrics);
+
+                // Scroll to bottom of messages if input is focused
+                const messageInput = document.getElementById('messageInput');
+                if (messageInput && document.activeElement === messageInput) {
+                    setTimeout(() => {
+                        const messagesContainer = document.getElementById('messagesContainer');
+                        if (messagesContainer) {
+                            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                        }
+                    }, 100);
+                }
+            } else {
+                refreshLayoutMetrics();
+            }
+        }
+
+        // Prevent body scroll on mobile when keyboard is open
+        function preventBodyScroll(e) {
+            if (window.innerWidth <= 768) {
+                const target = e.target;
+                const messagesContainer = document.getElementById('messagesContainer');
+                if (!messagesContainer?.contains(target) && target.id !== 'messageInput') {
+                    e.preventDefault();
+                }
+            }
         }
 
         setAppHeight();
         window.addEventListener('resize', () => requestAnimationFrame(setAppHeight));
         window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 100));
-        window.visualViewport?.addEventListener('resize', setAppHeight);
-        window.visualViewport?.addEventListener('scroll', setAppHeight);
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', setAppHeight);
+            window.visualViewport.addEventListener('scroll', setAppHeight);
+        }
+
+        // Add touch event listeners to prevent unwanted scrolling
+        document.body.addEventListener('touchmove', preventBodyScroll, { passive: false });
         const expandedDepartments = new Set();
         let selectedFiles = [];
         let replyToMessage = null;
@@ -2913,6 +2983,10 @@
                 messageInput.placeholder = 'Напишите сообщение...';
                 sendBtn.disabled = false;
                 attachBtn.disabled = false;
+
+                // Refresh layout metrics after showing chat header
+                requestAnimationFrame(refreshLayoutMetrics);
+
                 messageInput.focus();
 
             const chat = chats.find(c => c.id === chatId);
@@ -3028,6 +3102,9 @@
                 }
 
                 console.log('[loadMessages] Сообщения успешно загружены');
+
+                // Refresh layout metrics after messages are loaded
+                requestAnimationFrame(refreshLayoutMetrics);
             } catch (err) {
                 console.error('[loadMessages] Критическая ошибка:', err);
                 messagesContainer.innerHTML = `
