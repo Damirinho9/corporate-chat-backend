@@ -463,6 +463,13 @@
             font-weight: 600;
         }
 
+        .draft-indicator {
+            color: var(--warning);
+            font-size: 14px;
+            margin-left: 4px;
+            opacity: 0.8;
+        }
+
         /* Online/Offline Status Indicators */
         .online-indicator {
             display: inline-block;
@@ -2316,6 +2323,13 @@
             }
         });
 
+        // Auto-save draft on input
+        document.getElementById('messageInput').addEventListener('input', (e) => {
+            if (currentChatId) {
+                saveDraftDebounced(currentChatId, e.target.value);
+            }
+        });
+
         // ==================== FILE UPLOAD ====================
         const fileInput = document.getElementById('fileInput');
         const uploadArea = document.getElementById('fileUploadArea');
@@ -3318,7 +3332,15 @@
                                 }
                         }
 
-                        if (!lastMessageText) lastMessageText = 'Пока тишина';
+                        // Check for draft
+                        const draft = getDraft(chat.id);
+                        const draftIndicator = draft ? `<span class="draft-indicator">📝</span>` : '';
+
+                        if (draft) {
+                                lastMessageText = `<span style="color: var(--warning);">Черновик: ${escapeHtml(draft.substring(0, 30))}${draft.length > 30 ? '...' : ''}</span>`;
+                        } else if (!lastMessageText) {
+                                lastMessageText = 'Пока тишина';
+                        }
 
                         const chatName = escapeHtml(chat.name || 'Чат');
 
@@ -3341,7 +3363,7 @@
 
                         const content = `
                                 <div class="chat-item-header">
-                                        <span class="chat-name">${chatName}${onlineIndicator}</span>
+                                        <span class="chat-name">${chatName}${onlineIndicator}${draftIndicator}</span>
                                         ${unreadBadge}
                                 </div>
                                 <div class="chat-last-message">
@@ -3650,6 +3672,15 @@
 
                 // Show markdown toolbar
                 document.getElementById('markdownToolbar').style.display = 'flex';
+
+                // Restore draft if exists
+                const draft = getDraft(chatId);
+                if (draft) {
+                    messageInput.value = draft;
+                    console.log('📝 Draft restored for chat', chatId);
+                } else {
+                    messageInput.value = '';
+                }
 
                 // Refresh layout metrics after showing chat header
                 requestAnimationFrame(refreshLayoutMetrics);
@@ -4093,6 +4124,79 @@
             });
         }
 
+        // ==================== DRAFTS (LocalStorage) ====================
+        function saveDraft(chatId, text) {
+            if (!chatId) return;
+
+            const drafts = getDrafts();
+            if (text.trim()) {
+                drafts[chatId] = text;
+            } else {
+                delete drafts[chatId];
+            }
+
+            try {
+                localStorage.setItem('messageDrafts', JSON.stringify(drafts));
+            } catch (e) {
+                console.warn('Failed to save draft:', e);
+            }
+        }
+
+        function getDraft(chatId) {
+            if (!chatId) return '';
+            const drafts = getDrafts();
+            return drafts[chatId] || '';
+        }
+
+        function clearDraft(chatId) {
+            if (!chatId) return;
+            const drafts = getDrafts();
+            delete drafts[chatId];
+
+            try {
+                localStorage.setItem('messageDrafts', JSON.stringify(drafts));
+            } catch (e) {
+                console.warn('Failed to clear draft:', e);
+            }
+        }
+
+        function getDrafts() {
+            try {
+                const drafts = localStorage.getItem('messageDrafts');
+                return drafts ? JSON.parse(drafts) : {};
+            } catch (e) {
+                console.warn('Failed to load drafts:', e);
+                return {};
+            }
+        }
+
+        function hasDraft(chatId) {
+            return !!getDraft(chatId);
+        }
+
+        // Debounce helper
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Auto-save draft on input (debounced)
+        const saveDraftDebounced = debounce((chatId, text) => {
+            saveDraft(chatId, text);
+            console.log('💾 Draft auto-saved for chat', chatId);
+            // Update chat list to show draft indicator
+            if (typeof loadChats === 'function') {
+                loadChats();
+            }
+        }, 500);
+
         // Generate avatar color from name
         function getAvatarColor(name) {
             const colors = [
@@ -4237,6 +4341,15 @@
 
                 input.value = '';
                 input.style.height = 'auto';
+
+                // Clear draft after successful send
+                clearDraft(currentChatId);
+                console.log('🗑️ Draft cleared for chat', currentChatId);
+                // Update chat list to remove draft indicator
+                if (typeof loadChats === 'function') {
+                    loadChats();
+                }
+
                 requestAnimationFrame(refreshLayoutMetrics);
                 cancelReply();
             } catch (err) {
