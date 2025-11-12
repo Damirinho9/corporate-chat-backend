@@ -10,7 +10,13 @@
     "postbuild": "node scripts/restore_production_snapshot.js",
     "test": "node tests/directMessages.test.js",
     "db:init": "psql -U postgres -d corporate_chat -f database/schema.sql",
-    "restore:snapshot": "node scripts/restore_production_snapshot.js"
+    "restore:snapshot": "node scripts/restore_production_snapshot.js",
+    "backup": "node scripts/backup.js",
+    "backup:now": "bash scripts/backup.sh backup",
+    "backup:check": "bash scripts/backup.sh check",
+    "backup:list": "bash scripts/backup.sh list",
+    "restore": "node scripts/restore.js",
+    "restore:list": "node scripts/restore.js list"
   },
   "engines": {
     "node": ">=18.0.0"
