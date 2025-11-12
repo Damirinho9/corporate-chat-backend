@@ -102,6 +102,73 @@ router.get('/users/department/:department',
     userController.getUsersByDepartment
 );
 
+// ==================== ONLINE STATUS ====================
+// IMPORTANT: These routes must come BEFORE /users/:userId to avoid "online" being treated as a userId
+const { getOnlineUsers, isUserOnline } = require('../socket/socketHandler');
+
+router.get('/users/online', authenticateToken, async (req, res) => {
+    console.log('📊 GET /users/online - Request received');
+    try {
+        const onlineUserIds = getOnlineUsers();
+        console.log('📊 Online user IDs:', onlineUserIds);
+
+        // If no users online, return empty array
+        if (!onlineUserIds || onlineUserIds.length === 0) {
+            console.log('📊 No users online, returning empty array');
+            return res.json({
+                online: [],
+                count: 0
+            });
+        }
+
+        console.log('📊 Querying database for', onlineUserIds.length, 'users');
+        // Get user details for online users
+        const result = await query(
+            `SELECT id, username, name, role, department, last_seen
+             FROM users
+             WHERE id = ANY($1::int[]) AND is_active = true
+             ORDER BY name`,
+            [onlineUserIds]
+        );
+
+        console.log('📊 Found', result.rows.length, 'online users');
+        res.json({
+            online: result.rows,
+            count: result.rows.length
+        });
+    } catch (error) {
+        console.error('❌ Get online users error:', error);
+        res.status(500).json({ error: 'Failed to get online users' });
+    }
+});
+
+router.get('/users/:userId/status', authenticateToken, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const online = isUserOnline(parseInt(userId, 10));
+
+        let lastSeen = null;
+        if (!online) {
+            const result = await query(
+                'SELECT last_seen FROM users WHERE id = $1',
+                [userId]
+            );
+            if (result.rows.length > 0) {
+                lastSeen = result.rows[0].last_seen;
+            }
+        }
+
+        res.json({
+            userId: parseInt(userId, 10),
+            online,
+            lastSeen
+        });
+    } catch (error) {
+        console.error('Get user status error:', error);
+        res.status(500).json({ error: 'Failed to get user status' });
+    }
+});
+
 router.get('/users/:userId',
     authenticateToken,
     [param('userId').isInt()],
@@ -609,72 +676,6 @@ router.get('/files/stats',
 );
 
 router.use('/files', fileRoutes);
-
-// ==================== ONLINE STATUS ====================
-const { getOnlineUsers, isUserOnline } = require('../socket/socketHandler');
-
-router.get('/users/online', authenticateToken, async (req, res) => {
-    console.log('📊 GET /users/online - Request received');
-    try {
-        const onlineUserIds = getOnlineUsers();
-        console.log('📊 Online user IDs:', onlineUserIds);
-
-        // If no users online, return empty array
-        if (!onlineUserIds || onlineUserIds.length === 0) {
-            console.log('📊 No users online, returning empty array');
-            return res.json({
-                online: [],
-                count: 0
-            });
-        }
-
-        console.log('📊 Querying database for', onlineUserIds.length, 'users');
-        // Get user details for online users
-        const result = await query(
-            `SELECT id, username, name, role, department, last_seen
-             FROM users
-             WHERE id = ANY($1::int[]) AND is_active = true
-             ORDER BY name`,
-            [onlineUserIds]
-        );
-
-        console.log('📊 Found', result.rows.length, 'online users');
-        res.json({
-            online: result.rows,
-            count: result.rows.length
-        });
-    } catch (error) {
-        console.error('❌ Get online users error:', error);
-        res.status(500).json({ error: 'Failed to get online users' });
-    }
-});
-
-router.get('/users/:userId/status', authenticateToken, async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const online = isUserOnline(parseInt(userId, 10));
-
-        let lastSeen = null;
-        if (!online) {
-            const result = await query(
-                'SELECT last_seen FROM users WHERE id = $1',
-                [userId]
-            );
-            if (result.rows.length > 0) {
-                lastSeen = result.rows[0].last_seen;
-            }
-        }
-
-        res.json({
-            userId: parseInt(userId, 10),
-            online,
-            lastSeen
-        });
-    } catch (error) {
-        console.error('Get user status error:', error);
-        res.status(500).json({ error: 'Failed to get user status' });
-    }
-});
 
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {
