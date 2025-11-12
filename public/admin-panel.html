@@ -1389,54 +1389,6 @@
             window.location.href = '/';
         }
 
-                <div class="form-group">
-                    <label>Username *</label>
-                    <input type="text" id="editUsername" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Role *</label>
-                    <select id="editRole" required>
-                        <option value="">Select role</option>
-                        <option value="admin">Админ</option>
-                        <option value="assistant">Assistant</option>
-                        <option value="rop">ROP</option>
-                        <option value="operator">Operator</option>
-                        <option value="employee">Сотрудник</option>
-                    </select>
-                </div>
-
-                <div class="form-group disabled" id="editDepartmentField">
-                    <label>Department *</label>
-                    <select id="editDepartmentSelect" disabled>
-                        <option value="">Выберите отдел</option>
-                    </select>
-                    <small class="form-hint">Отдел обязателен для РОПов, операторов и сотрудников.</small>
-                </div>
-
-                <div class="form-group">
-                    <label>Status *</label>
-                    <select id="editStatus" required>
-                        <option value="true">Active</option>
-                        <option value="false">Inactive</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Initial Password</label>
-                    <div class="password-inline">
-                        <input type="text" id="editInitialPassword" readonly>
-                        <button type="button" class="btn btn-secondary" onclick="copyEditPassword()">Копировать</button>
-                        <button type="button" class="btn btn-secondary" onclick="resetUserPassword()">Сбросить</button>
-                    </div>
-                    <small class="form-hint">Пароль показывается только администраторам. Сброс создаст новый случайный пароль и сохранит его.</small>
-                </div>
-
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('editUserModal')">Отмена</button>
-                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
-                </div>
-            </form>
         const ROLE_LABELS = {
             admin: 'Админ',
             assistant: 'Ассистент',
