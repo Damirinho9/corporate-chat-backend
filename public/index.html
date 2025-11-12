@@ -2687,19 +2687,12 @@
                 };
 
                 // 3️⃣ Группировка по отделам и ролям
-                const assistants = [];
                 const directChats = [];
                 const usedChatIds = new Set();
 
                 filteredChats.forEach(chat => {
                         if (chat.type === 'direct') {
                                 directChats.push(chat);
-                                return;
-                        }
-
-                        if (/ассист/i.test(chat.name || '')) {
-                                assistants.push(chat);
-                                usedChatIds.add(chat.id);
                         }
                 });
 
@@ -2707,6 +2700,7 @@
                 const departmentSections = [];
                 const departmentContacts = Array.isArray(contacts.departments) ? contacts.departments : [];
 
+                // Сначала привязываем чаты к отделам (включая "Ассистенты")
                 departmentContacts.forEach(dept => {
                         const deptName = dept.department || '';
                         const deptKey = getDepartmentKey(deptName || `department-${dept.id || ''}`);
@@ -2732,6 +2726,12 @@
                                 isExpanded: expandedDepartments.has(deptKey)
                         });
                 });
+
+                // Теперь среди оставшихся чатов ищем чаты ассистентов для отдельной секции
+                const assistants = groupChats.filter(chat =>
+                        !usedChatIds.has(chat.id) && /ассист/i.test(chat.name || '')
+                );
+                assistants.forEach(chat => usedChatIds.add(chat.id));
 
                 groupChats
                         .filter(chat => !usedChatIds.has(chat.id) && /отдел/i.test(chat.name || ''))

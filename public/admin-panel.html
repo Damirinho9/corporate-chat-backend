@@ -3258,14 +3258,6 @@ function handleChatTypeChange() {
     }
 }
 
-            if (currentValue) {
-                const hasMatch = Array.from(targetSelect.options).some(opt => opt.value === currentValue);
-                targetSelect.value = hasMatch ? currentValue : '';
-            } else {
-                targetSelect.value = '';
-            }
-        }
-
         function generateStrongPassword(length = 12) {
             const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()_+';
             const chars = [];
