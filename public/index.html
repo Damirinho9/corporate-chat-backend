@@ -4318,6 +4318,9 @@
 
                 showToast('Голосовое сообщение отправлено', 'success');
 
+                // Reload messages to show the new voice message
+                await loadMessages(currentChatId);
+
             } catch (error) {
                 console.error('Failed to send voice message:', error);
                 showToast('Ошибка отправки голосового сообщения', 'error');
