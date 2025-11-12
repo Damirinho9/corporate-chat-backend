@@ -617,11 +617,19 @@ router.get('/users/online', authenticateToken, async (req, res) => {
     try {
         const onlineUserIds = getOnlineUsers();
 
+        // If no users online, return empty array
+        if (!onlineUserIds || onlineUserIds.length === 0) {
+            return res.json({
+                online: [],
+                count: 0
+            });
+        }
+
         // Get user details for online users
         const result = await query(
             `SELECT id, username, name, role, department, last_seen
              FROM users
-             WHERE id = ANY($1) AND is_active = true
+             WHERE id = ANY($1::int[]) AND is_active = true
              ORDER BY name`,
             [onlineUserIds]
         );
