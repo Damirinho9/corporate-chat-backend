@@ -460,6 +460,38 @@
             font-weight: 600;
         }
 
+        /* Online/Offline Status Indicators */
+        .online-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-left: 8px;
+            position: relative;
+            top: 0;
+            border: 2px solid var(--bg-secondary);
+        }
+
+        .online-indicator.online {
+            background-color: #10b981;
+            box-shadow: 0 0 5px rgba(16, 185, 129, 0.5);
+        }
+
+        .online-indicator.offline {
+            background-color: #6b7280;
+        }
+
+        .chat-name .online-indicator {
+            vertical-align: middle;
+            margin-left: 6px;
+        }
+
+        .chat-header h3 .online-indicator {
+            margin-left: 10px;
+            width: 12px;
+            height: 12px;
+        }
+
         .chat-last-message {
             display: flex;
             justify-content: space-between;
@@ -1617,6 +1649,7 @@
         let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
         let socket = null;
         let currentChatId = null;
+        let onlineUsers = new Set(); // Track online user IDs
         let currentDirectContactId = null;
         let chats = [];
         const directChatByUser = new Map();
@@ -2254,6 +2287,7 @@
             connectSocket();
             loadChats();
             loadUserPermissions();
+            loadOnlineUsers();
         }
 
         function updateUserUI(user) {
@@ -2318,9 +2352,75 @@
                 }
             });
 
+            socket.on('user_online', (data) => {
+                onlineUsers.add(data.userId);
+                updateUserOnlineStatus(data.userId, true);
+            });
+
+            socket.on('user_offline', (data) => {
+                onlineUsers.delete(data.userId);
+                updateUserOnlineStatus(data.userId, false);
+            });
+
             socket.on('error', (err) => {
                 showToast(err.message || 'Ошибка сокета', 'error');
             });
+        }
+
+        // ==================== ONLINE STATUS ====================
+        async function loadOnlineUsers() {
+            try {
+                const res = await fetch(`${API_URL}/users/online`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    onlineUsers.clear();
+                    data.online.forEach(user => {
+                        onlineUsers.add(user.id);
+                        updateUserOnlineStatus(user.id, true);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load online users:', error);
+            }
+        }
+
+        function updateUserOnlineStatus(userId, isOnline) {
+            // Update status indicators in chat list
+            const chatElements = document.querySelectorAll(`.chat-item[data-user-id="${userId}"], .contact[data-user-id="${userId}"]`);
+            chatElements.forEach(chatEl => {
+                let indicator = chatEl.querySelector('.online-indicator');
+                if (indicator) {
+                    // Indicator already exists, just update its class
+                    indicator.classList.toggle('online', isOnline);
+                    indicator.classList.toggle('offline', !isOnline);
+                } else {
+                    // For dynamically created elements that don't have indicators yet
+                    // The indicator will be added during next re-render
+                    // We'll just trigger a re-render
+                    requestAnimationFrame(() => renderChats());
+                }
+            });
+
+            // Update status in chat header if this is the current chat
+            if (currentChatId) {
+                const chatHeader = document.querySelector('.chat-header h3');
+                if (chatHeader) {
+                    const chatInfo = chats.find(c => c.id === currentChatId);
+                    if (chatInfo && chatInfo.type === 'direct' && chatInfo.otherUserId === userId) {
+                        let headerIndicator = chatHeader.querySelector('.online-indicator');
+                        if (!headerIndicator) {
+                            headerIndicator = document.createElement('span');
+                            headerIndicator.className = 'online-indicator';
+                            chatHeader.appendChild(headerIndicator);
+                        }
+                        headerIndicator.classList.toggle('online', isOnline);
+                        headerIndicator.classList.toggle('offline', !isOnline);
+                    }
+                }
+            }
         }
 
         // ==================== TOAST ====================
@@ -2644,15 +2744,27 @@
                         if (!lastMessageText) lastMessageText = 'Пока тишина';
 
                         const chatName = escapeHtml(chat.name || 'Чат');
+
+                        // Add online indicator for direct chats
+                        const isOnline = chat.type === 'direct' && chat.otherUserId && onlineUsers.has(chat.otherUserId);
+                        const onlineIndicator = chat.type === 'direct'
+                                ? `<span class="online-indicator ${isOnline ? 'online' : 'offline'}"></span>`
+                                : '';
+
                         const unreadBadge = chat.unread_count > 0
                                 ? `<span class="unread-badge">${chat.unread_count}</span>`
                                 : '';
 
                         const isActive = Number(chat.id) === Number(currentChatId);
 
+                        // Add data-user-id attribute for direct chats
+                        const userIdAttr = chat.type === 'direct' && chat.otherUserId
+                                ? `data-user-id="${chat.otherUserId}"`
+                                : '';
+
                         const content = `
                                 <div class="chat-item-header">
-                                        <span class="chat-name">${chatName}</span>
+                                        <span class="chat-name">${chatName}${onlineIndicator}</span>
                                         ${unreadBadge}
                                 </div>
                                 <div class="chat-last-message">
@@ -2668,6 +2780,7 @@
                                 return `
                                         <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
                                             data-chat-id="${chat.id}"
+                                            ${userIdAttr}
                                             onclick="openChat(${chat.id})">
                                                 <button class="${arrowClass}" onclick="toggleDepartment(event, '${deptKey}')">&#9656;</button>
                                                 <div class="department-info">
@@ -2680,6 +2793,7 @@
                         return `
                                 <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
                                     data-chat-id="${chat.id}"
+                                    ${userIdAttr}
                                     onclick="openChat(${chat.id})">
                                         ${content}
                                 </li>
