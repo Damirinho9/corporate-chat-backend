@@ -1623,7 +1623,7 @@ async function loadChats() {
                     tbody.innerHTML = chatsCache.map(chat => `
                         <tr>
                             <td>${chat.id}</td>
-                            <td>${displayName}</td>
+                            <td>${chat.name || 'N/A'}</td>
                             <td>${chat.type || 'N/A'}</td>
                             <td>${chat.department_name || 'N/A'}</td>
                             <td>${chat.participant_count || 0}</td>
