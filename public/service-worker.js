@@ -1,7 +1,7 @@
 // public/service-worker.js
 // Service Worker для обработки push-уведомлений
 
-const CACHE_NAME = 'corporate-chat-v1';
+const CACHE_NAME = 'corporate-chat-v2-polls-fix';
 const urlsToCache = [
   '/',
   '/index.html',
