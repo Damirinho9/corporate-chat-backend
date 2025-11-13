@@ -1,0 +1,136 @@
+=====================================================
+ИНСТРУКЦИЯ ПО ПРИМЕНЕНИЮ МИГРАЦИИ ОПРОСОВ
+=====================================================
+
+ПРОБЛЕМА:
+API опросов возвращает 404, потому что таблицы в БД еще не созданы.
+
+РЕШЕНИЕ (выберите один из вариантов):
+
+=====================================================
+ВАРИАНТ 1: Через pgAdmin или другой GUI клиент
+=====================================================
+
+1. Откройте pgAdmin или ваш PostgreSQL GUI клиент
+
+2. Подключитесь к базе данных "corporate_chat" с параметрами:
+   - Host: localhost
+   - Port: 5433
+   - Username: postgres
+   - Password: postgres
+   - Database: corporate_chat
+
+3. Откройте Query Tool
+
+4. Скопируйте и выполните содержимое файла:
+   database/migrations/012_create_polls.sql
+
+5. Должны быть созданы таблицы: polls и poll_votes
+
+=====================================================
+ВАРИАНТ 2: Через командную строку на СЕРВЕРЕ
+=====================================================
+
+На вашем сервере (где работает приложение) выполните:
+
+cd ~/corporate-chat-backend
+
+# Если PostgreSQL доступен локально:
+psql -h localhost -p 5433 -U postgres -d corporate_chat -f database/migrations/012_create_polls.sql
+
+# Или если через Unix socket:
+psql -U postgres -d corporate_chat -f database/migrations/012_create_polls.sql
+
+# Введите пароль: postgres
+
+=====================================================
+ВАРИАНТ 3: Выполнить SQL вручную
+=====================================================
+
+Подключитесь к базе данных corporate_chat и выполните следующий SQL:
+
+-- Создание таблицы опросов
+CREATE TABLE IF NOT EXISTS polls (
+    id SERIAL PRIMARY KEY,
+    message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+    chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+    created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    question TEXT NOT NULL,
+    options JSONB NOT NULL,
+    multiple_choice BOOLEAN DEFAULT false,
+    anonymous BOOLEAN DEFAULT false,
+    closed BOOLEAN DEFAULT false,
+    closes_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Создание таблицы голосов
+CREATE TABLE IF NOT EXISTS poll_votes (
+    id SERIAL PRIMARY KEY,
+    poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    option_indices INTEGER[] NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(poll_id, user_id)
+);
+
+-- Создание индексов
+CREATE INDEX IF NOT EXISTS idx_polls_message_id ON polls(message_id);
+CREATE INDEX IF NOT EXISTS idx_polls_chat_id ON polls(chat_id);
+CREATE INDEX IF NOT EXISTS idx_polls_created_by ON polls(created_by);
+CREATE INDEX IF NOT EXISTS idx_polls_closed ON polls(closed);
+CREATE INDEX IF NOT EXISTS idx_poll_votes_poll_id ON poll_votes(poll_id);
+CREATE INDEX IF NOT EXISTS idx_poll_votes_user_id ON poll_votes(user_id);
+
+-- Создание триггера для updated_at
+CREATE OR REPLACE FUNCTION update_poll_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER poll_updated_at_trigger
+    BEFORE UPDATE ON polls
+    FOR EACH ROW
+    EXECUTE FUNCTION update_poll_updated_at();
+
+=====================================================
+ПРОВЕРКА
+=====================================================
+
+После применения миграции проверьте, что таблицы созданы:
+
+SELECT tablename FROM pg_tables
+WHERE schemaname='public' AND tablename LIKE 'poll%';
+
+Должны быть:
+- polls
+- poll_votes
+
+=====================================================
+ПОСЛЕ ПРИМЕНЕНИЯ
+=====================================================
+
+1. Сервер уже перезапущен (pm2 restart all)
+
+2. Обновите страницу в браузере (Ctrl+Shift+R)
+
+3. Попробуйте создать опрос
+
+4. Если не работает, проверьте логи:
+   pm2 logs corporate-chat
+
+=====================================================
+ДАННЫЕ ДЛЯ ПОДКЛЮЧЕНИЯ (из PM2)
+=====================================================
+
+DB_HOST=localhost
+DB_PORT=5433
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=corporate_chat
+
+=====================================================
