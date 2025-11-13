@@ -780,4 +780,160 @@ router.get('/active/all',
   }
 );
 
+// ==================== GET CALL SUMMARY ====================
+router.get('/:callId/summary',
+  authenticateToken,
+  [param('callId').isInt()],
+  validate,
+  async (req, res) => {
+    try {
+      const { callId } = req.params;
+      const userId = req.user.id;
+
+      // Получаем основную информацию о звонке
+      const callResult = await query(
+        `SELECT c.*,
+                u.name as initiator_name,
+                u.username as initiator_username,
+                ch.name as chat_name,
+                ch.type as chat_type
+         FROM calls c
+         JOIN users u ON c.initiated_by = u.id
+         LEFT JOIN chats ch ON c.chat_id = ch.id
+         WHERE c.id = $1`,
+        [callId]
+      );
+
+      if (callResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Call not found' });
+      }
+
+      const call = callResult.rows[0];
+
+      // Проверяем доступ (пользователь должен быть участником звонка)
+      const accessCheck = await query(
+        'SELECT * FROM call_participants WHERE call_id = $1 AND user_id = $2',
+        [callId, userId]
+      );
+
+      if (accessCheck.rows.length === 0 && req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Получаем участников с временем присоединения/выхода
+      const participantsResult = await query(
+        `SELECT cp.user_id, u.name, u.username, u.role,
+                cp.joined_at, cp.left_at, cp.is_moderator,
+                CASE
+                  WHEN cp.left_at IS NOT NULL AND cp.joined_at IS NOT NULL
+                  THEN EXTRACT(EPOCH FROM (cp.left_at - cp.joined_at))
+                  ELSE NULL
+                END as duration_seconds
+         FROM call_participants cp
+         JOIN users u ON cp.user_id = u.id
+         WHERE cp.call_id = $1
+         ORDER BY cp.joined_at ASC`,
+        [callId]
+      );
+
+      // Получаем все события звонка
+      const eventsResult = await query(
+        `SELECT ce.*, u.name as user_name
+         FROM call_events ce
+         LEFT JOIN users u ON ce.user_id = u.id
+         WHERE ce.call_id = $1
+         ORDER BY ce.created_at ASC`,
+        [callId]
+      );
+
+      // Вычисляем общую длительность звонка
+      let totalDuration = null;
+      if (call.started_at && call.ended_at) {
+        const start = new Date(call.started_at);
+        const end = new Date(call.ended_at);
+        totalDuration = Math.floor((end - start) / 1000); // в секундах
+      } else if (call.started_at) {
+        const start = new Date(call.started_at);
+        const now = new Date();
+        totalDuration = Math.floor((now - start) / 1000); // в секундах (звонок еще идет)
+      }
+
+      // Подсчитываем статистику
+      const totalParticipants = participantsResult.rows.length;
+      const activeParticipants = participantsResult.rows.filter(p => p.left_at === null).length;
+      const completedParticipants = participantsResult.rows.filter(p => p.left_at !== null).length;
+
+      // Форматируем длительность
+      const formatDuration = (seconds) => {
+        if (!seconds) return null;
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+
+        if (hours > 0) {
+          return `${hours}ч ${minutes}м ${secs}с`;
+        } else if (minutes > 0) {
+          return `${minutes}м ${secs}с`;
+        } else {
+          return `${secs}с`;
+        }
+      };
+
+      res.json({
+        call: {
+          id: call.id,
+          roomName: call.room_name,
+          callType: call.call_type,
+          callMode: call.call_mode,
+          status: call.status,
+          initiatedBy: {
+            name: call.initiator_name,
+            username: call.initiator_username
+          },
+          chat: call.chat_name ? {
+            name: call.chat_name,
+            type: call.chat_type
+          } : null,
+          startedAt: call.started_at,
+          endedAt: call.ended_at,
+          createdAt: call.created_at,
+          duration: {
+            seconds: totalDuration,
+            formatted: formatDuration(totalDuration)
+          }
+        },
+        participants: participantsResult.rows.map(p => ({
+          userId: p.user_id,
+          name: p.name,
+          username: p.username,
+          role: p.role,
+          isModerator: p.is_moderator,
+          joinedAt: p.joined_at,
+          leftAt: p.left_at,
+          duration: {
+            seconds: p.duration_seconds,
+            formatted: formatDuration(p.duration_seconds)
+          }
+        })),
+        statistics: {
+          totalParticipants,
+          activeParticipants,
+          completedParticipants,
+          totalDuration: {
+            seconds: totalDuration,
+            formatted: formatDuration(totalDuration)
+          }
+        },
+        events: eventsResult.rows
+      });
+    } catch (error) {
+      console.error('Error getting call summary:', error);
+      res.status(500).json({
+        error: 'Failed to get call summary',
+        details: error.message
+      });
+    }
+  }
+);
+
 module.exports = router;

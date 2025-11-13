@@ -2044,6 +2044,7 @@
                         </div>
                     </div>
                     <div class="header-actions">
+                        <button class="icon-btn" id="callHistoryBtn" title="История звонков">📞</button>
                         <button class="icon-btn" id="adminBtn" title="Админ-панель" style="display:none">🛠️</button>
                         <button class="icon-btn" id="themeToggle" title="Тема">🌓</button>
                         <button class="icon-btn" id="logoutBtn" title="Выход">🚪</button>
@@ -2195,6 +2196,24 @@
                 <button class="app-modal-close" onclick="closeModal()">×</button>
             </div>
             <div class="app-modal-body" id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- Call History Modal -->
+    <div id="callHistoryModal" class="app-modal">
+        <div class="app-modal-content" style="max-width: 900px;">
+            <div class="app-modal-header">
+                <h3>📞 История звонков</h3>
+                <button class="app-modal-close" onclick="closeCallHistoryModal()">×</button>
+            </div>
+            <div class="app-modal-body">
+                <div id="callHistoryContent">
+                    <div style="text-align: center; padding: 40px; color: #999;">
+                        <div style="font-size: 40px; margin-bottom: 10px;">⏳</div>
+                        <div>Загрузка истории звонков...</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2839,6 +2858,213 @@
             }
         });
 
+        // ==================== CALL HISTORY ====================
+        async function openCallHistoryModal() {
+            const modal = document.getElementById('callHistoryModal');
+            modal.classList.add('show');
+
+            // Load call history
+            await loadCallHistory();
+        }
+
+        function closeCallHistoryModal() {
+            const modal = document.getElementById('callHistoryModal');
+            modal.classList.remove('show');
+        }
+
+        async function loadCallHistory() {
+            const container = document.getElementById('callHistoryContent');
+
+            try {
+                const response = await fetch(`${API_URL}/calls/history/all`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load call history');
+                }
+
+                const data = await response.json();
+                const calls = data.calls || [];
+
+                if (calls.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 60px 20px; color: #999;">
+                            <div style="font-size: 60px; margin-bottom: 15px;">📞</div>
+                            <div style="font-size: 18px; margin-bottom: 5px;">Нет истории звонков</div>
+                            <div style="font-size: 14px;">Начните видео или аудиозвонок</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Render call history
+                container.innerHTML = `
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        ${calls.map(call => renderCallHistoryItem(call)).join('')}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading call history:', error);
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #e74c3c;">
+                        <div style="font-size: 40px; margin-bottom: 10px;">❌</div>
+                        <div>Ошибка загрузки истории звонков</div>
+                    </div>
+                `;
+            }
+        }
+
+        function renderCallHistoryItem(call) {
+            const callType = call.call_type === 'audio' ? '🎙️ Аудио' : '📹 Видео';
+            const callMode = call.call_mode === 'direct' ? 'Личный' : 'Групповой';
+            const status = call.status === 'ended' ? '✅ Завершен' : call.status === 'ongoing' ? '🔴 В процессе' : '⏸️ Ожидание';
+            const date = new Date(call.created_at);
+            const formattedDate = date.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
+            const formattedTime = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+            let duration = 'N/A';
+            if (call.started_at && call.ended_at) {
+                const start = new Date(call.started_at);
+                const end = new Date(call.ended_at);
+                const durationSec = Math.floor((end - start) / 1000);
+                const minutes = Math.floor(durationSec / 60);
+                const seconds = durationSec % 60;
+                duration = minutes > 0 ? `${minutes}м ${seconds}с` : `${seconds}с`;
+            }
+
+            return `
+                <div style="
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                    padding: 16px;
+                    border-left: 4px solid ${call.call_type === 'audio' ? '#4A90E2' : '#9C27B0'};
+                    cursor: pointer;
+                    transition: all 0.2s;
+                "
+                onmouseover="this.style.background='#e9ecef'"
+                onmouseout="this.style.background='#f8f9fa'"
+                onclick="viewCallSummary(${call.id})">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 16px; color: #2c3e50; margin-bottom: 4px;">
+                                ${callType} · ${callMode}
+                            </div>
+                            <div style="font-size: 13px; color: #666;">
+                                Инициатор: ${call.initiator_name || 'Неизвестно'}
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 4px;">
+                                ${formattedDate}
+                            </div>
+                            <div style="font-size: 12px; font-weight: 600; color: #666;">
+                                ${formattedTime}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 16px; font-size: 13px;">
+                        <div style="color: #666;">
+                            <span style="font-weight: 600;">Участников:</span> ${call.participants_count || 0}
+                        </div>
+                        <div style="color: #666;">
+                            <span style="font-weight: 600;">Длительность:</span> ${duration}
+                        </div>
+                        <div style="color: ${call.status === 'ended' ? '#2e7d32' : call.status === 'ongoing' ? '#d32f2f' : '#f57c00'};">
+                            ${status}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function viewCallSummary(callId) {
+            try {
+                const response = await fetch(`${API_URL}/calls/${callId}/summary`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load call summary');
+                }
+
+                const data = await response.json();
+
+                // Show summary in modal
+                const container = document.getElementById('callHistoryContent');
+                container.innerHTML = `
+                    <button onclick="loadCallHistory()" style="
+                        background: #f8f9fa;
+                        border: 1px solid #ddd;
+                        padding: 8px 16px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        margin-bottom: 16px;
+                        font-size: 14px;
+                    ">← Назад к истории</button>
+                    <div style="background: #fff; border-radius: 8px; padding: 24px;">
+                        <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #e0e0e0;">
+                            <h3 style="margin: 0 0 8px 0; color: #2c3e50;">📊 Детали звонка</h3>
+                            <div style="color: #666; font-size: 14px;">
+                                ${data.call.callType === 'audio' ? '🎙️ Аудиозвонок' : '📹 Видеозвонок'} ·
+                                ${data.call.callMode === 'direct' ? 'Личный' : 'Групповой'}
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                            <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #4A90E2;">
+                                <div style="font-size: 12px; color: #666; margin-bottom: 6px;">ДЛИТЕЛЬНОСТЬ</div>
+                                <div style="font-size: 24px; font-weight: 700; color: #2c3e50;">
+                                    ${data.statistics.totalDuration.formatted || 'N/A'}
+                                </div>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid #9C27B0;">
+                                <div style="font-size: 12px; color: #666; margin-bottom: 6px;">УЧАСТНИКОВ</div>
+                                <div style="font-size: 24px; font-weight: 700; color: #2c3e50;">
+                                    ${data.statistics.totalParticipants}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 24px;">
+                            <h4 style="margin: 0 0 12px 0; color: #4A90E2;">👥 УЧАСТНИКИ</h4>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                ${data.participants.map(p => `
+                                    <div style="display: flex; justify-content: space-between; padding: 12px; background: #f8f9fa; border-radius: 6px;">
+                                        <div>
+                                            <span style="font-weight: 600; color: #2c3e50;">${p.name}</span>
+                                            ${p.isModerator ? '<span style="background: #ffd700; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-left: 8px;">Модератор</span>' : ''}
+                                            <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                                                ${p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString('ru-RU') : '-'} →
+                                                ${p.leftAt ? new Date(p.leftAt).toLocaleTimeString('ru-RU') : 'В звонке'}
+                                            </div>
+                                        </div>
+                                        <div style="font-weight: 600; color: #4A90E2;">
+                                            ${p.duration.formatted || '-'}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading call summary:', error);
+                showToast('Ошибка загрузки деталей звонка', 'error');
+            }
+        }
+
+        // Close call history modal when clicking outside
+        document.getElementById('callHistoryModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'callHistoryModal') {
+                closeCallHistoryModal();
+            }
+        });
+
         // ==================== THEME ====================
         function toggleTheme() {
             const html = document.documentElement;
@@ -2952,6 +3178,12 @@
                 adminBtn.onclick = () => window.location.href = '/admin-panel.html';
             } else {
                 adminBtn.style.display = 'none';
+            }
+
+            // Call History button
+            const callHistoryBtn = document.getElementById('callHistoryBtn');
+            if (callHistoryBtn) {
+                callHistoryBtn.onclick = openCallHistoryModal;
             }
         }
 
