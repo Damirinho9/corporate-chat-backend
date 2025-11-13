@@ -261,12 +261,24 @@ async function createPoll() {
             const error = await response.json();
             console.error('Server error response:', error);
 
+            // Log detailed error info
+            if (error.errors && Array.isArray(error.errors)) {
+                console.error('Validation errors:', error.errors);
+                error.errors.forEach((err, idx) => {
+                    console.error(`Error ${idx + 1}:`, err);
+                });
+            }
+
             // Show detailed error message
             let errorMessage = 'Failed to create poll';
             if (error.error) {
                 errorMessage = error.error;
             } else if (error.errors && Array.isArray(error.errors)) {
-                errorMessage = error.errors.map(e => e.msg || e.message).join(', ');
+                errorMessage = error.errors.map(e => {
+                    const field = e.path || e.param || '';
+                    const msg = e.msg || e.message || 'Invalid value';
+                    return field ? `${field}: ${msg}` : msg;
+                }).join(', ');
             } else if (error.message) {
                 errorMessage = error.message;
             }
