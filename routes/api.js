@@ -20,6 +20,7 @@ const { PERMISSIONS_MATRIX } = require('../config/permissionsMatrix');
 
 const { authenticateToken, requireAdmin, requireHead, requireAdminOrRop } = require('../middleware/auth');
 const { canAccessChat, canSendToChat, canCreateDirectMessage } = require('../middleware/permissions');
+const { logAdminAction } = require('../utils/adminLogger');
 
 const { body, param, query: queryValidator, validationResult } = require('express-validator');
 

@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to match seed.js
 const { query } = require('../config/database');
+const { logAdminAction } = require('../utils/adminLogger');
 
 const ROP_MANAGEABLE_ROLES = new Set(['operator', 'employee']);
 
@@ -283,6 +284,18 @@ const updateUser = async (req, res) => {
         const updatedUser = result.rows[0];
         const includeSecret = isAdmin;
 
+        // Log admin action
+        await logAdminAction(req.user.id, 'update_user', {
+            updated_user_id: parseInt(userId),
+            changes: {
+                username: normalizedUsername !== currentUser.username ? normalizedUsername : undefined,
+                name: name !== undefined && name !== currentUser.name ? name : undefined,
+                role: normalizedRole !== currentUser.role ? normalizedRole : undefined,
+                department: department !== undefined ? department : undefined,
+                is_active: isActive !== undefined && isActive !== currentUser.is_active ? isActive : undefined
+            }
+        });
+
         res.json({
             message: 'User updated successfully',
             user: sanitizeInitialPassword(updatedUser, includeSecret)
@@ -362,6 +375,15 @@ const deleteUser = async (req, res) => {
         // Delete user (cascade will handle messages and chat participants)
         await query('DELETE FROM users WHERE id = $1', [userId]);
 
+        // Log admin action
+        await logAdminAction(req.user.id, 'delete_user', {
+            deleted_user_id: parseInt(userId),
+            username: targetUser.username,
+            name: targetUser.name,
+            role: targetUser.role,
+            department: targetUser.department
+        });
+
         res.json({ message: 'User deleted successfully' });
     } catch (error) {
         console.error('Delete user error:', error);
@@ -407,6 +429,11 @@ const resetPassword = async (req, res) => {
             'UPDATE users SET password_hash = $1, initial_password = $2 WHERE id = $3',
             [passwordHash, newPassword, userId]
         );
+
+        // Log admin action
+        await logAdminAction(req.user.id, 'reset_password', {
+            user_id: parseInt(userId)
+        });
 
         res.json({ message: 'Password reset successfully' });
     } catch (error) {

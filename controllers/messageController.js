@@ -1,5 +1,6 @@
 const { query } = require('../config/database');
 const { pool } = require('../config/database');
+const { logAdminAction } = require('../utils/adminLogger');
 
 // Get messages for chat
 const getMessages = async (req, res) => {
@@ -504,6 +505,17 @@ const deleteMessage = async (req, res) => {
 
         // Delete message (cascade handles mentions, reactions)
         await query('DELETE FROM messages WHERE id = $1', [messageId]);
+
+        // Log admin action (only for moderator deletions)
+        if (!isOwner && (isAdmin || isDepartmentRop)) {
+            await logAdminAction(userId, 'delete_message', {
+                message_id: parseInt(messageId),
+                chat_id: messageRow.chat_id,
+                chat_name: messageRow.chat_name,
+                original_author: messageRow.author_name,
+                deletion_scope: deletionScope
+            });
+        }
 
         res.json({ message: 'Message deleted successfully' });
     } catch (error) {

@@ -7,6 +7,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to match seed.js
 const { query } = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
+const { logAdminAction, getAdminLogs } = require('../utils/adminLogger');
 
 // ==================== DEPARTMENT MANAGEMENT ====================
 // DEPRECATED: Old department routes moved to departmentController.js
@@ -222,29 +223,6 @@ router.get('/chats/:chatId/pinned', authenticateToken, async (req, res) => {
 
 // ==================== ADMIN LOGS ====================
 
-// Log admin action
-async function logAdminAction(userId, action, details) {
-    try {
-        // Create admin_logs table if doesn't exist
-        await query(`
-            CREATE TABLE IF NOT EXISTS admin_logs (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id),
-                action VARCHAR(100) NOT NULL,
-                details JSONB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-
-        await query(
-            'INSERT INTO admin_logs (user_id, action, details) VALUES ($1, $2, $3)',
-            [userId, action, JSON.stringify(details)]
-        );
-    } catch (error) {
-        console.error('Log admin action error:', error);
-    }
-}
-
 // Get admin logs (admin only)
 router.get('/admin/logs', authenticateToken, async (req, res) => {
     try {
@@ -253,16 +231,9 @@ router.get('/admin/logs', authenticateToken, async (req, res) => {
         }
 
         const { limit = 100, offset = 0 } = req.query;
+        const logs = await getAdminLogs(parseInt(limit), parseInt(offset));
 
-        const result = await query(`
-            SELECT al.*, u.name as user_name, u.username
-            FROM admin_logs al
-            JOIN users u ON al.user_id = u.id
-            ORDER BY al.created_at DESC
-            LIMIT $1 OFFSET $2
-        `, [limit, offset]);
-
-        res.json({ logs: result.rows });
+        res.json({ logs });
     } catch (error) {
         console.error('Get admin logs error:', error);
         res.status(500).json({ error: error.message });

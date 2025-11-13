@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');  // CHANGED: was 'bcrypt', now 'bcryptjs' to
 const crypto = require('crypto');
 const { query } = require('../config/database');
 const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../middleware/auth');
+const { logAdminAction } = require('../utils/adminLogger');
 
 const PASSWORD_LENGTH = 12;
 
@@ -240,6 +241,15 @@ const register = async (req, res) => {
                 }
             }
         }
+
+        // Log admin action
+        await logAdminAction(req.user.id, 'create_user', {
+            created_user_id: newUser.id,
+            username: newUser.username,
+            name: newUser.name,
+            role: newUser.role,
+            department: newUser.department
+        });
 
         res.status(201).json({
             success: true,
