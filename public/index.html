@@ -2402,6 +2402,14 @@
         let chats = [];
         const directChatByUser = new Map();
 
+        // Expose variables to global scope for external modules (polls-ui.js, etc.)
+        window.currentUser = currentUser;
+        window.API_URL = API_URL;
+        Object.defineProperty(window, 'selectedChatId', {
+            get: () => currentChatId,
+            set: (value) => { currentChatId = value; }
+        });
+
         function refreshLayoutMetrics() {
             const inputContainer = document.getElementById('chatInputContainer');
             const chatHeader = document.getElementById('chatHeader');
@@ -3273,6 +3281,7 @@
                 if (data.token && data.user) {
                     token = data.token;
                     currentUser = data.user;
+                    window.currentUser = currentUser; // Update global reference
 
                     localStorage.setItem('token', token);
                     localStorage.setItem('user', JSON.stringify(currentUser));
@@ -3300,6 +3309,7 @@
             localStorage.removeItem('user');
             token = null;
             currentUser = null;
+            window.currentUser = null; // Update global reference
             if (socket) {
                 socket.disconnect();
                 socket = null;
@@ -3523,6 +3533,7 @@
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
         }
+        window.showToast = showToast; // Export for external modules
 
         // ==================== LOAD CHATS ====================
         let contacts = { departments: [], assistants: { users: [] } };
@@ -4622,6 +4633,7 @@
                 showToast('Ошибка загрузки сообщений', 'error');
             }
         }
+        window.loadMessages = loadMessages; // Export for external modules
 
         function appendMessage(message, isTempSending = false) {
             const messagesContainer = document.getElementById('messagesContainer');
