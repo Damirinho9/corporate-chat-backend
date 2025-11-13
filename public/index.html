@@ -3822,11 +3822,18 @@
 
         async function initiateCall(callType) {
             if (!currentDirectContactId) {
-                showNotification('Звонки доступны только для личных чатов', 'error');
+                showToast('Звонки доступны только для личных чатов', 'error');
                 return;
             }
 
             try {
+                // Получаем токен из localStorage
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    showToast('Необходима авторизация', 'error');
+                    return;
+                }
+
                 // Отключаем кнопки на время создания звонка
                 const audioBtn = document.getElementById('audioCallBtn');
                 const videoBtn = document.getElementById('videoCallBtn');
@@ -3836,7 +3843,7 @@
                 const response = await fetch(`${API_URL}/calls`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${authToken}`,
+                        'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
@@ -3857,15 +3864,15 @@
 
                 // Открываем окно звонка
                 const callWindow = window.open(
-                    `/call.html?callId=${callId}&token=${authToken}`,
+                    `/call.html?callId=${callId}&token=${token}`,
                     `call_${callId}`,
                     'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no'
                 );
 
                 if (!callWindow) {
-                    showNotification('Разрешите всплывающие окна для видеозвонков', 'error');
+                    showToast('Разрешите всплывающие окна для видеозвонков', 'error');
                 } else {
-                    showNotification(`${callType === 'audio' ? 'Аудио' : 'Видео'}звонок инициирован`, 'success');
+                    showToast(`${callType === 'audio' ? 'Аудио' : 'Видео'}звонок инициирован`, 'success');
                 }
 
                 // Включаем кнопки обратно
@@ -3874,7 +3881,7 @@
 
             } catch (error) {
                 console.error('Error initiating call:', error);
-                showNotification(error.message || 'Ошибка при создании звонка', 'error');
+                showToast(error.message || 'Ошибка при создании звонка', 'error');
 
                 // Включаем кнопки обратно
                 document.getElementById('audioCallBtn').disabled = false;
