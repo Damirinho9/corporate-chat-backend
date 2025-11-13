@@ -249,8 +249,6 @@ async function createPoll() {
         requestData.closes_at = closesAt;
     }
 
-    console.log('Creating poll with data:', requestData);
-
     try {
         const response = await fetch(`${window.API_URL}/polls`, {
             method: 'POST',
@@ -263,15 +261,7 @@ async function createPoll() {
 
         if (!response.ok) {
             const error = await response.json();
-            console.error('Server error response:', error);
-
-            // Log detailed error info
-            if (error.errors && Array.isArray(error.errors)) {
-                console.error('Validation errors:', error.errors);
-                error.errors.forEach((err, idx) => {
-                    console.error(`Error ${idx + 1}:`, err);
-                });
-            }
+            console.error('Poll creation failed:', error);
 
             // Show detailed error message
             let errorMessage = 'Failed to create poll';
@@ -314,18 +304,8 @@ function renderPoll(poll, messageElement) {
     const options = Array.isArray(poll.options) ? poll.options : JSON.parse(poll.options || '[]');
     const userVote = poll.user_vote || [];
     const totalVoters = poll.total_voters || 0;
-
-    // Debug logging
-    console.log(`[renderPoll] Poll ${poll.id} status:`, {
-        closed: poll.closed,
-        closes_at: poll.closes_at,
-        closedType: typeof poll.closed
-    });
-
     const isClosed = poll.closed === true || poll.closed === 1 || (poll.closes_at && new Date(poll.closes_at) < new Date());
     const hasVoted = userVote && userVote.length > 0;
-
-    console.log(`[renderPoll] Poll ${poll.id} isClosed: ${isClosed}, hasVoted: ${hasVoted}`);
 
     // Calculate percentages
     const totalVotes = options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
