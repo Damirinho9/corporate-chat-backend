@@ -3,11 +3,25 @@ const fetch = require('node-fetch');
 
 // Конфигурация
 const API_URL = 'http://localhost:3000/api';
-const ADMIN_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc2MzAxODQ2MCwiZXhwIjoxNzYzMTA0ODYwfQ.yrSFEhajliVH1sTHLxrNJu4eizH7iOvotBA1EtlWaz0';
+// ВАЖНО: Получите свежий токен из localStorage в браузере или через API логина
+// В браузере: откройте консоль и выполните: localStorage.getItem('token')
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc2MzAxODQ2MCwiZXhwIjoxNzYzMTA0ODYwfQ.yrSFEhajliVH1sTHLxrNJu4eizH7iOvotBA1EtlWaz0';
 
 async function testGroupCall() {
   try {
     console.log('🧪 Тестирование групповых звонков...\n');
+
+    // Проверяем токен
+    if (!ADMIN_TOKEN) {
+      console.error('❌ ADMIN_TOKEN не указан!');
+      console.log('\nКак получить токен:');
+      console.log('1. Откройте приложение в браузере');
+      console.log('2. Войдите как admin');
+      console.log('3. Откройте консоль (F12)');
+      console.log('4. Выполните: localStorage.getItem("token")');
+      console.log('5. Скопируйте токен и запустите: ADMIN_TOKEN="..." node test_group_call.js\n');
+      process.exit(1);
+    }
 
     // 1. Получаем список чатов
     console.log('1️⃣ Получение списка чатов...');
@@ -18,10 +32,24 @@ async function testGroupCall() {
     });
 
     if (!chatsResponse.ok) {
-      throw new Error('Не удалось получить список чатов');
+      const errorText = await chatsResponse.text();
+      if (chatsResponse.status === 401) {
+        console.error('\n❌ Токен недействителен или истек!');
+        console.log('\nПолучите новый токен:');
+        console.log('1. Откройте приложение в браузере');
+        console.log('2. Войдите как admin');
+        console.log('3. Откройте консоль (F12)');
+        console.log('4. Выполните: localStorage.getItem("token")');
+        console.log('5. Запустите: ADMIN_TOKEN="ваш_токен" node test_group_call.js\n');
+      }
+      throw new Error(`Не удалось получить список чатов: ${chatsResponse.status} ${errorText}`);
     }
 
-    const chats = await chatsResponse.json();
+    const chatsData = await chatsResponse.json();
+    console.log('Ответ API:', JSON.stringify(chatsData, null, 2).substring(0, 500));
+
+    // API может вернуть объект с полем chats или массив напрямую
+    const chats = Array.isArray(chatsData) ? chatsData : (chatsData.chats || []);
     console.log(`✅ Найдено ${chats.length} чатов`);
 
     // Ищем групповой чат или чат отдела
