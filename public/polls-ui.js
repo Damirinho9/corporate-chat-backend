@@ -314,8 +314,18 @@ function renderPoll(poll, messageElement) {
     const options = Array.isArray(poll.options) ? poll.options : JSON.parse(poll.options || '[]');
     const userVote = poll.user_vote || [];
     const totalVoters = poll.total_voters || 0;
-    const isClosed = poll.closed === true || (poll.closes_at && new Date(poll.closes_at) < new Date());
+
+    // Debug logging
+    console.log(`[renderPoll] Poll ${poll.id} status:`, {
+        closed: poll.closed,
+        closes_at: poll.closes_at,
+        closedType: typeof poll.closed
+    });
+
+    const isClosed = poll.closed === true || poll.closed === 1 || (poll.closes_at && new Date(poll.closes_at) < new Date());
     const hasVoted = userVote && userVote.length > 0;
+
+    console.log(`[renderPoll] Poll ${poll.id} isClosed: ${isClosed}, hasVoted: ${hasVoted}`);
 
     // Calculate percentages
     const totalVotes = options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
