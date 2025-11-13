@@ -402,6 +402,69 @@ async function applyIncrementalSchemaUpdates() {
       await runOptionalQuery(sql);
     }
 
+    // ==================== VIDEO/AUDIO CALLS TABLES ====================
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS calls (
+        id SERIAL PRIMARY KEY,
+        room_name VARCHAR(255) NOT NULL UNIQUE,
+        call_type VARCHAR(20) NOT NULL CHECK (call_type IN ('audio', 'video', 'screen')),
+        call_mode VARCHAR(20) NOT NULL CHECK (call_mode IN ('direct', 'group')),
+        initiated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        chat_id INTEGER REFERENCES chats(id) ON DELETE SET NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ongoing', 'ended', 'missed', 'declined')),
+        started_at TIMESTAMP,
+        ended_at TIMESTAMP,
+        duration INTEGER,
+        recording_url TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `, 'Created calls table');
+
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS call_participants (
+        id SERIAL PRIMARY KEY,
+        call_id INTEGER NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        joined_at TIMESTAMP,
+        left_at TIMESTAMP,
+        duration INTEGER,
+        status VARCHAR(20) DEFAULT 'invited' CHECK (status IN ('invited', 'ringing', 'joined', 'left', 'declined', 'missed')),
+        is_moderator BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(call_id, user_id)
+      )
+    `, 'Created call_participants table');
+
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS call_events (
+        id SERIAL PRIMARY KEY,
+        call_id INTEGER NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        event_type VARCHAR(50) NOT NULL,
+        event_data JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `, 'Created call_events table');
+
+    // Индексы для calls
+    const callsIndexes = [
+      `CREATE INDEX IF NOT EXISTS idx_calls_room_name ON calls(room_name)`,
+      `CREATE INDEX IF NOT EXISTS idx_calls_initiated_by ON calls(initiated_by)`,
+      `CREATE INDEX IF NOT EXISTS idx_calls_chat_id ON calls(chat_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_calls_status ON calls(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_calls_created_at ON calls(created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_call_participants_call_id ON call_participants(call_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_call_participants_user_id ON call_participants(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_call_participants_status ON call_participants(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_call_events_call_id ON call_events(call_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_call_events_created_at ON call_events(created_at DESC)`
+    ];
+
+    for (const sql of callsIndexes) {
+      await runOptionalQuery(sql);
+    }
+
     logger.info('Incremental schema updates complete');
   } catch (error) {
     logger.error('Failed to apply incremental schema updates:', error.message || error);

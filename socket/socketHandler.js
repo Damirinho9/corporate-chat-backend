@@ -2,6 +2,7 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const { query } = require('../config/database');
 const { sendNewMessageNotification, sendMentionNotification } = require('../utils/pushNotifications');
+const { initializeCallHandlers } = require('./callSignaling');
 
 // Store connected users
 const connectedUsers = new Map(); // userId -> socketId
@@ -78,6 +79,9 @@ const initializeSocket = (server) => {
                 socket.join(`chat_${chat.id}`);
             });
 
+            // Join user's personal room for call notifications
+            socket.join(`user_${userId}`);
+
             // Notify others that user is online
             socket.broadcast.emit('user_online', {
                 userId: userId,
@@ -86,6 +90,9 @@ const initializeSocket = (server) => {
         } catch (error) {
             console.error('Error joining chat rooms:', error);
         }
+
+        // ==================== INITIALIZE CALL HANDLERS ====================
+        initializeCallHandlers(io, socket);
 
         // ==================== UPDATED: Handle new message with file support ====================
         socket.on('send_message', async (data) => {

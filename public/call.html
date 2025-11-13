@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Видеозвонок - Corporate Chat</title>
+    <script src="https://meet.jit.si/external_api.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #jitsi-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        #loading.hidden {
+            display: none;
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4A90E2;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #loading-text {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #999;
+        }
+
+        #error {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #fff;
+            color: #333;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            display: none;
+            text-align: center;
+            max-width: 400px;
+            z-index: 10000;
+        }
+
+        #error.show {
+            display: block;
+        }
+
+        #error h2 {
+            margin-bottom: 15px;
+            color: #e74c3c;
+        }
+
+        #error button {
+            margin-top: 20px;
+            padding: 10px 30px;
+            background: #4A90E2;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        #error button:hover {
+            background: #357abd;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="loader"></div>
+        <div id="loading-text">Подключение к звонку...</div>
+    </div>
+
+    <div id="error">
+        <h2>Ошибка подключения</h2>
+        <p id="error-message">Не удалось подключиться к звонку</p>
+        <button onclick="window.close()">Закрыть</button>
+    </div>
+
+    <div id="jitsi-container"></div>
+
+    <script>
+        // Получаем параметры из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const callId = urlParams.get('callId');
+        const token = urlParams.get('token');
+
+        if (!callId) {
+            showError('Неверные параметры звонка');
+            return;
+        }
+
+        // Получаем JWT токен из localStorage если не передан в URL
+        const authToken = token || localStorage.getItem('authToken');
+
+        if (!authToken) {
+            showError('Необходима аутентификация');
+            return;
+        }
+
+        let jitsiApi = null;
+
+        // Функция отображения ошибки
+        function showError(message) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error').classList.add('show');
+        }
+
+        // Загружаем информацию о звонке и подключаемся
+        async function initializeCall() {
+            try {
+                // Получаем информацию о звонке от сервера
+                const response = await fetch(`/api/calls/${callId}/join`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Не удалось подключиться к звонку');
+                }
+
+                const data = await response.json();
+                const { call, jitsi } = data;
+
+                // Инициализируем Jitsi Meet
+                initializeJitsi(jitsi.config);
+
+            } catch (error) {
+                console.error('Error initializing call:', error);
+                showError(error.message);
+            }
+        }
+
+        // Инициализация Jitsi Meet
+        function initializeJitsi(config) {
+            const domain = config.hosts?.domain || 'meet.jit.si';
+            const options = {
+                roomName: config.roomName,
+                width: '100%',
+                height: '100%',
+                parentNode: document.querySelector('#jitsi-container'),
+                userInfo: config.userInfo,
+                configOverwrite: config.configOverwrite,
+                interfaceConfigOverwrite: config.interfaceConfigOverwrite,
+                jwt: config.jwt
+            };
+
+            jitsiApi = new JitsiMeetExternalAPI(domain, options);
+
+            // События Jitsi
+            jitsiApi.addEventListener('videoConferenceJoined', () => {
+                console.log('Joined conference');
+                document.getElementById('loading').classList.add('hidden');
+
+                // Уведомляем сервер о присоединении через Socket.IO
+                if (window.socket) {
+                    window.socket.emit('call_join', { callId });
+                }
+            });
+
+            jitsiApi.addEventListener('videoConferenceLeft', () => {
+                console.log('Left conference');
+
+                // Уведомляем сервер о выходе
+                if (window.socket) {
+                    window.socket.emit('call_leave', { callId });
+                }
+
+                // Закрываем окно или перенаправляем
+                setTimeout(() => {
+                    window.close();
+                }, 1000);
+            });
+
+            jitsiApi.addEventListener('participantJoined', (participant) => {
+                console.log('Participant joined:', participant);
+            });
+
+            jitsiApi.addEventListener('participantLeft', (participant) => {
+                console.log('Participant left:', participant);
+            });
+
+            jitsiApi.addEventListener('audioMuteStatusChanged', (status) => {
+                console.log('Audio mute status changed:', status);
+                if (window.socket) {
+                    window.socket.emit('call_status_update', {
+                        callId,
+                        status: { audio_muted: status.muted }
+                    });
+                }
+            });
+
+            jitsiApi.addEventListener('videoMuteStatusChanged', (status) => {
+                console.log('Video mute status changed:', status);
+                if (window.socket) {
+                    window.socket.emit('call_status_update', {
+                        callId,
+                        status: { video_off: status.muted }
+                    });
+                }
+            });
+
+            jitsiApi.addEventListener('screenSharingStatusChanged', (status) => {
+                console.log('Screen sharing status changed:', status);
+                if (window.socket) {
+                    window.socket.emit('call_status_update', {
+                        callId,
+                        status: { screen_sharing: status.on }
+                    });
+                }
+            });
+
+            jitsiApi.addEventListener('recordingStatusChanged', (status) => {
+                console.log('Recording status changed:', status);
+                if (window.socket && status.on) {
+                    window.socket.emit('call_recording_started', { callId });
+                } else if (window.socket) {
+                    window.socket.emit('call_recording_stopped', { callId });
+                }
+            });
+        }
+
+        // Инициализируем звонок при загрузке страницы
+        window.addEventListener('load', initializeCall);
+
+        // Cleanup при закрытии окна
+        window.addEventListener('beforeunload', () => {
+            if (jitsiApi) {
+                jitsiApi.dispose();
+            }
+            if (window.socket) {
+                window.socket.emit('call_leave', { callId });
+            }
+        });
+    </script>
+</body>
+</html>

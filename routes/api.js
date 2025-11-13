@@ -30,6 +30,9 @@ const adminExtended = require('./admin-extended');
 // PUSH NOTIFICATIONS ROUTES
 const pushRoutes = require('./push');
 
+// VIDEO/AUDIO CALLS ROUTES
+const callsRoutes = require('./calls');
+
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -682,6 +685,9 @@ router.use('/files', fileRoutes);
 
 // ==================== PUSH NOTIFICATIONS ROUTES ====================
 router.use('/push', pushRoutes);
+
+// ==================== VIDEO/AUDIO CALLS ROUTES ====================
+router.use('/calls', callsRoutes);
 
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {
