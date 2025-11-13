@@ -33,6 +33,11 @@ const pushRoutes = require('./push');
 // VIDEO/AUDIO CALLS ROUTES
 const callsRoutes = require('./calls');
 
+// BOTS AND INTEGRATIONS ROUTES
+const botsRoutes = require('./bots');
+const botApiRoutes = require('./botApi');
+const webhooksRoutes = require('./webhooks');
+
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -688,6 +693,11 @@ router.use('/push', pushRoutes);
 
 // ==================== VIDEO/AUDIO CALLS ROUTES ====================
 router.use('/calls', callsRoutes);
+
+// ==================== BOTS AND INTEGRATIONS ROUTES ====================
+router.use('/bots', botsRoutes);
+router.use('/bot-api', botApiRoutes);
+router.use('/webhooks', webhooksRoutes);
 
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {
