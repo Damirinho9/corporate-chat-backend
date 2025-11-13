@@ -38,7 +38,7 @@ router.post('/initiate',
   validate,
   async (req, res) => {
     try {
-      const userId = req.user.userId;
+      const userId = req.user.id;
       const { callType, participants, chatId } = req.body;
 
       // Определяем режим звонка
@@ -146,7 +146,7 @@ router.post('/:callId/join',
   validate,
   async (req, res) => {
     try {
-      const userId = req.user.userId;
+      const userId = req.user.id;
       const { callId } = req.params;
 
       // Проверяем существование звонка
@@ -261,7 +261,7 @@ router.post('/:callId/leave',
   validate,
   async (req, res) => {
     try {
-      const userId = req.user.userId;
+      const userId = req.user.id;
       const { callId } = req.params;
 
       // Обновляем статус участника
@@ -326,7 +326,7 @@ router.post('/:callId/end',
   validate,
   async (req, res) => {
     try {
-      const userId = req.user.userId;
+      const userId = req.user.id;
       const { callId } = req.params;
 
       // Проверяем, является ли пользователь модератором
@@ -383,7 +383,7 @@ router.post('/:callId/decline',
   validate,
   async (req, res) => {
     try {
-      const userId = req.user.userId;
+      const userId = req.user.id;
       const { callId } = req.params;
 
       // Обновляем статус участника
@@ -422,7 +422,7 @@ router.get('/:callId',
   validate,
   async (req, res) => {
     try {
-      const userId = req.user.userId;
+      const userId = req.user.id;
       const { callId } = req.params;
 
       // Получаем информацию о звонке
@@ -506,7 +506,7 @@ router.get('/history/all',
   authenticateToken,
   async (req, res) => {
     try {
-      const userId = req.user.userId;
+      const userId = req.user.id;
       const limit = parseInt(req.query.limit) || 50;
       const offset = parseInt(req.query.offset) || 0;
 
@@ -544,7 +544,7 @@ router.get('/active/all',
   authenticateToken,
   async (req, res) => {
     try {
-      const userId = req.user.userId;
+      const userId = req.user.id;
 
       // Получаем активные звонки пользователя
       const callsResult = await query(
