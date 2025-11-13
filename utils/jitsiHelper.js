@@ -185,6 +185,7 @@ function generateJitsiConfig(options = {}) {
     // Функциональность
     startWithAudioMuted: false,
     startWithVideoMuted: callType === 'audio', // Для аудиозвонков отключаем видео
+    startAudioOnly: callType === 'audio', // Режим только аудио для аудиозвонков
     enableWelcomePage: false,
     enableClosePage: false,
     prejoinPageEnabled: false,
