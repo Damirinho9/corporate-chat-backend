@@ -746,6 +746,51 @@
             background: var(--bg-hover);
         }
 
+        /* Call Buttons */
+        .call-buttons {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .call-btn {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .call-btn:hover {
+            background: var(--bg-hover);
+            transform: scale(1.05);
+        }
+
+        .call-btn:active {
+            transform: scale(0.95);
+        }
+
+        .call-btn.video-call {
+            color: var(--accent);
+        }
+
+        .call-btn.audio-call {
+            color: var(--success);
+        }
+
+        .call-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .call-btn:disabled:hover {
+            transform: none;
+            background: transparent;
+        }
+
         /* Message Search Panel */
         .message-search-panel {
             background: var(--bg-primary);
@@ -2051,6 +2096,14 @@
                             <h2 id="chatTitle">Выберите чат</h2>
                             <p id="chatSubtitle"></p>
                         </div>
+                    </div>
+                    <div class="call-buttons" id="callButtons" style="display: none;">
+                        <button class="call-btn audio-call" id="audioCallBtn" title="Аудиозвонок">
+                            📞
+                        </button>
+                        <button class="call-btn video-call" id="videoCallBtn" title="Видеозвонок">
+                            📹
+                        </button>
                     </div>
                     <button class="search-toggle-btn" id="searchToggleBtn" title="Поиск по сообщениям">
                         🔍
@@ -3716,6 +3769,14 @@
 
                 document.getElementById('chatTitle').textContent = title;
                 document.getElementById('chatSubtitle').textContent = subtitle;
+
+                // Показываем кнопки звонков только для личных чатов
+                const callButtons = document.getElementById('callButtons');
+                if (chat.type === 'direct' && currentDirectContactId) {
+                    callButtons.style.display = 'flex';
+                } else {
+                    callButtons.style.display = 'none';
+                }
             }
 
             syncContactHighlights();
@@ -3755,6 +3816,70 @@
             panel.classList.add('hidden');
             searchInput.value = '';
             searchResults.innerHTML = '';
+        }
+
+        // ==================== VIDEO/AUDIO CALLS ====================
+
+        async function initiateCall(callType) {
+            if (!currentDirectContactId) {
+                showNotification('Звонки доступны только для личных чатов', 'error');
+                return;
+            }
+
+            try {
+                // Отключаем кнопки на время создания звонка
+                const audioBtn = document.getElementById('audioCallBtn');
+                const videoBtn = document.getElementById('videoCallBtn');
+                audioBtn.disabled = true;
+                videoBtn.disabled = true;
+
+                const response = await fetch(`${API_URL}/calls`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        callType: callType,
+                        callMode: 'direct',
+                        chatId: currentChatId,
+                        participants: [Number(currentDirectContactId)]
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Не удалось создать звонок');
+                }
+
+                const data = await response.json();
+                const callId = data.call.id;
+
+                // Открываем окно звонка
+                const callWindow = window.open(
+                    `/call.html?callId=${callId}&token=${authToken}`,
+                    `call_${callId}`,
+                    'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no'
+                );
+
+                if (!callWindow) {
+                    showNotification('Разрешите всплывающие окна для видеозвонков', 'error');
+                } else {
+                    showNotification(`${callType === 'audio' ? 'Аудио' : 'Видео'}звонок инициирован`, 'success');
+                }
+
+                // Включаем кнопки обратно
+                audioBtn.disabled = false;
+                videoBtn.disabled = false;
+
+            } catch (error) {
+                console.error('Error initiating call:', error);
+                showNotification(error.message || 'Ошибка при создании звонка', 'error');
+
+                // Включаем кнопки обратно
+                document.getElementById('audioCallBtn').disabled = false;
+                document.getElementById('videoCallBtn').disabled = false;
+            }
         }
 
         async function searchMessagesInChat(searchQuery) {
@@ -4758,6 +4883,10 @@
             // Message search
             document.getElementById('searchToggleBtn')?.addEventListener('click', toggleSearchPanel);
             document.getElementById('searchCloseBtn')?.addEventListener('click', closeSearchPanel);
+
+            // Call buttons
+            document.getElementById('audioCallBtn')?.addEventListener('click', () => initiateCall('audio'));
+            document.getElementById('videoCallBtn')?.addEventListener('click', () => initiateCall('video'));
 
             const messageSearchInput = document.getElementById('messageSearchInput');
             messageSearchInput?.addEventListener('input', (e) => {
