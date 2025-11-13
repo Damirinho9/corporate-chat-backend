@@ -37,6 +37,7 @@ const callsRoutes = require('./calls');
 const botsRoutes = require('./bots');
 const botApiRoutes = require('./botApi');
 const webhooksRoutes = require('./webhooks');
+const pollsRoutes = require('./polls');
 
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
@@ -698,6 +699,9 @@ router.use('/calls', callsRoutes);
 router.use('/bots', botsRoutes);
 router.use('/bot-api', botApiRoutes);
 router.use('/webhooks', webhooksRoutes);
+
+// ==================== POLLS ROUTES ====================
+router.use('/polls', pollsRoutes);
 
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {
