@@ -27,6 +27,9 @@ const { body, param, query: queryValidator, validationResult } = require('expres
 const adminBasic = require('./admin-basic');
 const adminExtended = require('./admin-extended');
 
+// PUSH NOTIFICATIONS ROUTES
+const pushRoutes = require('./push');
+
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -676,6 +679,9 @@ router.get('/files/stats',
 );
 
 router.use('/files', fileRoutes);
+
+// ==================== PUSH NOTIFICATIONS ROUTES ====================
+router.use('/push', pushRoutes);
 
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {

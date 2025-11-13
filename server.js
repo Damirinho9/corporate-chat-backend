@@ -345,6 +345,63 @@ async function applyIncrementalSchemaUpdates() {
       END$$
     `);
 
+    // ==================== PUSH NOTIFICATIONS TABLES ====================
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        user_agent TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `, 'Created push_subscriptions table');
+
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS notification_settings (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        enabled BOOLEAN DEFAULT true,
+        new_messages BOOLEAN DEFAULT true,
+        mentions BOOLEAN DEFAULT true,
+        direct_messages BOOLEAN DEFAULT true,
+        group_messages BOOLEAN DEFAULT true,
+        sound BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `, 'Created notification_settings table');
+
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS notification_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+        notification_type VARCHAR(50) NOT NULL,
+        title TEXT,
+        body TEXT,
+        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        success BOOLEAN DEFAULT true,
+        error_message TEXT
+      )
+    `, 'Created notification_logs table');
+
+    // Индексы для push notifications
+    const pushNotificationIndexes = [
+      `CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_push_subscriptions_active ON push_subscriptions(is_active)`,
+      `CREATE INDEX IF NOT EXISTS idx_notification_settings_user_id ON notification_settings(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_notification_logs_user_id ON notification_logs(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_notification_logs_sent_at ON notification_logs(sent_at DESC)`
+    ];
+
+    for (const sql of pushNotificationIndexes) {
+      await runOptionalQuery(sql);
+    }
+
     logger.info('Incremental schema updates complete');
   } catch (error) {
     logger.error('Failed to apply incremental schema updates:', error.message || error);

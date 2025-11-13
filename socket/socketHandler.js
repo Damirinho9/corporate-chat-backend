@@ -1,6 +1,7 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const { query } = require('../config/database');
+const { sendNewMessageNotification, sendMentionNotification } = require('../utils/pushNotifications');
 
 // Store connected users
 const connectedUsers = new Map(); // userId -> socketId
@@ -180,6 +181,92 @@ const initializeSocket = (server) => {
                     chatId,
                     message
                 });
+
+                // ==================== SEND PUSH NOTIFICATIONS ====================
+                try {
+                    // Получаем информацию о чате
+                    const chatResult = await query(
+                        'SELECT id, name, type, department FROM chats WHERE id = $1',
+                        [chatId]
+                    );
+
+                    if (chatResult.rows.length > 0) {
+                        const chat = chatResult.rows[0];
+
+                        // Получаем всех участников чата, кроме отправителя
+                        const participantsResult = await query(
+                            `SELECT user_id FROM chat_participants
+                             WHERE chat_id = $1 AND user_id != $2`,
+                            [chatId, userId]
+                        );
+
+                        const recipientUserIds = participantsResult.rows.map(row => row.user_id);
+
+                        // Фильтруем только тех, кто НЕ в сети (не подключен к socket)
+                        const offlineRecipients = recipientUserIds.filter(id => !connectedUsers.has(id));
+
+                        if (offlineRecipients.length > 0) {
+                            // Отправляем уведомления офлайн пользователям
+                            await sendNewMessageNotification(
+                                {
+                                    id: messageData.id,
+                                    content: content || '[Файл]'
+                                },
+                                {
+                                    id: userId,
+                                    name: socket.user.name
+                                },
+                                chat,
+                                offlineRecipients
+                            );
+                        }
+
+                        // Проверяем наличие упоминаний в сообщении
+                        if (content) {
+                            const mentionRegex = /@(\w+)/g;
+                            const mentions = content.match(mentionRegex);
+
+                            if (mentions) {
+                                for (const mention of mentions) {
+                                    const username = mention.substring(1); // Убираем @
+
+                                    // Находим пользователя по username
+                                    const mentionedUserResult = await query(
+                                        'SELECT id, name FROM users WHERE username = $1',
+                                        [username]
+                                    );
+
+                                    if (mentionedUserResult.rows.length > 0) {
+                                        const mentionedUser = mentionedUserResult.rows[0];
+
+                                        // Сохраняем упоминание в БД
+                                        await query(
+                                            'INSERT INTO mentions (message_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                                            [messageData.id, mentionedUser.id]
+                                        );
+
+                                        // Отправляем push-уведомление об упоминании
+                                        await sendMentionNotification(
+                                            {
+                                                id: messageData.id,
+                                                content: content
+                                            },
+                                            {
+                                                id: userId,
+                                                name: socket.user.name
+                                            },
+                                            chat,
+                                            mentionedUser.id
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (pushError) {
+                    console.error('Error sending push notifications:', pushError);
+                    // Не прерываем выполнение, если не удалось отправить уведомление
+                }
 
                 // Stop typing indicator
                 stopTyping(chatId, userId);
