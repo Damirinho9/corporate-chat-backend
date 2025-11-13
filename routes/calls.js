@@ -1,6 +1,7 @@
 // routes/calls.js
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { query } = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 const { body, param, validationResult } = require('express-validator');
@@ -11,6 +12,11 @@ const {
   generateJitsiConfig,
   validateJitsiConfig
 } = require('../utils/jitsiHelper');
+
+// Helper function to generate invite token
+function generateInviteToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
 
 // Validation middleware
 const validate = (req, res, next) => {
@@ -32,27 +38,77 @@ router.post('/initiate',
   authenticateToken,
   [
     body('callType').isIn(['audio', 'video', 'screen']).withMessage('Invalid call type'),
-    body('participants').isArray({ min: 1 }).withMessage('At least one participant required'),
+    body('participants').optional().isArray({ min: 1 }).withMessage('At least one participant required'),
     body('chatId').optional().isInt().withMessage('Invalid chat ID')
   ],
   validate,
   async (req, res) => {
     try {
       const userId = req.user.id;
-      const { callType, participants, chatId } = req.body;
+      const userRole = req.user.role;
+      let { callType, participants, chatId } = req.body;
+
+      // Если указан chatId, получаем информацию о чате и всех его участников
+      let chat = null;
+      if (chatId) {
+        const chatResult = await query(
+          'SELECT * FROM chats WHERE id = $1',
+          [chatId]
+        );
+
+        if (chatResult.rows.length === 0) {
+          return res.status(404).json({ error: 'Chat not found' });
+        }
+
+        chat = chatResult.rows[0];
+
+        // Проверка прав для групповых чатов и чатов отделов
+        if (chat.type === 'group' || chat.type === 'department') {
+          // Только админы или руководители могут начинать групповые звонки
+          if (userRole !== 'admin' && userRole !== 'rop') {
+            return res.status(403).json({
+              error: 'Only administrators and department heads can initiate group calls'
+            });
+          }
+
+          // Для чатов отделов дополнительная проверка - rop может начинать только в своем отделе
+          if (userRole === 'rop' && chat.type === 'department') {
+            const userDept = req.user.department;
+            if (chat.department !== userDept) {
+              return res.status(403).json({
+                error: 'You can only initiate calls in your own department'
+              });
+            }
+          }
+        }
+
+        // Автоматически получаем всех участников чата
+        const participantsResult = await query(
+          'SELECT user_id FROM chat_participants WHERE chat_id = $1',
+          [chatId]
+        );
+
+        participants = participantsResult.rows.map(p => p.user_id);
+      }
+
+      // Если participants не указаны, возвращаем ошибку
+      if (!participants || participants.length === 0) {
+        return res.status(400).json({ error: 'No participants found for this call' });
+      }
 
       // Определяем режим звонка
       const callMode = participants.length === 1 ? 'direct' : 'group';
 
-      // Генерируем уникальное имя комнаты
+      // Генерируем уникальное имя комнаты и токен приглашения
       const roomName = generateRoomName(`call-${userId}`);
+      const inviteToken = generateInviteToken();
 
       // Создаем запись звонка в БД
       const callResult = await query(
-        `INSERT INTO calls (room_name, call_type, call_mode, initiated_by, chat_id, status)
-         VALUES ($1, $2, $3, $4, $5, 'pending')
+        `INSERT INTO calls (room_name, call_type, call_mode, initiated_by, chat_id, status, invite_token)
+         VALUES ($1, $2, $3, $4, $5, 'pending', $6)
          RETURNING *`,
-        [roomName, callType, callMode, userId, chatId || null]
+        [roomName, callType, callMode, userId, chatId || null, inviteToken]
       );
 
       const call = callResult.rows[0];
@@ -115,6 +171,9 @@ router.post('/initiate',
         callType: callType
       });
 
+      // Генерируем пригласительную ссылку
+      const inviteLink = `${req.protocol}://${req.get('host')}/call.html?invite=${inviteToken}`;
+
       res.json({
         call: {
           id: call.id,
@@ -122,6 +181,8 @@ router.post('/initiate',
           callType: call.call_type,
           callMode: call.call_mode,
           status: call.status,
+          inviteLink: inviteLink,
+          inviteToken: inviteToken,
           createdAt: call.created_at
         },
         jitsi: {
@@ -248,6 +309,140 @@ router.post('/:callId/join',
       });
     } catch (error) {
       console.error('Error joining call:', error);
+      res.status(500).json({
+        error: 'Failed to join call',
+        details: error.message
+      });
+    }
+  }
+);
+
+// ==================== JOIN CALL BY INVITE TOKEN ====================
+router.post('/join-by-invite',
+  authenticateToken,
+  [body('inviteToken').isString().notEmpty().withMessage('Invite token required')],
+  validate,
+  async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { inviteToken } = req.body;
+
+      // Находим звонок по invite_token
+      const callResult = await query(
+        'SELECT * FROM calls WHERE invite_token = $1',
+        [inviteToken]
+      );
+
+      if (callResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Call not found or invite link is invalid' });
+      }
+
+      const call = callResult.rows[0];
+
+      // Проверяем, что звонок еще активен
+      if (call.status === 'ended') {
+        return res.status(410).json({ error: 'Call has ended' });
+      }
+
+      // Проверяем, является ли пользователь уже участником
+      let participantResult = await query(
+        'SELECT * FROM call_participants WHERE call_id = $1 AND user_id = $2',
+        [call.id, userId]
+      );
+
+      let participant;
+      if (participantResult.rows.length === 0) {
+        // Добавляем пользователя как участника (не модератор)
+        await query(
+          `INSERT INTO call_participants (call_id, user_id, status, is_moderator)
+           VALUES ($1, $2, 'joined', false)`,
+          [call.id, userId]
+        );
+
+        participantResult = await query(
+          'SELECT * FROM call_participants WHERE call_id = $1 AND user_id = $2',
+          [call.id, userId]
+        );
+
+        participant = participantResult.rows[0];
+      } else {
+        participant = participantResult.rows[0];
+
+        // Обновляем статус участника
+        await query(
+          `UPDATE call_participants
+           SET status = 'joined', joined_at = CURRENT_TIMESTAMP
+           WHERE call_id = $1 AND user_id = $2`,
+          [call.id, userId]
+        );
+      }
+
+      // Если звонок еще не начался, начинаем его
+      if (call.status === 'pending') {
+        await query(
+          `UPDATE calls
+           SET status = 'ongoing', started_at = CURRENT_TIMESTAMP
+           WHERE id = $1`,
+          [call.id]
+        );
+      }
+
+      // Логируем событие
+      await query(
+        `INSERT INTO call_events (call_id, user_id, event_type, event_data)
+         VALUES ($1, $2, 'joined', $3)`,
+        [call.id, userId, JSON.stringify({ via: 'invite_link' })]
+      );
+
+      // Получаем информацию о пользователе
+      const userResult = await query(
+        'SELECT id, name, username FROM users WHERE id = $1',
+        [userId]
+      );
+      const user = userResult.rows[0];
+
+      // Генерируем JWT токен
+      const jitsiToken = generateJitsiToken({
+        roomName: call.room_name,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: `${user.username}@corporate-chat.local`
+        },
+        isModerator: participant.is_moderator
+      });
+
+      // Генерируем URL
+      const meetingUrl = generateJitsiUrl(call.room_name, jitsiToken, call.call_type);
+
+      // Генерируем конфигурацию
+      const jitsiConfig = generateJitsiConfig({
+        roomName: call.room_name,
+        userInfo: {
+          name: user.name,
+          email: `${user.username}@corporate-chat.local`
+        },
+        isModerator: participant.is_moderator,
+        callType: call.call_type
+      });
+
+      res.json({
+        call: {
+          id: call.id,
+          roomName: call.room_name,
+          callType: call.call_type,
+          callMode: call.call_mode,
+          status: 'ongoing',
+          startedAt: call.started_at
+        },
+        jitsi: {
+          token: jitsiToken,
+          meetingUrl,
+          config: jitsiConfig
+        }
+      });
+    } catch (error) {
+      console.error('Error joining call by invite:', error);
       res.status(500).json({
         error: 'Failed to join call',
         details: error.message

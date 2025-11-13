@@ -3770,9 +3770,17 @@
                 document.getElementById('chatTitle').textContent = title;
                 document.getElementById('chatSubtitle').textContent = subtitle;
 
-                // Показываем кнопки звонков только для личных чатов
+                // Показываем кнопки звонков:
+                // - Для личных чатов - всегда
+                // - Для групповых и отделов - только для admin и rop
                 const callButtons = document.getElementById('callButtons');
+                const userRole = currentUser?.role;
+
                 if (chat.type === 'direct' && currentDirectContactId) {
+                    // Личный чат - показываем всем
+                    callButtons.style.display = 'flex';
+                } else if ((chat.type === 'group' || chat.type === 'department') && (userRole === 'admin' || userRole === 'rop')) {
+                    // Групповой чат или отдел - только админам и руководителям
                     callButtons.style.display = 'flex';
                 } else {
                     callButtons.style.display = 'none';
@@ -3821,8 +3829,8 @@
         // ==================== VIDEO/AUDIO CALLS ====================
 
         async function initiateCall(callType) {
-            if (!currentDirectContactId) {
-                showToast('Звонки доступны только для личных чатов', 'error');
+            if (!currentChatId) {
+                showToast('Сначала откройте чат', 'error');
                 return;
             }
 
@@ -3834,11 +3842,29 @@
                     return;
                 }
 
+                // Получаем информацию о чате
+                const chat = chats.find(c => c.id === currentChatId);
+                if (!chat) {
+                    showToast('Чат не найден', 'error');
+                    return;
+                }
+
                 // Отключаем кнопки на время создания звонка
                 const audioBtn = document.getElementById('audioCallBtn');
                 const videoBtn = document.getElementById('videoCallBtn');
                 audioBtn.disabled = true;
                 videoBtn.disabled = true;
+
+                // Подготавливаем данные запроса
+                const requestData = {
+                    callType: callType,
+                    chatId: currentChatId
+                };
+
+                // Для личных чатов добавляем participants
+                if (chat.type === 'direct' && currentDirectContactId) {
+                    requestData.participants = [Number(currentDirectContactId)];
+                }
 
                 const response = await fetch(`${API_URL}/calls/initiate`, {
                     method: 'POST',
@@ -3846,11 +3872,7 @@
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        callType: callType,
-                        chatId: currentChatId,
-                        participants: [Number(currentDirectContactId)]
-                    })
+                    body: JSON.stringify(requestData)
                 });
 
                 if (!response.ok) {
@@ -3860,6 +3882,7 @@
 
                 const data = await response.json();
                 const callId = data.call.id;
+                const inviteLink = data.call.inviteLink;
 
                 // Открываем окно звонка
                 const callWindow = window.open(
@@ -3871,6 +3894,10 @@
                 if (!callWindow) {
                     showToast('Разрешите всплывающие окна для видеозвонков', 'error');
                 } else {
+                    // Для групповых звонков показываем invite link
+                    if (chat.type === 'group' || chat.type === 'department') {
+                        showInviteLinkModal(inviteLink, callType);
+                    }
                     showToast(`${callType === 'audio' ? 'Аудио' : 'Видео'}звонок инициирован`, 'success');
                 }
 
@@ -3885,6 +3912,71 @@
                 // Включаем кнопки обратно
                 document.getElementById('audioCallBtn').disabled = false;
                 document.getElementById('videoCallBtn').disabled = false;
+            }
+        }
+
+        // Показать модальное окно с пригласительной ссылкой
+        function showInviteLinkModal(inviteLink, callType) {
+            const callTypeText = callType === 'audio' ? 'аудиозвонку' : 'видеозвонку';
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.7);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+            `;
+
+            modal.innerHTML = `
+                <div style="background: #fff; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%;">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">Пригласительная ссылка на ${callTypeText}</h3>
+                    <p style="margin: 0 0 12px 0; color: #666; font-size: 14px;">
+                        Скопируйте эту ссылку и отправьте участникам:
+                    </p>
+                    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                        <input type="text" value="${inviteLink}" readonly
+                            style="flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"
+                            id="inviteLinkInput">
+                        <button onclick="copyInviteLink()"
+                            style="padding: 8px 16px; background: #4A90E2; color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;">
+                            📋 Копировать
+                        </button>
+                    </div>
+                    <button onclick="closeInviteLinkModal()"
+                        style="width: 100%; padding: 10px; background: #f0f0f0; border: none; border-radius: 4px; cursor: pointer;">
+                        Закрыть
+                    </button>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+            window.currentInviteLinkModal = modal;
+
+            // Автоматически выделяем ссылку при открытии
+            setTimeout(() => {
+                const input = document.getElementById('inviteLinkInput');
+                if (input) input.select();
+            }, 100);
+        }
+
+        function copyInviteLink() {
+            const input = document.getElementById('inviteLinkInput');
+            if (input) {
+                input.select();
+                document.execCommand('copy');
+                showToast('Ссылка скопирована в буфер обмена', 'success');
+            }
+        }
+
+        function closeInviteLinkModal() {
+            if (window.currentInviteLinkModal) {
+                window.currentInviteLinkModal.remove();
+                window.currentInviteLinkModal = null;
             }
         }
 

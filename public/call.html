@@ -130,15 +130,16 @@
         // Получаем параметры из URL
         const urlParams = new URLSearchParams(window.location.search);
         const callId = urlParams.get('callId');
+        const inviteToken = urlParams.get('invite');
         const token = urlParams.get('token');
 
         // Получаем JWT токен из localStorage если не передан в URL
-        const authToken = token || localStorage.getItem('authToken');
+        const authToken = token || localStorage.getItem('token') || localStorage.getItem('authToken');
 
         // Загружаем информацию о звонке и подключаемся
         async function initializeCall() {
             // Проверяем наличие необходимых параметров
-            if (!callId) {
+            if (!callId && !inviteToken) {
                 showError('Неверные параметры звонка');
                 return;
             }
@@ -149,17 +150,34 @@
             }
 
             try {
-                // Получаем информацию о звонке от сервера
-                const response = await fetch(`/api/calls/${callId}/join`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
+                let response;
+
+                // Если есть invite token - присоединяемся по ссылке
+                if (inviteToken) {
+                    response = await fetch(`/api/calls/join-by-invite`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            inviteToken: inviteToken
+                        })
+                    });
+                } else {
+                    // Иначе присоединяемся по callId
+                    response = await fetch(`/api/calls/${callId}/join`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                }
 
                 if (!response.ok) {
-                    throw new Error('Не удалось подключиться к звонку');
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Не удалось подключиться к звонку');
                 }
 
                 const data = await response.json();
