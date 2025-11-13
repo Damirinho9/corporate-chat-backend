@@ -6,6 +6,7 @@
     <title>Корпоративный чат</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <link rel="stylesheet" href="/polls-ui.css">
     <!-- Markdown support -->
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
@@ -2434,7 +2435,7 @@
                         <div class="chat-input">
                             <button class="icon-btn" onclick="toggleFileUpload()" title="Прикрепить файл" id="attachBtn">📎</button>
                             <button class="icon-btn" onclick="toggleVoiceRecorder()" title="Голосовое сообщение" id="voiceBtn">🎤</button>
-                            <button class="icon-btn" onclick="openCreatePollModal()" title="Создать опрос" id="pollBtn" style="display: none;">📊</button>
+                            <button class="icon-btn" onclick="openCreatePollModal()" title="Создать опрос" id="pollBtn" disabled style="display: none;">📊</button>
                             <textarea id="messageInput" placeholder="Выберите чат для начала общения..." rows="1" disabled></textarea>
                         </div>
                         <button class="send-btn" id="sendBtn" title="Отправить" disabled>➤</button>
@@ -3438,6 +3439,7 @@
             const pollBtn = document.getElementById('pollBtn');
             if (pollBtn && currentUser && (currentUser.role === 'admin' || currentUser.role === 'rop')) {
                 pollBtn.style.display = 'inline-block';
+                // Will be enabled when a chat is selected
             }
 
             connectSocket();
@@ -4292,10 +4294,11 @@
                 sendBtn.disabled = false;
                 attachBtn.disabled = false;
 
-                // Show poll button for admins and ROPs
+                // Enable poll button for admins and ROPs
                 const pollBtn = document.getElementById('pollBtn');
                 if (pollBtn && currentUser && (currentUser.role === 'admin' || currentUser.role === 'rop')) {
                     pollBtn.style.display = 'inline-block';
+                    pollBtn.disabled = false;
                 }
 
                 // Show markdown toolbar

@@ -1,5 +1,5 @@
 // ==================================================
-// POLLS UI - JavaScript Module
+// POLLS UI - JavaScript Module (Modern UI Edition)
 // ==================================================
 
 let currentPolls = {};
@@ -20,56 +20,125 @@ function openCreatePollModal() {
     modal.className = 'modal';
     modal.style.display = 'flex';
     modal.innerHTML = `
-        <div class="modal-content" style="max-width: 600px;">
-            <div class="modal-header">
-                <h2>📊 Создать опрос</h2>
-                <button class="close-btn" onclick="closeCreatePollModal()">×</button>
+        <div class="modern-modal-content">
+            <div class="modern-modal-header">
+                <div class="modal-title-group">
+                    <div class="modal-icon">📊</div>
+                    <h2>Создать опрос</h2>
+                </div>
+                <button class="modern-close-btn" onclick="closeCreatePollModal()" aria-label="Закрыть">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
             </div>
+
             <form id="createPollForm" onsubmit="event.preventDefault(); createPoll();">
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>Вопрос *</label>
-                        <input type="text" id="pollQuestion" placeholder="Например: Когда удобнее провести встречу?" required maxlength="500">
+                <div class="modern-modal-body">
+                    <!-- Question Field -->
+                    <div class="modern-form-group">
+                        <label class="modern-label">
+                            <span class="label-icon">❓</span>
+                            <span class="label-text">Вопрос опроса <span class="required">*</span></span>
+                        </label>
+                        <input
+                            type="text"
+                            id="pollQuestion"
+                            class="modern-input"
+                            placeholder="Например: Когда удобнее провести встречу?"
+                            required
+                            maxlength="500"
+                        >
+                        <div class="input-hint">Максимум 500 символов</div>
                     </div>
 
-                    <div class="form-group">
-                        <label>Варианты ответов *</label>
-                        <div id="pollOptionsContainer">
-                            <input type="text" class="poll-option-input" placeholder="Вариант 1" required maxlength="200">
-                            <input type="text" class="poll-option-input" placeholder="Вариант 2" required maxlength="200">
+                    <!-- Options Field -->
+                    <div class="modern-form-group">
+                        <label class="modern-label">
+                            <span class="label-icon">📝</span>
+                            <span class="label-text">Варианты ответов <span class="required">*</span></span>
+                        </label>
+                        <div id="pollOptionsContainer" class="options-container">
+                            <!-- Options will be added here -->
                         </div>
-                        <button type="button" class="btn btn-sm btn-secondary" onclick="addPollOption()" style="margin-top: 10px;">
-                            ➕ Добавить вариант
+                        <button
+                            type="button"
+                            class="add-option-btn"
+                            onclick="addPollOption()"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Добавить вариант
                         </button>
+                        <div class="input-hint">Минимум 2 варианта, максимум 10</div>
                     </div>
 
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" id="pollMultipleChoice" style="margin-right: 10px;">
-                            Множественный выбор
+                    <!-- Settings Card -->
+                    <div class="settings-card">
+                        <div class="settings-header">
+                            <span class="label-icon">⚙️</span>
+                            <span class="settings-title">Настройки опроса</span>
+                        </div>
+
+                        <div class="settings-options">
+                            <label class="modern-checkbox">
+                                <input type="checkbox" id="pollMultipleChoice">
+                                <span class="checkbox-custom"></span>
+                                <div class="checkbox-label">
+                                    <span class="checkbox-title">Множественный выбор</span>
+                                    <span class="checkbox-desc">Участники смогут выбрать несколько вариантов</span>
+                                </div>
+                            </label>
+
+                            <label class="modern-checkbox">
+                                <input type="checkbox" id="pollAnonymous">
+                                <span class="checkbox-custom"></span>
+                                <div class="checkbox-label">
+                                    <span class="checkbox-title">Анонимное голосование</span>
+                                    <span class="checkbox-desc">Имена проголосовавших не будут видны</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Auto-close Field -->
+                    <div class="modern-form-group">
+                        <label class="modern-label">
+                            <span class="label-icon">⏰</span>
+                            <span class="label-text">Автоматическое закрытие (опционально)</span>
                         </label>
-                    </div>
-
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" id="pollAnonymous" style="margin-right: 10px;">
-                            Анонимное голосование
-                        </label>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Закрыть автоматически (опционально)</label>
-                        <input type="datetime-local" id="pollClosesAt">
+                        <input
+                            type="datetime-local"
+                            id="pollClosesAt"
+                            class="modern-input"
+                        >
+                        <div class="input-hint">Опрос автоматически закроется в указанное время</div>
                     </div>
                 </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeCreatePollModal()">Отмена</button>
-                    <button type="submit" class="btn btn-primary">Создать опрос</button>
+
+                <div class="modern-modal-footer">
+                    <button type="button" class="btn-cancel" onclick="closeCreatePollModal()">
+                        Отмена
+                    </button>
+                    <button type="submit" class="btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Создать опрос
+                    </button>
                 </div>
             </form>
         </div>
     `;
+
     document.body.appendChild(modal);
+
+    // Add initial options
+    addPollOption();
+    addPollOption();
 }
 
 function closeCreatePollModal() {
@@ -79,20 +148,73 @@ function closeCreatePollModal() {
 
 function addPollOption() {
     const container = document.getElementById('pollOptionsContainer');
-    const optionsCount = container.querySelectorAll('.poll-option-input').length;
+    const optionsCount = container.querySelectorAll('.poll-option-wrapper').length;
 
     if (optionsCount >= 10) {
         alert('Максимум 10 вариантов ответа');
         return;
     }
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'poll-option-input';
-    input.placeholder = `Вариант ${optionsCount + 1}`;
-    input.required = true;
-    input.maxLength = 200;
-    container.appendChild(input);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'poll-option-wrapper';
+    wrapper.innerHTML = `
+        <div class="option-number">${optionsCount + 1}</div>
+        <input
+            type="text"
+            class="poll-option-input modern-input"
+            placeholder="Введите вариант ответа"
+            required
+            maxlength="200"
+        >
+        <button
+            type="button"
+            class="remove-option-btn"
+            onclick="removePollOption(this)"
+            aria-label="Удалить вариант"
+            ${optionsCount < 2 ? 'style="visibility: hidden;"' : ''}
+        >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        </button>
+    `;
+
+    container.appendChild(wrapper);
+    updateOptionNumbers();
+}
+
+function removePollOption(button) {
+    const wrapper = button.closest('.poll-option-wrapper');
+    const container = document.getElementById('pollOptionsContainer');
+
+    // Don't allow removing if only 2 options left
+    const optionsCount = container.querySelectorAll('.poll-option-wrapper').length;
+    if (optionsCount <= 2) {
+        alert('Минимум 2 варианта ответа');
+        return;
+    }
+
+    wrapper.remove();
+    updateOptionNumbers();
+}
+
+function updateOptionNumbers() {
+    const container = document.getElementById('pollOptionsContainer');
+    const wrappers = container.querySelectorAll('.poll-option-wrapper');
+
+    wrappers.forEach((wrapper, index) => {
+        const numberSpan = wrapper.querySelector('.option-number');
+        if (numberSpan) {
+            numberSpan.textContent = index + 1;
+        }
+
+        // Show/hide remove button based on count
+        const removeBtn = wrapper.querySelector('.remove-option-btn');
+        if (removeBtn) {
+            removeBtn.style.visibility = wrappers.length <= 2 ? 'hidden' : 'visible';
+        }
+    });
 }
 
 async function createPoll() {
@@ -365,6 +487,7 @@ function escapeHtml(text) {
 window.openCreatePollModal = openCreatePollModal;
 window.closeCreatePollModal = closeCreatePollModal;
 window.addPollOption = addPollOption;
+window.removePollOption = removePollOption;
 window.createPoll = createPoll;
 window.renderPoll = renderPoll;
 window.togglePollOption = togglePollOption;
@@ -372,4 +495,4 @@ window.submitPollVote = submitPollVote;
 window.closePoll = closePoll;
 window.canClosePoll = canClosePoll;
 
-console.log('✅ Polls UI module loaded');
+console.log('✅ Polls UI module loaded (Modern Edition)');
