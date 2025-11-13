@@ -118,24 +118,6 @@
     <div id="jitsi-container"></div>
 
     <script>
-        // Получаем параметры из URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const callId = urlParams.get('callId');
-        const token = urlParams.get('token');
-
-        if (!callId) {
-            showError('Неверные параметры звонка');
-            return;
-        }
-
-        // Получаем JWT токен из localStorage если не передан в URL
-        const authToken = token || localStorage.getItem('authToken');
-
-        if (!authToken) {
-            showError('Необходима аутентификация');
-            return;
-        }
-
         let jitsiApi = null;
 
         // Функция отображения ошибки
@@ -145,8 +127,27 @@
             document.getElementById('error').classList.add('show');
         }
 
+        // Получаем параметры из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const callId = urlParams.get('callId');
+        const token = urlParams.get('token');
+
+        // Получаем JWT токен из localStorage если не передан в URL
+        const authToken = token || localStorage.getItem('authToken');
+
         // Загружаем информацию о звонке и подключаемся
         async function initializeCall() {
+            // Проверяем наличие необходимых параметров
+            if (!callId) {
+                showError('Неверные параметры звонка');
+                return;
+            }
+
+            if (!authToken) {
+                showError('Необходима аутентификация');
+                return;
+            }
+
             try {
                 // Получаем информацию о звонке от сервера
                 const response = await fetch(`/api/calls/${callId}/join`, {
