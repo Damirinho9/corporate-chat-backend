@@ -314,7 +314,8 @@ function renderPoll(poll, messageElement) {
     const options = Array.isArray(poll.options) ? poll.options : JSON.parse(poll.options || '[]');
     const userVote = poll.user_vote || [];
     const totalVoters = poll.total_voters || 0;
-    const isClosed = poll.closed || (poll.closes_at && new Date(poll.closes_at) < new Date());
+    const isClosed = poll.closed === true || (poll.closes_at && new Date(poll.closes_at) < new Date());
+    const hasVoted = userVote && userVote.length > 0;
 
     // Calculate percentages
     const totalVotes = options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
@@ -349,14 +350,30 @@ function renderPoll(poll, messageElement) {
                 }).join('')}
             </div>
 
-            <div class="poll-footer">
-                <span class="poll-voters">👥 ${totalVoters} ${totalVoters === 1 ? 'голос' : 'голосов'}</span>
-                ${poll.multiple_choice ? '<span class="poll-info">Можно выбрать несколько</span>' : ''}
-                ${poll.anonymous ? '<span class="poll-info">Анонимно</span>' : ''}
-                ${userVote.length > 0 && !isClosed ?
-                    `<button class="btn btn-sm btn-primary" onclick="submitPollVote(${poll.id})">Проголосовать</button>` : ''}
-                ${canClosePoll(poll) && !isClosed ?
-                    `<button class="btn btn-sm btn-danger" onclick="closePoll(${poll.id})">Закрыть опрос</button>` : ''}
+            <div class="poll-footer" id="poll-footer-${poll.id}">
+                <div class="poll-info-section">
+                    <span class="poll-voters">👥 ${totalVoters} ${totalVoters === 1 ? 'голос' : 'голосов'}</span>
+                    ${poll.multiple_choice ? '<span class="poll-info">Можно выбрать несколько</span>' : ''}
+                    ${poll.anonymous ? '<span class="poll-info">Анонимно</span>' : ''}
+                </div>
+                <div class="poll-actions" id="poll-actions-${poll.id}">
+                    ${!isClosed && !hasVoted ?
+                        `<button class="poll-vote-btn" id="vote-btn-${poll.id}" onclick="submitPollVote(${poll.id})" style="display: none;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Проголосовать
+                        </button>` : ''}
+                    ${canClosePoll(poll) && !isClosed ?
+                        `<button class="poll-close-btn" onclick="if(confirm('Закрыть опрос? Голосование станет невозможным.')) closePoll(${poll.id})">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="15" y1="9" x2="9" y2="15"></line>
+                                <line x1="9" y1="9" x2="15" y2="15"></line>
+                            </svg>
+                            Закрыть опрос
+                        </button>` : ''}
+                </div>
             </div>
 
             ${!poll.anonymous && poll.voters && poll.voters.length > 0 ? `
@@ -409,6 +426,12 @@ function togglePollOption(pollId, optionIndex, isMultipleChoice) {
                 opt.classList.remove('selected');
             }
         });
+
+        // Show/hide vote button based on selection
+        const voteBtn = document.getElementById(`vote-btn-${pollId}`);
+        if (voteBtn) {
+            voteBtn.style.display = tempPollVotes[pollId].length > 0 ? 'inline-flex' : 'none';
+        }
     }
 }
 
