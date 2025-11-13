@@ -145,6 +145,7 @@ function generateJitsiConfig(options = {}) {
     roomName,
     userInfo = {},
     isModerator = false,
+    callType = 'video',
     configOverrides = {},
     interfaceConfigOverrides = {}
   } = options;
@@ -177,7 +178,7 @@ function generateJitsiConfig(options = {}) {
 
     // Функциональность
     startWithAudioMuted: false,
-    startWithVideoMuted: false,
+    startWithVideoMuted: callType === 'audio', // Для аудиозвонков отключаем видео
     enableWelcomePage: false,
     enableClosePage: false,
     prejoinPageEnabled: false,

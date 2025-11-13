@@ -111,7 +111,8 @@ router.post('/initiate',
           name: user.name,
           email: `${user.username}@corporate-chat.local`
         },
-        isModerator: true
+        isModerator: true,
+        callType: callType
       });
 
       res.json({
@@ -226,7 +227,8 @@ router.post('/:callId/join',
           name: user.name,
           email: `${user.username}@corporate-chat.local`
         },
-        isModerator: participant.is_moderator
+        isModerator: participant.is_moderator,
+        callType: call.call_type
       });
 
       res.json({
