@@ -1020,6 +1020,8 @@
             margin-top: 15px;
         }
     </style>
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -1104,6 +1106,66 @@
                         <div class="stat-info">
                             <h4>Online Users</h4>
                             <p id="onlineUsers">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Period Filter -->
+                <div class="card" style="margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>📈 Аналитика</h3>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-sm" id="period-day" onclick="changeAnalyticsPeriod('day')">День</button>
+                            <button class="btn btn-sm btn-primary" id="period-week" onclick="changeAnalyticsPeriod('week')">Неделя</button>
+                            <button class="btn btn-sm" id="period-month" onclick="changeAnalyticsPeriod('month')">Месяц</button>
+                        </div>
+                    </div>
+
+                    <!-- Messages Timeline Chart -->
+                    <div style="margin-bottom: 30px;">
+                        <h4 style="margin-bottom: 15px; color: #4a5568;">Динамика сообщений</h4>
+                        <canvas id="messagesTimelineChart" height="80"></canvas>
+                    </div>
+
+                    <!-- Hourly Activity Chart -->
+                    <div style="margin-bottom: 30px;">
+                        <h4 style="margin-bottom: 15px; color: #4a5568;">Активность по часам</h4>
+                        <canvas id="hourlyActivityChart" height="80"></canvas>
+                    </div>
+
+                    <!-- Top Users and Chats -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+                        <div>
+                            <h4 style="margin-bottom: 15px; color: #4a5568;">Самые активные пользователи</h4>
+                            <canvas id="topUsersChart" height="120"></canvas>
+                        </div>
+                        <div>
+                            <h4 style="margin-bottom: 15px; color: #4a5568;">Самые активные чаты</h4>
+                            <canvas id="topChatsChart" height="120"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Departments Stats -->
+                    <div style="margin-bottom: 30px;">
+                        <h4 style="margin-bottom: 15px; color: #4a5568;">Активность по отделам</h4>
+                        <canvas id="departmentsChart" height="80"></canvas>
+                    </div>
+
+                    <!-- Response Time Stats -->
+                    <div class="stats-grid" style="margin-bottom: 20px;">
+                        <div class="stat-card">
+                            <div class="stat-icon blue">⏱️</div>
+                            <div class="stat-info">
+                                <h4>Среднее время отклика</h4>
+                                <p id="avgResponseTime">-</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon purple">📊</div>
+                            <div class="stat-info">
+                                <h4>Медиана времени отклика</h4>
+                                <p id="medianResponseTime">-</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1831,6 +1893,16 @@ function verifySignature(secret, payload, signature) {
         let usersCache = [];
         let chatsCache = [];
         let currentEditingUser = null;
+
+        // Analytics variables
+        let currentAnalyticsPeriod = 'week';
+        let charts = {
+            messagesTimeline: null,
+            hourlyActivity: null,
+            topUsers: null,
+            topChats: null,
+            departments: null
+        };
         let editChatState = {
             chatId: null,
             chat: null,
@@ -2079,25 +2151,25 @@ function verifySignature(secret, payload, signature) {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const stats = await statsRes.json();
-                
+
                 document.getElementById('totalUsers').textContent = stats.overall.total_users || 0;
                 document.getElementById('onlineUsers').textContent = stats.overall.online_users || 0;
-                
+
                 // Load message stats
                 const msgRes = await fetch(`${API_URL}/messages/stats`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const msgStats = await msgRes.json();
-                
+
                 document.getElementById('totalMessages').textContent = msgStats.overall.total_messages || 0;
                 document.getElementById('totalChats').textContent = msgStats.overall.active_chats || 0;
-                
+
                 // Load recent activity
                 const logsRes = await fetch(`${API_URL}/admin/logs?limit=10`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const logs = await logsRes.json();
-                
+
                 const tbody = document.querySelector('#recentActivity tbody');
                 if (logs.logs && logs.logs.length > 0) {
                     tbody.innerHTML = logs.logs.map(log => `
@@ -2110,9 +2182,282 @@ function verifySignature(secret, payload, signature) {
                 } else {
                     tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #a0aec0;">No recent activity</td></tr>';
                 }
+
+                // Load analytics
+                await loadAnalytics(currentAnalyticsPeriod);
             } catch (err) {
                 console.error('Load dashboard error:', err);
             }
+        }
+
+        function changeAnalyticsPeriod(period) {
+            currentAnalyticsPeriod = period;
+
+            // Update button styles
+            ['day', 'week', 'month'].forEach(p => {
+                const btn = document.getElementById(`period-${p}`);
+                if (btn) {
+                    if (p === period) {
+                        btn.classList.add('btn-primary');
+                    } else {
+                        btn.classList.remove('btn-primary');
+                    }
+                }
+            });
+
+            loadAnalytics(period);
+        }
+
+        async function loadAnalytics(period) {
+            try {
+                // Load all analytics data in parallel
+                const [
+                    timelineRes,
+                    hourlyRes,
+                    usersRes,
+                    chatsRes,
+                    depsRes,
+                    responseTimeRes
+                ] = await Promise.all([
+                    fetch(`${API_URL}/analytics/messages/timeline?period=${period}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_URL}/analytics/activity/hourly?period=${period}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_URL}/analytics/users/active?period=${period}&limit=10`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_URL}/analytics/chats/active?period=${period}&limit=10`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_URL}/analytics/departments?period=${period}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_URL}/analytics/response-time?period=${period}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                ]);
+
+                const timeline = await timelineRes.json();
+                const hourly = await hourlyRes.json();
+                const users = await usersRes.json();
+                const chats = await chatsRes.json();
+                const deps = await depsRes.json();
+                const responseTime = await responseTimeRes.json();
+
+                // Update charts
+                renderMessagesTimelineChart(timeline.data);
+                renderHourlyActivityChart(hourly.hours);
+                renderTopUsersChart(users.users);
+                renderTopChatsChart(chats.chats);
+                renderDepartmentsChart(deps.departments);
+
+                // Update response time stats
+                const avgMin = responseTime.average_response_time_minutes || 0;
+                const medianMin = responseTime.median_response_time_minutes || 0;
+                document.getElementById('avgResponseTime').textContent =
+                    avgMin > 60 ? `${Math.round(avgMin / 60)} ч` : `${avgMin} мин`;
+                document.getElementById('medianResponseTime').textContent =
+                    medianMin > 60 ? `${Math.round(medianMin / 60)} ч` : `${medianMin} мин`;
+
+            } catch (err) {
+                console.error('Load analytics error:', err);
+            }
+        }
+
+        // ==================== CHART RENDERING FUNCTIONS ====================
+        function renderMessagesTimelineChart(data) {
+            const ctx = document.getElementById('messagesTimelineChart');
+            if (!ctx) return;
+
+            // Destroy previous chart if exists
+            if (charts.messagesTimeline) {
+                charts.messagesTimeline.destroy();
+            }
+
+            const labels = data.map(d => new Date(d.time_bucket).toLocaleString('ru-RU', {
+                month: 'short',
+                day: 'numeric',
+                hour: currentAnalyticsPeriod === 'day' ? '2-digit' : undefined
+            }));
+            const values = data.map(d => parseInt(d.message_count));
+
+            charts.messagesTimeline = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Сообщения',
+                        data: values,
+                        borderColor: '#4299e1',
+                        backgroundColor: 'rgba(66, 153, 225, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderHourlyActivityChart(hours) {
+            const ctx = document.getElementById('hourlyActivityChart');
+            if (!ctx) return;
+
+            if (charts.hourlyActivity) {
+                charts.hourlyActivity.destroy();
+            }
+
+            // Fill missing hours with 0
+            const hourData = Array(24).fill(0);
+            hours.forEach(h => {
+                hourData[parseInt(h.hour)] = parseInt(h.message_count);
+            });
+
+            const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+
+            charts.hourlyActivity = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Сообщения',
+                        data: hourData,
+                        backgroundColor: 'rgba(102, 126, 234, 0.7)',
+                        borderColor: '#667eea',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderTopUsersChart(users) {
+            const ctx = document.getElementById('topUsersChart');
+            if (!ctx) return;
+
+            if (charts.topUsers) {
+                charts.topUsers.destroy();
+            }
+
+            const labels = users.map(u => u.name || u.username);
+            const values = users.map(u => parseInt(u.message_count));
+
+            charts.topUsers = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Сообщений',
+                        data: values,
+                        backgroundColor: 'rgba(72, 187, 120, 0.7)',
+                        borderColor: '#48bb78',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderTopChatsChart(chats) {
+            const ctx = document.getElementById('topChatsChart');
+            if (!ctx) return;
+
+            if (charts.topChats) {
+                charts.topChats.destroy();
+            }
+
+            const labels = chats.map(c => c.name);
+            const values = chats.map(c => parseInt(c.message_count));
+
+            charts.topChats = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Сообщений',
+                        data: values,
+                        backgroundColor: 'rgba(237, 137, 54, 0.7)',
+                        borderColor: '#ed8936',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderDepartmentsChart(departments) {
+            const ctx = document.getElementById('departmentsChart');
+            if (!ctx) return;
+
+            if (charts.departments) {
+                charts.departments.destroy();
+            }
+
+            const labels = departments.map(d => d.department);
+            const values = departments.map(d => parseInt(d.message_count));
+
+            charts.departments = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Сообщений',
+                        data: values,
+                        backgroundColor: 'rgba(159, 122, 234, 0.7)',
+                        borderColor: '#9f7aea',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
         }
 
         async function loadUsers() {

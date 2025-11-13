@@ -39,6 +39,9 @@ const botApiRoutes = require('./botApi');
 const webhooksRoutes = require('./webhooks');
 const pollsRoutes = require('./polls');
 
+// ANALYTICS ROUTES
+const analyticsRoutes = require('./analytics');
+
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -702,6 +705,9 @@ router.use('/webhooks', webhooksRoutes);
 
 // ==================== POLLS ROUTES ====================
 router.use('/polls', pollsRoutes);
+
+// ==================== ANALYTICS ROUTES ====================
+router.use('/analytics', analyticsRoutes);
 
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {
