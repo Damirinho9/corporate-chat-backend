@@ -219,7 +219,7 @@ router.post('/:id/vote',
             }
 
             // Validate option indices
-            const options = JSON.parse(poll.options);
+            const options = typeof poll.options === 'string' ? JSON.parse(poll.options) : poll.options;
             for (const index of option_indices) {
                 if (index < 0 || index >= options.length) {
                     return res.status(400).json({ error: 'Invalid option index' });
@@ -422,7 +422,8 @@ async function updatePollVoteCounts(pollId) {
 
         // Get poll
         const pollResult = await query('SELECT options FROM polls WHERE id = $1', [pollId]);
-        const options = JSON.parse(pollResult.rows[0].options);
+        const rawOptions = pollResult.rows[0].options;
+        const options = typeof rawOptions === 'string' ? JSON.parse(rawOptions) : rawOptions;
 
         // Reset votes
         options.forEach(opt => opt.votes = 0);
@@ -493,7 +494,7 @@ async function getPollWithDetails(pollId, userId) {
 
         return {
             ...poll,
-            options: JSON.parse(poll.options),
+            options: typeof poll.options === 'string' ? JSON.parse(poll.options) : poll.options,
             user_vote: userVote,
             total_voters: totalVoters,
             voters: voters
