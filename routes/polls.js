@@ -16,17 +16,26 @@ const validate = (req, res, next) => {
 // Check if user can create polls (admin or ROP in their department)
 async function canCreatePoll(userId, chatId) {
     try {
+        console.log(`[canCreatePoll] Checking permissions for userId: ${userId}, chatId: ${chatId}`);
+
         const userResult = await query(
             'SELECT role, department FROM users WHERE id = $1',
             [userId]
         );
 
-        if (userResult.rows.length === 0) return false;
+        if (userResult.rows.length === 0) {
+            console.log(`[canCreatePoll] User not found: ${userId}`);
+            return false;
+        }
 
         const user = userResult.rows[0];
+        console.log(`[canCreatePoll] User data:`, user);
 
         // Admins can create polls anywhere
-        if (user.role === 'admin') return true;
+        if (user.role === 'admin') {
+            console.log(`[canCreatePoll] User is admin - access granted`);
+            return true;
+        }
 
         // ROPs can create polls in their department chats
         if (user.role === 'rop') {
@@ -41,13 +50,15 @@ async function canCreatePoll(userId, chatId) {
 
             // ROP can create in department chats of their department
             if (chat.type === 'department' && chat.department === user.department) {
+                console.log(`[canCreatePoll] ROP can create in their department chat - access granted`);
                 return true;
             }
         }
 
+        console.log(`[canCreatePoll] Access denied - user role: ${user.role}`);
         return false;
     } catch (error) {
-        console.error('Can create poll error:', error);
+        console.error('[canCreatePoll] Error:', error);
         return false;
     }
 }
