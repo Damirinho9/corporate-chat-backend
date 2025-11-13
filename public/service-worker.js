@@ -52,6 +52,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Кэшируем только GET запросы
   if (event.request.method !== 'GET') {
+    // Для не-GET запросов просто пропускаем через сеть без кэширования
+    event.respondWith(fetch(event.request));
     return;
   }
 
@@ -66,7 +68,8 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME)
             .then((cache) => {
               cache.put(event.request, responseToCache);
-            });
+            })
+            .catch(err => console.log('[Service Worker] Cache put failed:', err));
         }
 
         return response;
