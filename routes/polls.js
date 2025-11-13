@@ -82,7 +82,7 @@ router.post('/',
     async (req, res) => {
         try {
             const { chat_id, question, options, multiple_choice, anonymous, closes_at } = req.body;
-            const userId = req.user.userId;
+            const userId = req.user.id; // req.user comes from DB query which has 'id' field, not 'userId'
 
             // Check permissions
             const canCreate = await canCreatePoll(userId, chat_id);
@@ -184,7 +184,7 @@ router.post('/:id/vote',
         try {
             const pollId = req.params.id;
             const { option_indices } = req.body;
-            const userId = req.user.userId;
+            const userId = req.user.id;
 
             // Get poll
             const pollResult = await query(
@@ -289,7 +289,7 @@ router.get('/:id',
     async (req, res) => {
         try {
             const pollId = req.params.id;
-            const userId = req.user.userId;
+            const userId = req.user.id;
 
             const poll = await getPollWithDetails(pollId, userId);
 
@@ -317,7 +317,7 @@ router.get('/by-message/:messageId',
     async (req, res) => {
         try {
             const messageId = req.params.messageId;
-            const userId = req.user.userId;
+            const userId = req.user.id;
 
             // Get poll by message_id
             const pollResult = await query(
@@ -356,7 +356,7 @@ router.post('/:id/close',
     async (req, res) => {
         try {
             const pollId = req.params.id;
-            const userId = req.user.userId;
+            const userId = req.user.id;
 
             // Get poll
             const pollResult = await query(
