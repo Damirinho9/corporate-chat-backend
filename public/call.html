@@ -181,6 +181,15 @@
             console.log('Config:', config);
             console.log('Config.configOverwrite (JSON):', JSON.stringify(config.configOverwrite, null, 2));
 
+            // Устанавливаем правильный заголовок окна
+            document.title = callType === 'audio' ? 'Аудиозвонок - Corporate Chat' : 'Видеозвонок - Corporate Chat';
+
+            // Обновляем текст загрузки
+            const loadingText = document.getElementById('loading-text');
+            if (loadingText) {
+                loadingText.textContent = callType === 'audio' ? 'Подключение к аудиозвонку...' : 'Подключение к видеозвонку...';
+            }
+
             const domain = config.hosts?.domain || 'meet.jit.si';
             const options = {
                 roomName: config.roomName,
