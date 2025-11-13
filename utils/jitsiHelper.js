@@ -92,9 +92,10 @@ function generateJitsiToken(options) {
  * Генерирует URL для Jitsi встречи
  * @param {string} roomName - Имя комнаты
  * @param {string} token - JWT токен (опционально)
+ * @param {string} callType - Тип звонка ('audio' | 'video')
  * @returns {string} URL встречи
  */
-function generateJitsiUrl(roomName, token = null) {
+function generateJitsiUrl(roomName, token = null, callType = 'video') {
   const jitsiDomain = process.env.JITSI_DOMAIN || 'meet.jit.si';
   const useJWT = process.env.JITSI_USE_JWT === 'true';
 
@@ -127,6 +128,11 @@ function generateJitsiUrl(roomName, token = null) {
     'config.stereo': 'true',
     'config.opusMaxAverageBitrate': '128000'
   });
+
+  // Для аудиозвонков добавляем параметр для отключения видео
+  if (callType === 'audio') {
+    params.set('config.startWithVideoMuted', 'true');
+  }
 
   if (!useJWT) {
     url += '?' + params.toString();

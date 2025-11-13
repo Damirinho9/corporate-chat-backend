@@ -102,7 +102,7 @@ router.post('/initiate',
       });
 
       // Генерируем URL для встречи
-      const meetingUrl = generateJitsiUrl(roomName, jitsiToken);
+      const meetingUrl = generateJitsiUrl(roomName, jitsiToken, callType);
 
       // Генерируем конфигурацию для Jitsi
       const jitsiConfig = generateJitsiConfig({
@@ -218,7 +218,7 @@ router.post('/:callId/join',
       });
 
       // Генерируем URL
-      const meetingUrl = generateJitsiUrl(call.room_name, jitsiToken);
+      const meetingUrl = generateJitsiUrl(call.room_name, jitsiToken, call.call_type);
 
       // Генерируем конфигурацию
       const jitsiConfig = generateJitsiConfig({
