@@ -3326,6 +3326,12 @@
 
             updateUserUI(currentUser);
 
+            // Show poll button for admins and ROPs
+            const pollBtn = document.getElementById('pollBtn');
+            if (pollBtn && currentUser && (currentUser.role === 'admin' || currentUser.role === 'rop')) {
+                pollBtn.style.display = 'inline-block';
+            }
+
             connectSocket();
             loadChats();
             loadUserPermissions();

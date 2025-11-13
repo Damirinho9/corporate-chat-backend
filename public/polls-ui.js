@@ -8,10 +8,12 @@ let currentPolls = {};
 // CREATE POLL MODAL
 // ==================================================
 function openCreatePollModal() {
-    if (!selectedChatId) {
+    if (!window.selectedChatId) {
         alert('Выберите чат для создания опроса');
         return;
     }
+
+    const selectedChatId = window.selectedChatId;
 
     const modal = document.createElement('div');
     modal.id = 'createPollModal';
@@ -106,8 +108,14 @@ async function createPoll() {
         return;
     }
 
+    const selectedChatId = window.selectedChatId;
+    if (!selectedChatId) {
+        alert('Выберите чат для создания опроса');
+        return;
+    }
+
     try {
-        const response = await fetch(`${API_URL}/polls`, {
+        const response = await fetch(`${window.API_URL}/polls`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -130,11 +138,11 @@ async function createPoll() {
 
         const data = await response.json();
         closeCreatePollModal();
-        showToast('✅ Опрос создан успешно', 'success');
+        window.showToast('✅ Опрос создан успешно', 'success');
 
         // Reload messages to show the poll
-        if (typeof loadMessages === 'function') {
-            loadMessages(selectedChatId);
+        if (typeof window.loadMessages === 'function') {
+            window.loadMessages(selectedChatId);
         }
 
     } catch (error) {
@@ -259,7 +267,7 @@ async function submitPollVote(pollId) {
     }
 
     try {
-        const response = await fetch(`${API_URL}/polls/${pollId}/vote`, {
+        const response = await fetch(`${window.API_URL}/polls/${pollId}/vote`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -276,7 +284,7 @@ async function submitPollVote(pollId) {
         }
 
         const data = await response.json();
-        showToast('✅ Голос учтен', 'success');
+        window.showToast('✅ Голос учтен', 'success');
 
         // Clear temp votes
         delete tempPollVotes[pollId];
@@ -285,8 +293,8 @@ async function submitPollVote(pollId) {
         if (data.poll && currentPollsData) {
             currentPollsData[pollId] = data.poll;
             // Reload messages to update display
-            if (typeof loadMessages === 'function' && selectedChatId) {
-                loadMessages(selectedChatId);
+            if (typeof window.loadMessages === 'function' && window.selectedChatId) {
+                window.loadMessages(window.selectedChatId);
             }
         }
 
@@ -302,7 +310,7 @@ async function closePoll(pollId) {
     }
 
     try {
-        const response = await fetch(`${API_URL}/polls/${pollId}/close`, {
+        const response = await fetch(`${window.API_URL}/polls/${pollId}/close`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -314,11 +322,11 @@ async function closePoll(pollId) {
             throw new Error(error.error || 'Failed to close poll');
         }
 
-        showToast('✅ Опрос закрыт', 'success');
+        window.showToast('✅ Опрос закрыт', 'success');
 
         // Reload messages
-        if (typeof loadMessages === 'function' && selectedChatId) {
-            loadMessages(selectedChatId);
+        if (typeof window.loadMessages === 'function' && window.selectedChatId) {
+            window.loadMessages(window.selectedChatId);
         }
 
     } catch (error) {
@@ -328,6 +336,7 @@ async function closePoll(pollId) {
 }
 
 function canClosePoll(poll) {
+    const currentUser = window.currentUser;
     if (!currentUser) return false;
 
     // Admin can close any poll
