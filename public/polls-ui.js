@@ -237,7 +237,7 @@ async function createPoll() {
     }
 
     const requestData = {
-        chat_id: selectedChatId,
+        chat_id: parseInt(selectedChatId, 10), // Ensure it's a number
         question,
         options,
         multiple_choice: multipleChoice,
