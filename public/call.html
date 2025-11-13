@@ -175,6 +175,11 @@
 
         // Инициализация Jitsi Meet
         function initializeJitsi(config, callType) {
+            console.log('=== INITIALIZING JITSI ===');
+            console.log('Call type:', callType);
+            console.log('Config:', config);
+            console.log('Config.configOverwrite:', config.configOverwrite);
+
             const domain = config.hosts?.domain || 'meet.jit.si';
             const options = {
                 roomName: config.roomName,
