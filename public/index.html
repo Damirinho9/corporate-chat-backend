@@ -3840,7 +3840,7 @@
                 audioBtn.disabled = true;
                 videoBtn.disabled = true;
 
-                const response = await fetch(`${API_URL}/calls`, {
+                const response = await fetch(`${API_URL}/calls/initiate`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -3848,7 +3848,6 @@
                     },
                     body: JSON.stringify({
                         callType: callType,
-                        callMode: 'direct',
                         chatId: currentChatId,
                         participants: [Number(currentDirectContactId)]
                     })
