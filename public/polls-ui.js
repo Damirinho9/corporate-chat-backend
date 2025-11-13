@@ -236,6 +236,17 @@ async function createPoll() {
         return;
     }
 
+    const requestData = {
+        chat_id: selectedChatId,
+        question,
+        options,
+        multiple_choice: multipleChoice,
+        anonymous: anonymous,
+        closes_at: closesAt || null
+    };
+
+    console.log('Creating poll with data:', requestData);
+
     try {
         const response = await fetch(`${window.API_URL}/polls`, {
             method: 'POST',
@@ -243,19 +254,24 @@ async function createPoll() {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                chat_id: selectedChatId,
-                question,
-                options,
-                multiple_choice: multipleChoice,
-                anonymous: anonymous,
-                closes_at: closesAt || null
-            })
+            body: JSON.stringify(requestData)
         });
 
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.error || 'Failed to create poll');
+            console.error('Server error response:', error);
+
+            // Show detailed error message
+            let errorMessage = 'Failed to create poll';
+            if (error.error) {
+                errorMessage = error.error;
+            } else if (error.errors && Array.isArray(error.errors)) {
+                errorMessage = error.errors.map(e => e.msg || e.message).join(', ');
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            throw new Error(errorMessage);
         }
 
         const data = await response.json();
