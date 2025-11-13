@@ -165,7 +165,7 @@
                 const { call, jitsi } = data;
 
                 // Инициализируем Jitsi Meet
-                initializeJitsi(jitsi.config);
+                initializeJitsi(jitsi.config, call.callType);
 
             } catch (error) {
                 console.error('Error initializing call:', error);
@@ -174,7 +174,7 @@
         }
 
         // Инициализация Jitsi Meet
-        function initializeJitsi(config) {
+        function initializeJitsi(config, callType) {
             const domain = config.hosts?.domain || 'meet.jit.si';
             const options = {
                 roomName: config.roomName,
@@ -193,6 +193,20 @@
             jitsiApi.addEventListener('videoConferenceJoined', () => {
                 console.log('Joined conference');
                 document.getElementById('loading').classList.add('hidden');
+
+                // Для аудиозвонков принудительно отключаем видео
+                if (callType === 'audio') {
+                    console.log('Audio call detected - checking video status');
+                    // Проверяем состояние видео и выключаем, если оно включено
+                    jitsiApi.isVideoMuted().then(muted => {
+                        if (!muted) {
+                            console.log('Video is on, turning it off');
+                            jitsiApi.executeCommand('toggleVideo');
+                        } else {
+                            console.log('Video already off');
+                        }
+                    });
+                }
 
                 // Уведомляем сервер о присоединении через Socket.IO
                 if (window.socket) {
