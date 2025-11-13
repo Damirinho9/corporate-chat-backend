@@ -18,12 +18,12 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('[Service Worker] Caching app shell');
-        return cache.addAll(urlsToCache.filter(url => {
-          // Кэшируем только существующие файлы
-          return fetch(url, { method: 'HEAD' })
-            .then(response => response.ok)
-            .catch(() => false);
-        }));
+        // Кэшируем только основные файлы, игнорируем ошибки
+        return Promise.allSettled(
+          urlsToCache.map(url => cache.add(url).catch(err => {
+            console.log('[Service Worker] Failed to cache:', url, err.message);
+          }))
+        );
       })
       .catch(err => console.log('[Service Worker] Cache failed:', err))
   );
@@ -50,17 +50,24 @@ self.addEventListener('activate', (event) => {
 
 // Fetch - стратегия Network First
 self.addEventListener('fetch', (event) => {
+  // Кэшируем только GET запросы
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
         // Клонируем ответ
         const responseToCache = response.clone();
 
-        // Кэшируем новый ответ
-        caches.open(CACHE_NAME)
-          .then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
+        // Кэшируем новый ответ (только успешные ответы)
+        if (response.status === 200) {
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+        }
 
         return response;
       })
