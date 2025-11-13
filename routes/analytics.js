@@ -12,20 +12,20 @@ router.get('/messages/timeline', authenticateToken, requireAdmin, async (req, re
     try {
         const { period = 'week' } = req.query; // day, week, month
 
-        let interval, limit;
+        let truncUnit, intervalStr;
         switch (period) {
             case 'day':
-                interval = '1 hour';
-                limit = 24;
+                truncUnit = 'hour';
+                intervalStr = '24 hours';
                 break;
             case 'month':
-                interval = '1 day';
-                limit = 30;
+                truncUnit = 'day';
+                intervalStr = '30 days';
                 break;
             case 'week':
             default:
-                interval = '1 day';
-                limit = 7;
+                truncUnit = 'day';
+                intervalStr = '7 days';
         }
 
         const result = await query(`
@@ -33,10 +33,10 @@ router.get('/messages/timeline', authenticateToken, requireAdmin, async (req, re
                 date_trunc($1, created_at) as time_bucket,
                 COUNT(*) as message_count
             FROM messages
-            WHERE created_at >= NOW() - INTERVAL '${limit} ${interval}'
+            WHERE created_at >= NOW() - $2::interval
             GROUP BY time_bucket
             ORDER BY time_bucket ASC
-        `, [interval.split(' ')[1]]); // 'hour' or 'day'
+        `, [truncUnit, intervalStr]);
 
         res.json({
             period,
@@ -56,17 +56,17 @@ router.get('/users/active', authenticateToken, requireAdmin, async (req, res) =>
     try {
         const { limit = 10, period = 'week' } = req.query;
 
-        let timeFilter;
+        let intervalStr;
         switch (period) {
             case 'day':
-                timeFilter = "INTERVAL '1 day'";
+                intervalStr = '1 day';
                 break;
             case 'month':
-                timeFilter = "INTERVAL '30 days'";
+                intervalStr = '30 days';
                 break;
             case 'week':
             default:
-                timeFilter = "INTERVAL '7 days'";
+                intervalStr = '7 days';
         }
 
         const result = await query(`
@@ -79,12 +79,12 @@ router.get('/users/active', authenticateToken, requireAdmin, async (req, res) =>
                 COUNT(DISTINCT m.chat_id) as chats_participated
             FROM users u
             LEFT JOIN messages m ON u.id = m.user_id
-                AND m.created_at >= NOW() - ${timeFilter}
+                AND m.created_at >= NOW() - $2::interval
             WHERE u.is_active = true
             GROUP BY u.id, u.username, u.name, u.department
             ORDER BY message_count DESC
             LIMIT $1
-        `, [parseInt(limit)]);
+        `, [parseInt(limit), intervalStr]);
 
         res.json({
             period,
@@ -104,17 +104,17 @@ router.get('/chats/active', authenticateToken, requireAdmin, async (req, res) =>
     try {
         const { limit = 10, period = 'week' } = req.query;
 
-        let timeFilter;
+        let intervalStr;
         switch (period) {
             case 'day':
-                timeFilter = "INTERVAL '1 day'";
+                intervalStr = '1 day';
                 break;
             case 'month':
-                timeFilter = "INTERVAL '30 days'";
+                intervalStr = '30 days';
                 break;
             case 'week':
             default:
-                timeFilter = "INTERVAL '7 days'";
+                intervalStr = '7 days';
         }
 
         const result = await query(`
@@ -128,12 +128,12 @@ router.get('/chats/active', authenticateToken, requireAdmin, async (req, res) =>
                 MAX(m.created_at) as last_message_at
             FROM chats c
             LEFT JOIN messages m ON c.id = m.chat_id
-                AND m.created_at >= NOW() - ${timeFilter}
+                AND m.created_at >= NOW() - $2::interval
             GROUP BY c.id, c.name, c.type, c.department
             HAVING COUNT(m.id) > 0
             ORDER BY message_count DESC
             LIMIT $1
-        `, [parseInt(limit)]);
+        `, [parseInt(limit), intervalStr]);
 
         res.json({
             period,
@@ -153,17 +153,17 @@ router.get('/activity/hourly', authenticateToken, requireAdmin, async (req, res)
     try {
         const { period = 'week' } = req.query;
 
-        let timeFilter;
+        let intervalStr;
         switch (period) {
             case 'day':
-                timeFilter = "INTERVAL '1 day'";
+                intervalStr = '1 day';
                 break;
             case 'month':
-                timeFilter = "INTERVAL '30 days'";
+                intervalStr = '30 days';
                 break;
             case 'week':
             default:
-                timeFilter = "INTERVAL '7 days'";
+                intervalStr = '7 days';
         }
 
         const result = await query(`
@@ -171,10 +171,10 @@ router.get('/activity/hourly', authenticateToken, requireAdmin, async (req, res)
                 EXTRACT(HOUR FROM created_at) as hour,
                 COUNT(*) as message_count
             FROM messages
-            WHERE created_at >= NOW() - ${timeFilter}
+            WHERE created_at >= NOW() - $1::interval
             GROUP BY hour
             ORDER BY hour ASC
-        `);
+        `, [intervalStr]);
 
         res.json({
             period,
@@ -194,17 +194,17 @@ router.get('/response-time', authenticateToken, requireAdmin, async (req, res) =
     try {
         const { period = 'week' } = req.query;
 
-        let timeFilter;
+        let intervalStr;
         switch (period) {
             case 'day':
-                timeFilter = "INTERVAL '1 day'";
+                intervalStr = '1 day';
                 break;
             case 'month':
-                timeFilter = "INTERVAL '30 days'";
+                intervalStr = '30 days';
                 break;
             case 'week':
             default:
-                timeFilter = "INTERVAL '7 days'";
+                intervalStr = '7 days';
         }
 
         // Среднее время между сообщениями в чате (упрощенная метрика)
@@ -216,7 +216,7 @@ router.get('/response-time', authenticateToken, requireAdmin, async (req, res) =
                     LAG(created_at) OVER (PARTITION BY chat_id ORDER BY created_at) as prev_message_at,
                     EXTRACT(EPOCH FROM (created_at - LAG(created_at) OVER (PARTITION BY chat_id ORDER BY created_at))) as gap_seconds
                 FROM messages
-                WHERE created_at >= NOW() - ${timeFilter}
+                WHERE created_at >= NOW() - $1::interval
             )
             SELECT
                 AVG(gap_seconds) as avg_response_seconds,
@@ -224,8 +224,8 @@ router.get('/response-time', authenticateToken, requireAdmin, async (req, res) =
                 COUNT(*) as total_responses
             FROM message_gaps
             WHERE gap_seconds IS NOT NULL
-                AND gap_seconds < 3600 -- Игнорируем разрывы больше часа
-        `);
+                AND gap_seconds < 3600
+        `, [intervalStr]);
 
         const avgSeconds = parseFloat(result.rows[0]?.avg_response_seconds || 0);
         const medianSeconds = parseFloat(result.rows[0]?.median_response_seconds || 0);
@@ -252,17 +252,17 @@ router.get('/departments', authenticateToken, requireAdmin, async (req, res) => 
     try {
         const { period = 'week' } = req.query;
 
-        let timeFilter;
+        let intervalStr;
         switch (period) {
             case 'day':
-                timeFilter = "INTERVAL '1 day'";
+                intervalStr = '1 day';
                 break;
             case 'month':
-                timeFilter = "INTERVAL '30 days'";
+                intervalStr = '30 days';
                 break;
             case 'week':
             default:
-                timeFilter = "INTERVAL '7 days'";
+                intervalStr = '7 days';
         }
 
         const result = await query(`
@@ -273,11 +273,11 @@ router.get('/departments', authenticateToken, requireAdmin, async (req, res) => 
                 COUNT(DISTINCT m.chat_id) as active_chats
             FROM users u
             LEFT JOIN messages m ON u.id = m.user_id
-                AND m.created_at >= NOW() - ${timeFilter}
+                AND m.created_at >= NOW() - $1::interval
             WHERE u.department IS NOT NULL
             GROUP BY u.department
             ORDER BY message_count DESC
-        `);
+        `, [intervalStr]);
 
         res.json({
             period,
@@ -297,17 +297,17 @@ router.get('/overview', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { period = 'week' } = req.query;
 
-        let timeFilter;
+        let intervalStr;
         switch (period) {
             case 'day':
-                timeFilter = "INTERVAL '1 day'";
+                intervalStr = '1 day';
                 break;
             case 'month':
-                timeFilter = "INTERVAL '30 days'";
+                intervalStr = '30 days';
                 break;
             case 'week':
             default:
-                timeFilter = "INTERVAL '7 days'";
+                intervalStr = '7 days';
         }
 
         // Общая статистика
@@ -318,8 +318,8 @@ router.get('/overview', authenticateToken, requireAdmin, async (req, res) => {
                 COUNT(DISTINCT m.chat_id) as active_chats,
                 COUNT(DISTINCT DATE(m.created_at)) as days_with_activity
             FROM messages m
-            WHERE m.created_at >= NOW() - ${timeFilter}
-        `);
+            WHERE m.created_at >= NOW() - $1::interval
+        `, [intervalStr]);
 
         // Сравнение с предыдущим периодом
         const comparison = await query(`
@@ -327,9 +327,9 @@ router.get('/overview', authenticateToken, requireAdmin, async (req, res) => {
                 COUNT(DISTINCT m.id) as prev_messages,
                 COUNT(DISTINCT m.user_id) as prev_active_users
             FROM messages m
-            WHERE m.created_at >= NOW() - ${timeFilter} * 2
-                AND m.created_at < NOW() - ${timeFilter}
-        `);
+            WHERE m.created_at >= NOW() - ($1::interval * 2)
+                AND m.created_at < NOW() - $1::interval
+        `, [intervalStr]);
 
         const current = overview.rows[0];
         const previous = comparison.rows[0];

@@ -2276,6 +2276,11 @@ function verifySignature(secret, payload, signature) {
                 charts.messagesTimeline.destroy();
             }
 
+            // Handle empty or invalid data
+            if (!data || !Array.isArray(data) || data.length === 0) {
+                data = [];
+            }
+
             const labels = data.map(d => new Date(d.time_bucket).toLocaleString('ru-RU', {
                 month: 'short',
                 day: 'numeric',
@@ -2315,6 +2320,11 @@ function verifySignature(secret, payload, signature) {
 
             if (charts.hourlyActivity) {
                 charts.hourlyActivity.destroy();
+            }
+
+            // Handle empty or invalid data
+            if (!hours || !Array.isArray(hours)) {
+                hours = [];
             }
 
             // Fill missing hours with 0
@@ -2358,6 +2368,11 @@ function verifySignature(secret, payload, signature) {
                 charts.topUsers.destroy();
             }
 
+            // Handle empty or invalid data
+            if (!users || !Array.isArray(users) || users.length === 0) {
+                users = [];
+            }
+
             const labels = users.map(u => u.name || u.username);
             const values = users.map(u => parseInt(u.message_count));
 
@@ -2395,6 +2410,11 @@ function verifySignature(secret, payload, signature) {
                 charts.topChats.destroy();
             }
 
+            // Handle empty or invalid data
+            if (!chats || !Array.isArray(chats) || chats.length === 0) {
+                chats = [];
+            }
+
             const labels = chats.map(c => c.name);
             const values = chats.map(c => parseInt(c.message_count));
 
@@ -2430,6 +2450,11 @@ function verifySignature(secret, payload, signature) {
 
             if (charts.departments) {
                 charts.departments.destroy();
+            }
+
+            // Handle empty or invalid data
+            if (!departments || !Array.isArray(departments) || departments.length === 0) {
+                departments = [];
             }
 
             const labels = departments.map(d => d.department);
