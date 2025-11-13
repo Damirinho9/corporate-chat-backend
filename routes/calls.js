@@ -83,10 +83,21 @@ router.post('/initiate',
         }
 
         // Автоматически получаем всех участников чата
-        const participantsResult = await query(
-          'SELECT user_id FROM chat_participants WHERE chat_id = $1',
-          [chatId]
-        );
+        let participantsResult;
+
+        if (chat.type === 'department') {
+          // Для чатов отделов берем всех активных пользователей этого отдела
+          participantsResult = await query(
+            'SELECT id as user_id FROM users WHERE department = $1 AND is_active = true',
+            [chat.department]
+          );
+        } else {
+          // Для других типов чатов берем из chat_participants
+          participantsResult = await query(
+            'SELECT user_id FROM chat_participants WHERE chat_id = $1',
+            [chatId]
+          );
+        }
 
         participants = participantsResult.rows.map(p => p.user_id);
       }
