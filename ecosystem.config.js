@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'corporate-chat',
       script: 'server.js',
-      cwd: '/root/corporate-chat-backend',
+      cwd: '/home/damir/corporate-chat-backend',
       watch: false,
       env: {
         NODE_ENV: 'development',
