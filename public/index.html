@@ -2326,6 +2326,7 @@
                         <div class="chat-input">
                             <button class="icon-btn" onclick="toggleFileUpload()" title="Прикрепить файл" id="attachBtn">📎</button>
                             <button class="icon-btn" onclick="toggleVoiceRecorder()" title="Голосовое сообщение" id="voiceBtn">🎤</button>
+                            <button class="icon-btn" onclick="openCreatePollModal()" title="Создать опрос" id="pollBtn" style="display: none;">📊</button>
                             <textarea id="messageInput" placeholder="Выберите чат для начала общения..." rows="1" disabled></textarea>
                         </div>
                         <button class="send-btn" id="sendBtn" title="Отправить" disabled>➤</button>
@@ -3401,6 +3402,50 @@
                 updateUserOnlineStatus(data.userId, false);
             });
 
+            // Poll events
+            socket.on('new_poll', (data) => {
+                if (data.chatId === selectedChatId) {
+                    loadMessages(selectedChatId);
+                }
+            });
+
+            socket.on('poll_updated', (data) => {
+                if (data.chatId === selectedChatId) {
+                    // Update poll display in real-time
+                    const pollContainer = document.querySelector(`[data-poll-id="${data.poll.id}"]`);
+                    if (pollContainer && data.poll) {
+                        // Re-render the poll
+                        const messageEl = pollContainer.closest('.message');
+                        if (messageEl) {
+                            pollContainer.remove();
+                            const pollHTML = renderPoll(data.poll, messageEl);
+                            const messageContent = messageEl.querySelector('.message-bubble');
+                            if (messageContent) {
+                                messageContent.insertAdjacentHTML('afterend', pollHTML);
+                            }
+                        }
+                    }
+                }
+            });
+
+            socket.on('poll_closed', (data) => {
+                if (data.chatId === selectedChatId) {
+                    // Update poll display
+                    const pollContainer = document.querySelector(`[data-poll-id="${data.poll.id}"]`);
+                    if (pollContainer && data.poll) {
+                        const messageEl = pollContainer.closest('.message');
+                        if (messageEl) {
+                            pollContainer.remove();
+                            const pollHTML = renderPoll(data.poll, messageEl);
+                            const messageContent = messageEl.querySelector('.message-bubble');
+                            if (messageContent) {
+                                messageContent.insertAdjacentHTML('afterend', pollHTML);
+                            }
+                        }
+                    }
+                }
+            });
+
             socket.on('error', (err) => {
                 showToast(err.message || 'Ошибка сокета', 'error');
             });
@@ -4122,6 +4167,12 @@
                 sendBtn.disabled = false;
                 attachBtn.disabled = false;
 
+                // Show poll button for admins and ROPs
+                const pollBtn = document.getElementById('pollBtn');
+                if (pollBtn && currentUser && (currentUser.role === 'admin' || currentUser.role === 'rop')) {
+                    pollBtn.style.display = 'inline-block';
+                }
+
                 // Show markdown toolbar
                 document.getElementById('markdownToolbar').style.display = 'flex';
 
@@ -4641,7 +4692,7 @@
                     </div>
                     ${forwardHtml}
                     ${replyHtml}
-                    <div class="message-bubble markdown-content">
+                    <div class="message-bubble markdown-content" id="message-content-${message.id}">
                         ${renderMarkdown(message.content || '')}
                         ${renderMessageFile(message)}
                     </div>
@@ -4705,6 +4756,43 @@
             `;
 
             messagesContainer.appendChild(messageEl);
+
+            // Load poll if message is a poll
+            if (message.content && message.content.startsWith('📊 Опрос:')) {
+                loadPollForMessage(message.id);
+            }
+        }
+
+        // Load and render poll for a message
+        async function loadPollForMessage(messageId) {
+            try {
+                // Find poll by message_id
+                const response = await fetch(`${API_URL}/polls/by-message/${messageId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                if (!response.ok) {
+                    console.error('Failed to load poll for message:', messageId);
+                    return;
+                }
+
+                const data = await response.json();
+                const poll = data.poll;
+
+                if (poll) {
+                    // Find the message content element
+                    const messageContentEl = document.getElementById(`message-content-${messageId}`);
+                    if (messageContentEl) {
+                        // Render poll below the message content
+                        const pollHTML = renderPoll(poll, messageContentEl.parentElement);
+                        messageContentEl.insertAdjacentHTML('afterend', pollHTML);
+                    }
+                }
+            } catch (error) {
+                console.error('Load poll error:', error);
+            }
         }
 
         function scrollToBottom(force = false) {

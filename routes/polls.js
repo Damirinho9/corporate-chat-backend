@@ -296,6 +296,45 @@ router.get('/:id',
 );
 
 /**
+ * GET /api/polls/by-message/:messageId
+ * Get poll by message ID
+ */
+router.get('/by-message/:messageId',
+    authenticateToken,
+    [param('messageId').isInt()],
+    validate,
+    async (req, res) => {
+        try {
+            const messageId = req.params.messageId;
+            const userId = req.user.userId;
+
+            // Get poll by message_id
+            const pollResult = await query(
+                'SELECT id FROM polls WHERE message_id = $1',
+                [messageId]
+            );
+
+            if (pollResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Poll not found' });
+            }
+
+            const pollId = pollResult.rows[0].id;
+            const poll = await getPollWithDetails(pollId, userId);
+
+            if (!poll) {
+                return res.status(404).json({ error: 'Poll not found' });
+            }
+
+            res.json({ poll });
+
+        } catch (error) {
+            console.error('Get poll by message error:', error);
+            res.status(500).json({ error: 'Failed to get poll' });
+        }
+    }
+);
+
+/**
  * POST /api/polls/:id/close
  * Close a poll (admin, ROP, or creator)
  */
