@@ -241,9 +241,13 @@ async function createPoll() {
         question,
         options,
         multiple_choice: multipleChoice,
-        anonymous: anonymous,
-        closes_at: closesAt || null
+        anonymous: anonymous
     };
+
+    // Only include closes_at if it's provided
+    if (closesAt) {
+        requestData.closes_at = closesAt;
+    }
 
     console.log('Creating poll with data:', requestData);
 
