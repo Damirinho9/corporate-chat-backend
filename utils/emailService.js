@@ -14,6 +14,7 @@ const EMAIL_CONFIG = {
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'vaitmarket@ya.ru';
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+const SMTP_FROM = process.env.SMTP_FROM || process.env.SMTP_USER || 'vaitmarket@ya.ru';
 
 // Create transporter
 let transporter = null;
@@ -53,7 +54,7 @@ async function sendRegistrationRequestToAdmin(request) {
         const rejectUrl = `${APP_URL}/api/registration/reject/${request.approval_token}`;
 
         const mailOptions = {
-            from: `"Corporate Chat" <${EMAIL_CONFIG.auth.user}>`,
+            from: `"Corporate Chat" <${SMTP_FROM}>`,
             to: ADMIN_EMAIL,
             subject: '🔔 Новая заявка на регистрацию',
             html: `
@@ -159,7 +160,7 @@ async function sendApprovalToUser(request) {
         const loginUrl = `${APP_URL}`;
 
         const mailOptions = {
-            from: `"Corporate Chat" <${EMAIL_CONFIG.auth.user}>`,
+            from: `"Corporate Chat" <${SMTP_FROM}>`,
             to: request.email,
             subject: '✅ Ваша регистрация подтверждена',
             html: `
@@ -256,7 +257,7 @@ async function sendRejectionToUser(request, reason) {
 
     try {
         const mailOptions = {
-            from: `"Corporate Chat" <${EMAIL_CONFIG.auth.user}>`,
+            from: `"Corporate Chat" <${SMTP_FROM}>`,
             to: request.email,
             subject: '❌ Заявка на регистрацию отклонена',
             html: `
