@@ -32,7 +32,7 @@ function getTransporter() {
             adminEmail: ADMIN_EMAIL,
             appUrl: APP_URL
         });
-        transporter = nodemailer.createTransporter(EMAIL_CONFIG);
+        transporter = nodemailer.createTransport(EMAIL_CONFIG);
     }
     return transporter;
 }
