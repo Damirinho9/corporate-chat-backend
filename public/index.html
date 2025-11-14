@@ -247,6 +247,8 @@
                 background: var(--bg-primary);
                 z-index: 20;
                 transition: transform 0.3s ease;
+                -webkit-overflow-scrolling: touch;
+                touch-action: pan-y;
             }
             .sidebar.hidden {
                 transform: translateX(-100%);
@@ -402,6 +404,9 @@
             overflow-y: auto;
             min-height: 0;
             scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            touch-action: pan-y;
         }
 
         .chats-list::-webkit-scrollbar {
@@ -2574,7 +2579,12 @@
             if (window.innerWidth <= 768) {
                 const target = e.target;
                 const messagesContainer = document.getElementById('messagesContainer');
-                if (!messagesContainer?.contains(target) && target.id !== 'messageInput') {
+                const chatsList = document.querySelector('.chats-list');
+
+                // Allow scroll in messages container, message input, and chats list
+                if (!messagesContainer?.contains(target) &&
+                    !chatsList?.contains(target) &&
+                    target.id !== 'messageInput') {
                     e.preventDefault();
                 }
             }
