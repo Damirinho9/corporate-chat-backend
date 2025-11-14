@@ -382,7 +382,7 @@ router.delete('/admin/users/:userId', authenticateToken, async (req, res) => {
         await query('DELETE FROM chat_participants WHERE user_id = $1', [userId]);
         
         // Remove user's messages (or set author to null if you want to keep messages)
-        await query('DELETE FROM messages WHERE author_id = $1', [userId]);
+        await query('DELETE FROM messages WHERE user_id = $1', [userId]);
         
         // Finally, delete the user
         await query('DELETE FROM users WHERE id = $1', [userId]);
