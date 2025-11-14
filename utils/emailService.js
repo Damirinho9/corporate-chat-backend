@@ -1,12 +1,13 @@
 const nodemailer = require('nodemailer');
 
 // Email configuration from environment variables
+const SMTP_PORT = parseInt(process.env.SMTP_PORT) || 465;
 const EMAIL_CONFIG = {
-    host: process.env.SMTP_HOST || 'smtp.yandex.ru',
-    port: process.env.SMTP_PORT || 465,
-    secure: true, // use SSL
+    host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465, // true for 465 (SSL), false for 587 (STARTTLS)
     auth: {
-        user: process.env.SMTP_USER || 'vaitmarket@ya.ru',
+        user: process.env.SMTP_USER || '9b9c23001@smtp-brevo.com',
         pass: process.env.SMTP_PASS
     }
 };
@@ -23,6 +24,14 @@ function getTransporter() {
             console.warn('[Email] SMTP_PASS not configured. Email sending disabled.');
             return null;
         }
+        console.log('[Email] Initializing SMTP transporter:', {
+            host: EMAIL_CONFIG.host,
+            port: EMAIL_CONFIG.port,
+            secure: EMAIL_CONFIG.secure,
+            user: EMAIL_CONFIG.auth.user,
+            adminEmail: ADMIN_EMAIL,
+            appUrl: APP_URL
+        });
         transporter = nodemailer.createTransporter(EMAIL_CONFIG);
     }
     return transporter;
