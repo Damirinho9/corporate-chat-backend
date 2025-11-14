@@ -1061,6 +1061,9 @@
                 <div class="nav-item" data-section="logs">
                     📋 Logs
                 </div>
+                <div class="nav-item" data-section="registration-requests">
+                    📝 Заявки на регистрацию
+                </div>
                 <div class="nav-item" data-section="bots">
                     🤖 Боты и Интеграции
                 </div>
@@ -1347,6 +1350,50 @@
                         <tbody>
                             <tr>
                                 <td colspan="4" style="text-align: center; color: #a0aec0;">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Registration Requests Section -->
+            <div id="registration-requests" class="content-section">
+                <div class="header">
+                    <h2>📝 Заявки на регистрацию</h2>
+                </div>
+
+                <!-- Tabs for filtering -->
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchRegistrationTab('pending')">
+                        ⏳ Ожидают
+                    </button>
+                    <button class="tab-btn" onclick="switchRegistrationTab('approved')">
+                        ✅ Одобрены
+                    </button>
+                    <button class="tab-btn" onclick="switchRegistrationTab('rejected')">
+                        ❌ Отклонены
+                    </button>
+                    <button class="tab-btn" onclick="switchRegistrationTab('all')">
+                        📋 Все
+                    </button>
+                </div>
+
+                <div class="card">
+                    <table id="registrationRequestsTable">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>ФИО</th>
+                                <th>Username</th>
+                                <th>Роль</th>
+                                <th>Отдел</th>
+                                <th>Статус</th>
+                                <th>Дата</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7" style="text-align: center; color: #a0aec0;">Loading...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -2100,6 +2147,9 @@ function verifySignature(secret, payload, signature) {
                     break;
                 case 'logs':
                     await loadLogs();
+                    break;
+                case 'registration-requests':
+                    await loadRegistrationRequests(currentRegistrationFilter === 'all' ? null : currentRegistrationFilter);
                     break;
                 case 'bots':
                     if (typeof loadBots === 'function') {
@@ -3335,6 +3385,69 @@ async function loadChats() {
             } catch (err) {
                 console.error('Load logs error:', err);
             }
+        }
+
+        // ========== REGISTRATION REQUESTS ==========
+        let currentRegistrationFilter = 'pending';
+
+        async function loadRegistrationRequests(status = null) {
+            try {
+                const url = status && status !== 'all'
+                    ? `${API_URL}/registration/requests?status=${status}`
+                    : `${API_URL}/registration/requests`;
+
+                const res = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+
+                const tbody = document.querySelector('#registrationRequestsTable tbody');
+                if (data.requests && data.requests.length > 0) {
+                    tbody.innerHTML = data.requests.map(request => {
+                        const roleNames = {
+                            'assistant': 'Ассистент',
+                            'rop': 'РОП',
+                            'operator': 'Оператор',
+                            'employee': 'Сотрудник'
+                        };
+
+                        const statusBadges = {
+                            'pending': '<span style="background: #fbbf24; color: #78350f; padding: 4px 8px; border-radius: 4px; font-size: 12px;">⏳ Ожидает</span>',
+                            'approved': '<span style="background: #34d399; color: #064e3b; padding: 4px 8px; border-radius: 4px; font-size: 12px;">✅ Одобрена</span>',
+                            'rejected': '<span style="background: #f87171; color: #7f1d1d; padding: 4px 8px; border-radius: 4px; font-size: 12px;">❌ Отклонена</span>'
+                        };
+
+                        return `
+                            <tr>
+                                <td>${request.email}</td>
+                                <td>${request.full_name}</td>
+                                <td>${request.username}</td>
+                                <td>${roleNames[request.role] || request.role}</td>
+                                <td>${request.department || '-'}</td>
+                                <td>${statusBadges[request.status] || request.status}</td>
+                                <td>${new Date(request.created_at).toLocaleString('ru-RU')}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Заявок не найдено</td></tr>';
+                }
+            } catch (err) {
+                console.error('Load registration requests error:', err);
+            }
+        }
+
+        function switchRegistrationTab(status) {
+            currentRegistrationFilter = status;
+
+            // Update active tab
+            document.querySelectorAll('#registration-requests .tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Load requests with filter
+            loadRegistrationRequests(status === 'all' ? null : status);
         }
 
         // ========== CREATE USER ==========

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация - Corporate Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .register-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #2d3748;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group label .required {
+            color: #e53e3e;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group .hint {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 4px;
+        }
+
+        .password-field {
+            position: relative;
+        }
+
+        .password-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .password-display code {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        .btn-icon {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .btn-icon:hover {
+            background: #5a67d8;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .alert-success {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .alert-error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #fc8181;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            .register-container {
+                padding: 30px 20px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="header">
+            <h1>📝 Регистрация</h1>
+            <p>Заполните форму для создания учетной записи</p>
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <form id="registerForm">
+            <div class="form-group">
+                <label>Email <span class="required">*</span></label>
+                <input type="email" id="email" required placeholder="example@company.ru">
+                <div class="hint">Email будет использоваться как логин для входа</div>
+            </div>
+
+            <div class="form-group">
+                <label>ФИО <span class="required">*</span></label>
+                <input type="text" id="full_name" required placeholder="Иванов Иван Иванович">
+                <div class="hint">Username сформируется автоматически</div>
+            </div>
+
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" readonly placeholder="Генерируется автоматически">
+                <div class="hint">Можно отредактировать вручную после генерации</div>
+            </div>
+
+            <div class="form-group">
+                <label>Пароль <span class="required">*</span></label>
+                <div class="password-display">
+                    <code id="generatedPassword">-</code>
+                    <button type="button" class="btn-icon" onclick="regeneratePassword()">🔄</button>
+                    <button type="button" class="btn-icon" onclick="copyPassword()">📋</button>
+                </div>
+                <div class="hint">Сохраните пароль - он будет отправлен на email после подтверждения</div>
+            </div>
+
+            <div class="form-group">
+                <label>Роль <span class="required">*</span></label>
+                <select id="role" required>
+                    <option value="">Выберите роль</option>
+                    <option value="assistant">Ассистент</option>
+                    <option value="rop">РОП</option>
+                    <option value="operator">Оператор</option>
+                    <option value="employee">Сотрудник</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="departmentGroup">
+                <label>Отдел <span class="required">*</span></label>
+                <select id="department" required>
+                    <option value="">Загрузка...</option>
+                </select>
+                <div class="hint">Обязательно для РОП, операторов и сотрудников</div>
+            </div>
+
+            <button type="submit" class="btn-primary" id="submitBtn">
+                📨 Отправить заявку
+            </button>
+        </form>
+
+        <div class="back-link">
+            <a href="/">← Вернуться на страницу входа</a>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin + '/api';
+        let generatedPassword = '';
+
+        // Generate secure password
+        function generatePassword() {
+            const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()_+';
+            let password = '';
+            for (let i = 0; i < 12; i++) {
+                password += alphabet[Math.floor(Math.random() * alphabet.length)];
+            }
+            return password;
+        }
+
+        // Generate username from full name
+        function generateUsername(fullName) {
+            const translitMap = {
+                'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+                'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+                'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+                'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+                'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+            };
+
+            const parts = fullName.trim().split(/\s+/);
+            let username = '';
+
+            if (parts.length >= 2) {
+                const lastName = parts[0].toLowerCase();
+                const firstLetter = parts[1][0].toLowerCase();
+                username = lastName + firstLetter;
+            } else {
+                username = parts[0].toLowerCase();
+            }
+
+            username = username
+                .split('')
+                .map(char => translitMap[char] || char)
+                .join('')
+                .replace(/[^a-z0-9]/g, '');
+
+            return username || 'user';
+        }
+
+        // Initialize password
+        function regeneratePassword() {
+            generatedPassword = generatePassword();
+            document.getElementById('generatedPassword').textContent = generatedPassword;
+        }
+
+        // Copy password to clipboard
+        function copyPassword() {
+            navigator.clipboard.writeText(generatedPassword).then(() => {
+                showAlert('Пароль скопирован в буфер обмена!', 'success');
+            });
+        }
+
+        // Show alert
+        function showAlert(message, type) {
+            const alertContainer = document.getElementById('alertContainer');
+            alertContainer.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => {
+                alertContainer.innerHTML = '';
+            }, 5000);
+        }
+
+        // Load departments
+        async function loadDepartments() {
+            try {
+                const response = await fetch(`${API_URL}/registration/departments`);
+                const data = await response.json();
+
+                const departmentSelect = document.getElementById('department');
+                departmentSelect.innerHTML = '<option value="">Выберите отдел</option>';
+
+                data.departments.forEach(dept => {
+                    const option = document.createElement('option');
+                    option.value = dept;
+                    option.textContent = dept;
+                    departmentSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load departments:', error);
+                showAlert('Не удалось загрузить список отделов', 'error');
+            }
+        }
+
+        // Handle full name input
+        document.getElementById('full_name').addEventListener('input', (e) => {
+            const fullName = e.target.value;
+            if (fullName.length > 0) {
+                const username = generateUsername(fullName);
+                document.getElementById('username').value = username;
+                document.getElementById('username').removeAttribute('readonly');
+            }
+        });
+
+        // Handle role change
+        document.getElementById('role').addEventListener('change', (e) => {
+            const role = e.target.value;
+            const departmentGroup = document.getElementById('departmentGroup');
+            const departmentSelect = document.getElementById('department');
+
+            if (['rop', 'operator', 'employee'].includes(role)) {
+                departmentGroup.classList.remove('hidden');
+                departmentSelect.required = true;
+            } else {
+                departmentGroup.classList.add('hidden');
+                departmentSelect.required = false;
+            }
+        });
+
+        // Handle form submission
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Отправка...';
+
+            const formData = {
+                email: document.getElementById('email').value.trim(),
+                full_name: document.getElementById('full_name').value.trim(),
+                username: document.getElementById('username').value.trim(),
+                password: generatedPassword,
+                role: document.getElementById('role').value,
+                department: document.getElementById('department').value || null
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/registration/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showAlert('✅ Заявка успешно отправлена! Ожидайте подтверждения администратора на указанный email.', 'success');
+                    document.getElementById('registerForm').reset();
+                    regeneratePassword();
+                    document.getElementById('username').value = '';
+                    document.getElementById('username').setAttribute('readonly', 'true');
+                } else {
+                    showAlert('❌ ' + (data.error || 'Не удалось отправить заявку'), 'error');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                showAlert('❌ Произошла ошибка при отправке заявки', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '📨 Отправить заявку';
+            }
+        });
+
+        // Initialize
+        regeneratePassword();
+        loadDepartments();
+    </script>
+</body>
+</html>

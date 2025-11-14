@@ -43,6 +43,9 @@ const pollsRoutes = require('./polls');
 // ANALYTICS ROUTES
 const analyticsRoutes = require('./analytics');
 
+// REGISTRATION ROUTES
+const registrationRoutes = require('./registration');
+
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -709,6 +712,9 @@ router.use('/polls', pollsRoutes);
 
 // ==================== ANALYTICS ROUTES ====================
 router.use('/analytics', analyticsRoutes);
+
+// ==================== REGISTRATION ROUTES ====================
+router.use('/registration', registrationRoutes);
 
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {
