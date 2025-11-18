@@ -244,30 +244,30 @@ class MetricsCollector {
 
   // Detect anomalies and send alerts
   detectAnomalies(metrics) {
-    const telegramAlert = require('./telegramAlert');
+    const emailAlert = require('./emailAlert');
 
     // High error rate
     const errorRate = metrics.performance.recentErrors.length / Math.max(1, metrics.requests.total) * 100;
     if (errorRate > 5) {
-      telegramAlert.sendWarning(
-        'High Error Rate Detected',
-        `Error rate: ${errorRate.toFixed(2)}%\nRecent errors: ${metrics.performance.recentErrors.length}`
+      emailAlert.sendWarning(
+        'Высокий процент ошибок',
+        `Процент ошибок: ${errorRate.toFixed(2)}%\nПоследние ошибки: ${metrics.performance.recentErrors.length}`
       );
     }
 
     // Slow response time
     if (metrics.performance.p95 > 3000) {
-      telegramAlert.sendWarning(
-        'Slow Response Time',
-        `P95 response time: ${metrics.performance.p95}ms\nP99: ${metrics.performance.p99}ms`
+      emailAlert.sendWarning(
+        'Медленное время отклика',
+        `P95 время отклика: ${metrics.performance.p95}ms\nP99: ${metrics.performance.p99}ms`
       );
     }
 
     // High database query time
     if (metrics.database.slowQueries > 10) {
-      telegramAlert.sendWarning(
-        'Slow Database Queries',
-        `Slow queries: ${metrics.database.slowQueries}\nAvg query time: ${metrics.database.avgQueryTime}ms`
+      emailAlert.sendWarning(
+        'Медленные запросы к БД',
+        `Медленных запросов: ${metrics.database.slowQueries}\nСреднее время запроса: ${metrics.database.avgQueryTime}ms`
       );
     }
   }

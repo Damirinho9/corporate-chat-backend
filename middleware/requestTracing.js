@@ -1,7 +1,7 @@
 // Request tracing middleware with correlation IDs
 const crypto = require('crypto');
 const { createLogger } = require('../utils/logger');
-const telegramAlert = require('../utils/telegramAlert');
+const emailAlert = require('../utils/emailAlert');
 const metricsCollector = require('../utils/metricsCollector');
 const errorTracker = require('../utils/errorTracker');
 
@@ -125,15 +125,16 @@ function errorTrackingMiddleware(err, req, res, next) {
     logger.debug('Failed to track error in database', { error: trackErr.message });
   });
 
-  // Send Telegram alert for server errors (5xx)
+  // Send Email alert for server errors (5xx)
   if (!err.statusCode || err.statusCode >= 500) {
-    telegramAlert.sendErrorAlert(err, {
+    emailAlert.sendErrorAlert(err, {
       correlationId,
       method: req.method,
       url: req.originalUrl || req.url,
       userId: req.user?.id,
+      ip: req.ip || req.connection?.remoteAddress,
     }).catch(alertErr => {
-      logger.debug('Failed to send Telegram alert', { error: alertErr.message });
+      logger.debug('Failed to send email alert', { error: alertErr.message });
     });
   }
 
