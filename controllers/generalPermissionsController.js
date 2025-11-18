@@ -71,6 +71,19 @@ const PERMISSION_CATEGORIES = {
             { key: 'access_admin_panel', label: 'Доступ к админ-панели' },
             { key: 'manage_settings', label: 'Управление настройками' }
         ]
+    },
+    'support': {
+        label: 'Техническая поддержка',
+        permissions: [
+            { key: 'access_support', label: 'Доступ к системе поддержки' },
+            { key: 'view_support_tickets', label: 'Просмотр тикетов поддержки' },
+            { key: 'create_support_tickets', label: 'Создание тикетов поддержки' },
+            { key: 'assign_tickets', label: 'Назначение тикетов' },
+            { key: 'close_tickets', label: 'Закрытие тикетов' },
+            { key: 'view_support_analytics', label: 'Просмотр аналитики поддержки' },
+            { key: 'manage_kb', label: 'Управление базой знаний' },
+            { key: 'manage_canned_responses', label: 'Управление готовыми ответами' }
+        ]
     }
 };
 

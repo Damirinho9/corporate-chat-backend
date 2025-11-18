@@ -2354,6 +2354,7 @@
                     </div>
                     <div class="header-actions">
                         <button class="icon-btn" id="callHistoryBtn" title="История звонков">📞</button>
+                        <button class="icon-btn" id="supportBtn" title="Техподдержка" style="display:none">🎫</button>
                         <button class="icon-btn" id="adminBtn" title="Админ-панель" style="display:none">🛠️</button>
                         <button class="icon-btn" id="themeToggle" title="Тема">🌓</button>
                         <button class="icon-btn" id="logoutBtn" title="Выход">🚪</button>
@@ -3510,6 +3511,20 @@
                 adminBtn.onclick = () => window.location.href = '/admin-panel.html';
             } else {
                 adminBtn.style.display = 'none';
+            }
+
+            // Support button (visible for assistant and head roles)
+            const supportBtn = document.getElementById('supportBtn');
+            if (supportBtn && (user.role === 'assistant' || user.role === 'head' || user.role === 'admin')) {
+                supportBtn.style.display = 'grid';
+                supportBtn.onclick = () => {
+                    // Open in agent dashboard for support staff
+                    if (user.role === 'assistant' || user.role === 'head' || user.role === 'admin') {
+                        window.location.href = '/support-agent.html';
+                    } else {
+                        window.location.href = '/support.html';
+                    }
+                };
             }
 
             // Call History button
