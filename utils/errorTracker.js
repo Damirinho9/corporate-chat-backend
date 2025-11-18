@@ -1,5 +1,5 @@
 // Error tracking and analytics system
-const { query } = require('../database/connection');
+const { query } = require('../config/database');
 const { createLogger } = require('./logger');
 
 const logger = createLogger('error-tracker');

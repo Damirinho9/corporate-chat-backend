@@ -1,8 +1,8 @@
 // utils/pushNotifications.js
 const webPush = require('web-push');
 const { query } = require('../config/database');
-const Logger = require('./logger');
-const logger = new Logger('push-notifications');
+const { createLogger } = require('./logger');
+const logger = createLogger('push-notifications');
 
 // Настройка VAPID
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {

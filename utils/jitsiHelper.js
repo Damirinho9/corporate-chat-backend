@@ -1,8 +1,8 @@
 // utils/jitsiHelper.js
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const Logger = require('./logger');
-const logger = new Logger('jitsi-helper');
+const { createLogger } = require('./logger');
+const logger = createLogger('jitsi-helper');
 
 /**
  * Генерирует уникальное имя комнаты для Jitsi

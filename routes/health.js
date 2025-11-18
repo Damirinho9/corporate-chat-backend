@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const os = require('os');
 const fs = require('fs');
-const { query } = require('../database/connection');
+const { query } = require('../config/database');
 const { createLogger } = require('../utils/logger');
 const metricsCollector = require('../utils/metricsCollector');
 
