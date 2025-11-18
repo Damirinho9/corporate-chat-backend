@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Support Agent Dashboard</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👨‍💻</text></svg>">
+    <link rel="stylesheet" href="/support.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        /* Additional styles for agent dashboard */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .stat-card-title {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-card-change {
+            font-size: 0.85rem;
+            color: var(--success);
+        }
+
+        .stat-card-change.negative {
+            color: var(--danger);
+        }
+
+        .queue-section {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .queue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .queue-filters {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .filter-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .ticket-queue {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .queue-ticket {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            border-radius: 8px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+        }
+
+        .queue-ticket:hover {
+            box-shadow: 0 4px 12px var(--shadow);
+            transform: translateY(-1px);
+        }
+
+        .queue-ticket.sla-warning {
+            border-left-color: var(--warning);
+        }
+
+        .queue-ticket.sla-breach {
+            border-left-color: var(--danger);
+        }
+
+        .ticket-info {
+            flex: 1;
+        }
+
+        .ticket-quick-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .quick-action-btn {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .quick-action-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .sla-indicator {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .sla-ok {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .sla-warning {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .sla-breach {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        [data-theme="dark"] .sla-ok { background: #1b5e20; color: #a5d6a7; }
+        [data-theme="dark"] .sla-warning { background: #e65100; color: #ffcc80; }
+        [data-theme="dark"] .sla-breach { background: #b71c1c; color: #ef9a9a; }
+
+        .chart-container {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .canned-responses-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .canned-response-item {
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            background: var(--bg-primary);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .canned-response-item:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        .canned-shortcut {
+            font-family: monospace;
+            background: var(--bg-tertiary);
+            padding: 0.1rem 0.3rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        .internal-note-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--bg-tertiary);
+            transition: 0.3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="support-header">
+        <div class="header-content">
+            <h1>👨‍💻 Support Agent Dashboard</h1>
+            <div class="header-actions">
+                <button id="refreshBtn" class="icon-btn" title="Обновить">🔄</button>
+                <button id="themeToggle" class="icon-btn" title="Сменить тему">🌙</button>
+                <button id="userMenuBtn" class="icon-btn" title="Профиль">👤</button>
+            </div>
+        </div>
+        <nav class="support-nav">
+            <button class="nav-btn active" data-view="dashboard">📊 Dashboard</button>
+            <button class="nav-btn" data-view="queue">📋 Queue</button>
+            <button class="nav-btn" data-view="my-tickets">🎫 My Tickets</button>
+            <button class="nav-btn" data-view="analytics">📈 Analytics</button>
+            <button class="nav-btn" data-view="kb-manage">📚 KB</button>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="support-content">
+
+        <!-- Dashboard View -->
+        <section id="dashboard-view" class="view active">
+            <h2 style="margin-bottom: 1.5rem;">Dashboard Overview</h2>
+
+            <div class="dashboard-grid" id="stats-grid"></div>
+
+            <div class="queue-section">
+                <div class="queue-header">
+                    <h3>⚡ SLA At Risk</h3>
+                    <span id="at-risk-count" class="badge">0</span>
+                </div>
+                <div id="sla-at-risk-list" class="ticket-queue"></div>
+            </div>
+
+            <div class="chart-container">
+                <h3 style="margin-bottom: 1rem;">Tickets by Status (Last 7 Days)</h3>
+                <canvas id="statusChart" height="80"></canvas>
+            </div>
+        </section>
+
+        <!-- Queue View -->
+        <section id="queue-view" class="view">
+            <div class="queue-section">
+                <div class="queue-header">
+                    <h2>📋 Ticket Queue</h2>
+                    <select id="queue-sort">
+                        <option value="sla">SLA Due Date</option>
+                        <option value="priority">Priority</option>
+                        <option value="created">Created Date</option>
+                    </select>
+                </div>
+
+                <div class="queue-filters">
+                    <button class="filter-btn active" data-status="">All</button>
+                    <button class="filter-btn" data-status="new">New</button>
+                    <button class="filter-btn" data-status="open">Open</button>
+                    <button class="filter-btn" data-status="in_progress">In Progress</button>
+                    <button class="filter-btn" data-status="waiting_customer">Waiting</button>
+                </div>
+
+                <div id="ticket-queue" class="ticket-queue"></div>
+            </div>
+        </section>
+
+        <!-- My Tickets View -->
+        <section id="my-tickets-view" class="view">
+            <div class="tickets-container">
+                <div class="tickets-header">
+                    <h2>🎫 My Assigned Tickets</h2>
+                    <div id="my-ticket-count" class="badge">0</div>
+                </div>
+                <div id="my-tickets-list" class="tickets-list"></div>
+            </div>
+        </section>
+
+        <!-- Analytics View -->
+        <section id="analytics-view" class="view">
+            <h2 style="margin-bottom: 1.5rem;">📈 Analytics & Reports</h2>
+
+            <div class="dashboard-grid" id="analytics-stats"></div>
+
+            <div class="chart-container">
+                <h3 style="margin-bottom: 1rem;">Response Times Trend</h3>
+                <canvas id="responseTimeChart" height="80"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3 style="margin-bottom: 1rem;">CSAT Ratings</h3>
+                <canvas id="csatChart" height="80"></canvas>
+            </div>
+        </section>
+
+        <!-- KB Management View -->
+        <section id="kb-manage-view" class="view">
+            <div class="kb-container">
+                <div class="kb-header">
+                    <h2>📚 Knowledge Base Management</h2>
+                    <button class="btn btn-primary" onclick="createNewArticle()">
+                        ➕ New Article
+                    </button>
+                </div>
+
+                <div id="kb-articles-manage" class="kb-articles"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Agent Ticket Detail Modal -->
+    <div id="agent-ticket-modal" class="modal">
+        <div class="modal-content" style="max-width: 1000px;">
+            <div class="modal-header">
+                <h3 id="agent-modal-ticket-title">Тикет #</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
+                    <!-- Left column: Ticket details and messages -->
+                    <div>
+                        <div id="agent-ticket-detail" class="ticket-detail"></div>
+                        <div id="agent-ticket-messages" class="ticket-messages"></div>
+
+                        <!-- Canned Responses -->
+                        <div id="canned-responses-section" class="canned-responses-panel hidden">
+                            <h4>Quick Responses</h4>
+                            <div id="canned-responses-list"></div>
+                        </div>
+
+                        <!-- Reply Section -->
+                        <div class="ticket-reply">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h4>Reply</h4>
+                                <div style="display: flex; gap: 1rem; align-items: center;">
+                                    <div class="internal-note-toggle">
+                                        <span>Internal Note</span>
+                                        <label class="switch">
+                                            <input type="checkbox" id="internal-note-toggle">
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="toggleCannedResponses()">
+                                        💬 Quick Responses
+                                    </button>
+                                </div>
+                            </div>
+                            <textarea
+                                id="agent-reply-text"
+                                rows="6"
+                                placeholder="Type your reply..."
+                            ></textarea>
+                            <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                                <button id="send-agent-reply-btn" class="btn btn-primary">📤 Send Reply</button>
+                                <button id="resolve-ticket-btn" class="btn btn-secondary">✅ Resolve</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right column: Ticket actions and info -->
+                    <div>
+                        <div class="stat-card" style="margin-bottom: 1rem;">
+                            <div class="stat-card-title">Ticket Actions</div>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
+                                <select id="ticket-status-update" class="form-control">
+                                    <option value="">Change Status</option>
+                                    <option value="open">Open</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="waiting_customer">Waiting for Customer</option>
+                                    <option value="resolved">Resolved</option>
+                                    <option value="closed">Closed</option>
+                                </select>
+                                <select id="ticket-priority-update" class="form-control">
+                                    <option value="">Change Priority</option>
+                                    <option value="low">Low</option>
+                                    <option value="normal">Normal</option>
+                                    <option value="high">High</option>
+                                    <option value="urgent">Urgent</option>
+                                    <option value="critical">Critical</option>
+                                </select>
+                                <select id="ticket-assign-update" class="form-control">
+                                    <option value="">Assign To</option>
+                                    <option value="me">Assign to Me</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-card-title">SLA Information</div>
+                            <div id="sla-info" style="margin-top: 1rem;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- User Menu -->
+    <div id="userMenu" class="dropdown-menu hidden">
+        <div class="user-info">
+            <div id="userName">Loading...</div>
+            <div id="userEmail" class="text-muted"></div>
+        </div>
+        <hr>
+        <a href="/" class="menu-item">🏠 Home</a>
+        <a href="/support.html" class="menu-item">👤 Customer Support</a>
+        <a href="/admin-panel.html" class="menu-item">⚙️ Admin Panel</a>
+        <button id="logoutBtn" class="menu-item">🚪 Logout</button>
+    </div>
+
+    <script src="/support-agent.js"></script>
+</body>
+</html>

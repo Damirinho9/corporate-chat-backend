@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Техническая поддержка</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>">
+    <link rel="stylesheet" href="/support.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <!-- Markdown support -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="support-header">
+        <div class="header-content">
+            <h1>🎫 Техническая поддержка</h1>
+            <div class="header-actions">
+                <button id="themeToggle" class="icon-btn" title="Сменить тему">🌙</button>
+                <button id="userMenuBtn" class="icon-btn" title="Профиль">👤</button>
+            </div>
+        </div>
+        <nav class="support-nav">
+            <button class="nav-btn active" data-view="chatbot">💬 Чат-бот</button>
+            <button class="nav-btn" data-view="kb">📚 База знаний</button>
+            <button class="nav-btn" data-view="tickets">🎫 Мои тикеты</button>
+            <button class="nav-btn" data-view="new-ticket">✏️ Новый тикет</button>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="support-content">
+
+        <!-- Chatbot View -->
+        <section id="chatbot-view" class="view active">
+            <div class="chatbot-container">
+                <div class="chatbot-header">
+                    <h2>🤖 Виртуальный помощник</h2>
+                    <p class="chatbot-subtitle">Задайте вопрос, и я постараюсь помочь</p>
+                </div>
+
+                <div id="chatbot-messages" class="chatbot-messages">
+                    <div class="bot-message">
+                        <div class="message-avatar">🤖</div>
+                        <div class="message-content">
+                            <p>Здравствуйте! Я виртуальный помощник поддержки. Чем могу помочь?</p>
+                            <div class="message-time">Сейчас</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chatbot-input-container">
+                    <div id="quickReplies" class="quick-replies"></div>
+                    <div class="chatbot-input-wrapper">
+                        <input
+                            type="text"
+                            id="chatbot-input"
+                            placeholder="Напишите ваш вопрос..."
+                            autocomplete="off"
+                        >
+                        <button id="chatbot-send" class="send-btn">📤</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Knowledge Base View -->
+        <section id="kb-view" class="view">
+            <div class="kb-container">
+                <div class="kb-header">
+                    <h2>📚 База знаний</h2>
+                    <div class="kb-search">
+                        <input
+                            type="search"
+                            id="kb-search"
+                            placeholder="🔍 Поиск по статьям..."
+                            autocomplete="off"
+                        >
+                    </div>
+                </div>
+
+                <div id="kb-categories" class="kb-categories"></div>
+                <div id="kb-articles" class="kb-articles"></div>
+            </div>
+        </section>
+
+        <!-- My Tickets View -->
+        <section id="tickets-view" class="view">
+            <div class="tickets-container">
+                <div class="tickets-header">
+                    <h2>🎫 Мои тикеты</h2>
+                    <div class="tickets-filter">
+                        <select id="ticket-status-filter">
+                            <option value="">Все статусы</option>
+                            <option value="new">Новые</option>
+                            <option value="open">Открытые</option>
+                            <option value="in_progress">В работе</option>
+                            <option value="waiting_customer">Ожидает ответа</option>
+                            <option value="resolved">Решённые</option>
+                            <option value="closed">Закрытые</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="tickets-list" class="tickets-list"></div>
+            </div>
+        </section>
+
+        <!-- New Ticket View -->
+        <section id="new-ticket-view" class="view">
+            <div class="new-ticket-container">
+                <div class="new-ticket-header">
+                    <h2>✏️ Создать тикет</h2>
+                    <p class="subtitle">Опишите вашу проблему, и мы поможем её решить</p>
+                </div>
+
+                <form id="new-ticket-form" class="ticket-form">
+                    <div class="form-group">
+                        <label for="ticket-subject">Тема обращения *</label>
+                        <input
+                            type="text"
+                            id="ticket-subject"
+                            required
+                            placeholder="Кратко опишите проблему"
+                            maxlength="500"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ticket-category">Категория *</label>
+                        <select id="ticket-category" required>
+                            <option value="">Выберите категорию</option>
+                            <option value="technical">🔧 Техническая проблема</option>
+                            <option value="billing">💳 Вопрос по оплате</option>
+                            <option value="feature_request">💡 Запрос функции</option>
+                            <option value="bug">🐛 Сообщение об ошибке</option>
+                            <option value="other">📝 Другое</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ticket-priority">Приоритет *</label>
+                        <select id="ticket-priority" required>
+                            <option value="low">Низкий</option>
+                            <option value="normal" selected>Обычный</option>
+                            <option value="high">Высокий</option>
+                            <option value="urgent">Срочный</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ticket-description">Подробное описание *</label>
+                        <textarea
+                            id="ticket-description"
+                            required
+                            rows="8"
+                            placeholder="Опишите проблему подробно:&#10;- Что вы делали?&#10;- Что произошло?&#10;- Что вы ожидали?&#10;- Сообщения об ошибках (если есть)"
+                        ></textarea>
+                        <small class="form-hint">Чем подробнее описание, тем быстрее мы сможем помочь</small>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            ✅ Создать тикет
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="cancel-ticket-btn">
+                            ❌ Отмена
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Ticket Detail Modal -->
+    <div id="ticket-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-ticket-title">Тикет #</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="ticket-detail" class="ticket-detail"></div>
+                <div id="ticket-messages" class="ticket-messages"></div>
+
+                <div class="ticket-reply">
+                    <h4>Ответить</h4>
+                    <textarea
+                        id="ticket-reply-text"
+                        rows="4"
+                        placeholder="Введите ваш ответ..."
+                    ></textarea>
+                    <button id="send-reply-btn" class="btn btn-primary">📤 Отправить</button>
+                </div>
+
+                <div id="ticket-rating" class="ticket-rating"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KB Article Modal -->
+    <div id="article-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-article-title">Статья</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="article-content" class="article-content"></div>
+                <div class="article-actions">
+                    <button id="article-helpful-btn" class="btn btn-secondary">👍 Полезно</button>
+                    <button id="article-not-helpful-btn" class="btn btn-secondary">👎 Не помогло</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- User Menu Dropdown -->
+    <div id="userMenu" class="dropdown-menu hidden">
+        <div class="user-info">
+            <div id="userName">Загрузка...</div>
+            <div id="userEmail" class="text-muted"></div>
+        </div>
+        <hr>
+        <a href="/" class="menu-item">🏠 Главная</a>
+        <a href="/admin-panel.html" class="menu-item admin-only">⚙️ Админ-панель</a>
+        <button id="logoutBtn" class="menu-item">🚪 Выход</button>
+    </div>
+
+    <script src="/support.js"></script>
+</body>
+</html>

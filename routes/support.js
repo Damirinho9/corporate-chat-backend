@@ -841,4 +841,72 @@ router.get('/stats',
     }
 );
 
+// ==================== CHATBOT ====================
+
+/**
+ * POST /api/support/chatbot/message
+ * Process chatbot message
+ */
+router.post('/chatbot/message',
+    authenticateToken,
+    [
+        body('message').trim().isLength({ min: 1, max: 1000 }).withMessage('Message must be 1-1000 characters'),
+        body('session_id').trim().notEmpty().withMessage('Session ID is required')
+    ],
+    validate,
+    async (req, res) => {
+        try {
+            const { message, session_id } = req.body;
+            const userId = req.user.id;
+
+            // Import chatbot module
+            const chatbot = require('../utils/supportChatbot');
+
+            // Process message
+            const response = await chatbot.processMessage(userId, session_id, message);
+
+            res.json(response);
+
+        } catch (error) {
+            logger.error('Failed to process chatbot message', {
+                error: error.message,
+                userId: req.user.id
+            });
+            res.status(500).json({
+                message: 'Извините, произошла ошибка. Попробуйте ещё раз или создайте тикет.',
+                suggestions: ['Создать тикет']
+            });
+        }
+    }
+);
+
+/**
+ * GET /api/support/chatbot/history/:session_id
+ * Get chatbot conversation history
+ */
+router.get('/chatbot/history/:session_id',
+    authenticateToken,
+    async (req, res) => {
+        try {
+            const { session_id } = req.params;
+            const userId = req.user.id;
+
+            const result = await query(
+                `SELECT cm.*, cc.intent, cc.confidence_score
+                 FROM chatbot_messages cm
+                 JOIN chatbot_conversations cc ON cm.conversation_id = cc.id
+                 WHERE cc.session_id = $1 AND cc.user_id = $2
+                 ORDER BY cm.created_at ASC`,
+                [session_id, userId]
+            );
+
+            res.json(result.rows);
+
+        } catch (error) {
+            logger.error('Failed to fetch chatbot history', { error: error.message });
+            res.status(500).json({ error: 'Failed to fetch conversation history' });
+        }
+    }
+);
+
 module.exports = router;
