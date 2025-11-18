@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Портал поддержки - Self-Service</title>
+    <link rel="stylesheet" href="/support.css">
+    <style>
+        .portal-hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 3rem 1.5rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .portal-hero h1 {
+            margin: 0 0 0.5rem 0;
+            font-size: 2.5rem;
+        }
+
+        .portal-hero p {
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        .search-container {
+            max-width: 600px;
+            margin: -2rem auto 2rem auto;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 1rem 3rem 1rem 1.5rem;
+            font-size: 1.1rem;
+            border: 2px solid #ddd;
+            border-radius: 50px;
+            background: white;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 4px 25px rgba(102,126,234,0.3);
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 1.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.5rem;
+            pointer-events: none;
+        }
+
+        .portal-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem 2rem 1.5rem;
+        }
+
+        .portal-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .portal-section h2 {
+            margin: 0 0 1rem 0;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .quick-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .action-btn {
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: transform 0.2s;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102,126,234,0.3);
+        }
+
+        .kb-list, .ticket-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .kb-item, .ticket-item {
+            padding: 0.75rem;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .kb-item:hover, .ticket-item:hover {
+            background: #f8f9fa;
+        }
+
+        .kb-item:last-child, .ticket-item:last-child {
+            border-bottom: none;
+        }
+
+        .ticket-status {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-new { background: #e3f2fd; color: #1976d2; }
+        .status-open { background: #fff3e0; color: #f57c00; }
+        .status-resolved { background: #e8f5e9; color: #388e3c; }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <div class="portal-hero">
+        <h1>🎯 Портал поддержки</h1>
+        <p>Быстрые ответы на ваши вопросы</p>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="search-container">
+        <input
+            type="search"
+            id="portalSearch"
+            class="search-input"
+            placeholder="Поиск по базе знаний..."
+            autocomplete="off"
+        >
+        <span class="search-icon">🔍</span>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="portal-grid">
+        <!-- Quick Actions -->
+        <div class="portal-section">
+            <h2>⚡ Быстрые действия</h2>
+            <div class="quick-actions">
+                <button class="action-btn" onclick="window.location.href='/support.html'">
+                    💬 Чат с ботом
+                </button>
+                <button class="action-btn" onclick="window.location.href='/support.html?view=new-ticket'">
+                    ✉️ Создать тикет
+                </button>
+                <button class="action-btn" onclick="showCallbackForm()">
+                    📞 Заказать звонок
+                </button>
+            </div>
+        </div>
+
+        <!-- Popular KB Articles -->
+        <div class="portal-section">
+            <h2>📚 Популярные статьи</h2>
+            <ul class="kb-list" id="popularArticles">
+                <li class="empty-state">Загрузка...</li>
+            </ul>
+        </div>
+
+        <!-- My Tickets -->
+        <div class="portal-section">
+            <h2>🎫 Мои тикеты</h2>
+            <ul class="ticket-list" id="myTickets">
+                <li class="empty-state">Загрузка...</li>
+            </ul>
+        </div>
+
+        <!-- Support Stats -->
+        <div class="portal-section">
+            <h2>📊 Статистика</h2>
+            <div id="supportStats">
+                <p>📈 Среднее время ответа: <strong id="avgResponseTime">-</strong></p>
+                <p>⭐ Рейтинг поддержки: <strong id="csatRating">-</strong></p>
+                <p>✅ Решено тикетов: <strong id="resolvedCount">-</strong></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        let authToken = localStorage.getItem('token');
+
+        // Load popular KB articles
+        async function loadPopularArticles() {
+            try {
+                const response = await fetch(`${API_BASE}/support/kb/articles?limit=5`);
+                const data = await response.json();
+
+                const list = document.getElementById('popularArticles');
+
+                if (data.articles && data.articles.length > 0) {
+                    list.innerHTML = data.articles.map(article => `
+                        <li class="kb-item" onclick="openArticle('${article.slug}')">
+                            <strong>${article.title}</strong>
+                            <div style="font-size: 0.85rem; color: #666; margin-top: 0.25rem;">
+                                👁️ ${article.view_count} просмотров
+                            </div>
+                        </li>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<li class="empty-state">Нет статей</li>';
+                }
+            } catch (error) {
+                console.error('Failed to load articles:', error);
+                document.getElementById('popularArticles').innerHTML =
+                    '<li class="empty-state">Ошибка загрузки</li>';
+            }
+        }
+
+        // Load user's tickets
+        async function loadMyTickets() {
+            if (!authToken) {
+                document.getElementById('myTickets').innerHTML =
+                    '<li class="empty-state"><a href="/support.html">Войдите</a> для просмотра тикетов</li>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/support/tickets?limit=5`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load tickets');
+
+                const data = await response.json();
+                const list = document.getElementById('myTickets');
+
+                if (data.tickets && data.tickets.length > 0) {
+                    list.innerHTML = data.tickets.map(ticket => {
+                        const statusClass = `status-${ticket.status}`;
+                        return `
+                            <li class="ticket-item" onclick="openTicket(${ticket.id})">
+                                <div style="display: flex; justify-content: space-between; align-items: start;">
+                                    <div style="flex: 1;">
+                                        <strong>#${ticket.ticket_number}</strong>
+                                        <div style="font-size: 0.9rem; margin-top: 0.25rem;">
+                                            ${ticket.subject}
+                                        </div>
+                                    </div>
+                                    <span class="ticket-status ${statusClass}">${ticket.status}</span>
+                                </div>
+                            </li>
+                        `;
+                    }).join('');
+                } else {
+                    list.innerHTML = '<li class="empty-state">Нет тикетов</li>';
+                }
+            } catch (error) {
+                console.error('Failed to load tickets:', error);
+                document.getElementById('myTickets').innerHTML =
+                    '<li class="empty-state">Ошибка загрузки</li>';
+            }
+        }
+
+        // Load support stats
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/support/stats`, {
+                    headers: authToken ? {
+                        'Authorization': `Bearer ${authToken}`
+                    } : {}
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('avgResponseTime').textContent =
+                        `${data.avg_first_response_minutes || 0} мин`;
+                    document.getElementById('csatRating').textContent =
+                        `${data.csat?.avg_rating || 0}/5`;
+                    document.getElementById('resolvedCount').textContent =
+                        `${data.tickets_by_status?.find(s => s.status === 'resolved')?.count || 0}`;
+                }
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        // Search functionality
+        document.getElementById('portalSearch').addEventListener('input', async (e) => {
+            const searchTerm = e.target.value.trim();
+
+            if (searchTerm.length < 3) {
+                loadPopularArticles();
+                return;
+            }
+
+            try {
+                const response = await fetch(
+                    `${API_BASE}/support/kb/articles?search=${encodeURIComponent(searchTerm)}`
+                );
+                const data = await response.json();
+
+                const list = document.getElementById('popularArticles');
+                if (data.articles && data.articles.length > 0) {
+                    list.innerHTML = data.articles.map(article => `
+                        <li class="kb-item" onclick="openArticle('${article.slug}')">
+                            <strong>${article.title}</strong>
+                        </li>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<li class="empty-state">Ничего не найдено</li>';
+                }
+            } catch (error) {
+                console.error('Search failed:', error);
+            }
+        });
+
+        // Open KB article
+        function openArticle(slug) {
+            window.location.href = `/support.html?article=${slug}`;
+        }
+
+        // Open ticket
+        function openTicket(ticketId) {
+            window.location.href = `/support.html?ticket=${ticketId}`;
+        }
+
+        // Show callback form
+        function showCallbackForm() {
+            alert('Функция "Заказать звонок" будет добавлена в следующей версии');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPopularArticles();
+            loadMyTickets();
+            loadStats();
+        });
+    </script>
+</body>
+</html>

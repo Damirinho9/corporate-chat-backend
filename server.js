@@ -73,6 +73,12 @@ app.use('/', healthRoutes);
 
 app.use('/api', apiRoutes);
 
+// Support system routes
+const supportRoutes = require('./routes/support');
+const supportAnalyticsRoutes = require('./routes/support-analytics');
+app.use('/api/support', supportRoutes);
+app.use('/api/support/analytics', supportAnalyticsRoutes);
+
 // Раздача статики
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -586,6 +592,15 @@ const startServer = async () => {
         logger.info('SLA monitor started');
       } catch (err) {
         logger.error('Failed to start SLA monitor', { error: err.message });
+      }
+
+      // Start email-to-ticket service
+      try {
+        const emailToTicket = require('./services/emailToTicket');
+        emailToTicket.start();
+        logger.info('Email-to-ticket service initialized');
+      } catch (err) {
+        logger.error('Failed to start email-to-ticket service', { error: err.message });
       }
     });
   } catch (error) {
