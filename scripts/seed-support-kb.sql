@@ -1,27 +1,36 @@
 -- Seed Knowledge Base with sample articles
 -- Run: psql -U postgres -d corporate_chat -p 5433 -f scripts/seed-support-kb.sql
 
--- Insert categories (if not exist)
+-- Insert/update categories
 INSERT INTO kb_categories (name, slug, description, icon, sort_order, is_visible)
 VALUES
     ('Getting Started', 'getting-started', 'Основы работы с системой', '🚀', 1, true),
     ('Account & Settings', 'account-settings', 'Управление аккаунтом', '⚙️', 2, true),
     ('Troubleshooting', 'troubleshooting', 'Решение проблем', '🔧', 3, true),
     ('FAQ', 'faq', 'Часто задаваемые вопросы', '❓', 4, true)
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    icon = EXCLUDED.icon,
+    is_visible = EXCLUDED.is_visible;
 
--- Get category IDs
+-- Get category IDs and admin user
 DO $$
 DECLARE
     cat_getting_started INTEGER;
     cat_account INTEGER;
     cat_troubleshooting INTEGER;
     cat_faq INTEGER;
+    admin_user_id INTEGER;
 BEGIN
+    -- Get category IDs
     SELECT id INTO cat_getting_started FROM kb_categories WHERE slug = 'getting-started';
     SELECT id INTO cat_account FROM kb_categories WHERE slug = 'account-settings';
     SELECT id INTO cat_troubleshooting FROM kb_categories WHERE slug = 'troubleshooting';
     SELECT id INTO cat_faq FROM kb_categories WHERE slug = 'faq';
+
+    -- Get first admin user (or NULL if none exists)
+    SELECT id INTO admin_user_id FROM users WHERE role = 'admin' LIMIT 1;
 
     -- Insert sample articles
     INSERT INTO kb_articles (title, slug, summary, content, category_id, status, is_featured, view_count, helpful_count, created_by)
@@ -36,7 +45,7 @@ BEGIN
             true,
             125,
             42,
-            1
+            admin_user_id
         ),
         (
             'Начало работы с системой',
@@ -48,7 +57,7 @@ BEGIN
             true,
             256,
             89,
-            1
+            admin_user_id
         ),
         (
             'Проблемы со входом',
@@ -60,7 +69,7 @@ BEGIN
             false,
             78,
             23,
-            1
+            admin_user_id
         ),
         (
             'Как добавить участника в чат',
@@ -72,7 +81,7 @@ BEGIN
             false,
             143,
             51,
-            1
+            admin_user_id
         ),
         (
             'Часто задаваемые вопросы',
@@ -84,7 +93,7 @@ BEGIN
             false,
             312,
             127,
-            1
+            admin_user_id
         )
     ON CONFLICT (slug) DO UPDATE SET
         updated_at = CURRENT_TIMESTAMP,

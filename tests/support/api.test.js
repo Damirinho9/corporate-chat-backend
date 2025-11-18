@@ -87,8 +87,18 @@ describe('Support System API Tests', () => {
             assert.strictEqual(res.status, 200);
             assert.ok(Array.isArray(res.data.articles), 'articles should be an array');
 
-            if (res.data.articles.length > 0) {
+            console.log(`   📚 Found ${res.data.articles?.length || 0} articles in response`);
+
+            if (res.data.articles && res.data.articles.length > 0) {
+                console.log(`   First article: ${res.data.articles[0].title || 'no title'}`);
+                console.log(`   First article slug: ${res.data.articles[0].slug || 'NO SLUG!'}`);
                 testArticleSlug = res.data.articles[0].slug;
+            } else {
+                console.log('   ⚠️  API returned empty articles array');
+                console.log('   This may indicate:');
+                console.log('   - Categories not visible (is_visible = false)');
+                console.log('   - Articles not published');
+                console.log('   - Foreign key issues');
             }
         });
 
