@@ -84,6 +84,11 @@ describe('Support System API Tests', () => {
 
         it('should get KB articles', async () => {
             const res = await makeRequest('GET', '/api/support/kb/articles');
+
+            console.log(`   🔍 Response status: ${res.status}`);
+            console.log(`   🔍 Response data keys: ${Object.keys(res.data || {}).join(', ')}`);
+            console.log(`   🔍 Full response data:`, JSON.stringify(res.data, null, 2));
+
             assert.strictEqual(res.status, 200);
             assert.ok(Array.isArray(res.data.articles), 'articles should be an array');
 
