@@ -105,7 +105,6 @@ describe('Self-Service Portal', () => {
         assert.strictEqual(response.ok, true, 'Should allow KB search without auth');
         assert.ok(Array.isArray(data.articles), 'Should return articles array');
 
-        console.log('✅ Portal allows KB search without authentication');
     });
 
     it('should show popular articles', async () => {
@@ -114,7 +113,6 @@ describe('Self-Service Portal', () => {
         assert.strictEqual(response.ok, true, 'Should load popular articles');
         assert.ok(Array.isArray(data.articles), 'Should return articles');
 
-        console.log(`✅ Portal loads popular articles (${data.articles?.length || 0} articles)`);
     });
 
     it('should require authentication for user tickets', async () => {
@@ -123,12 +121,10 @@ describe('Self-Service Portal', () => {
 
         assert.strictEqual(response.ok, false, 'Should require authentication for tickets');
 
-        console.log('✅ Portal correctly requires authentication for user tickets');
     });
 
     it('should display user tickets when authenticated', async () => {
         if (!userToken) {
-            console.log('⚠️ Skipping - no user token');
             return;
         }
 
@@ -137,7 +133,6 @@ describe('Self-Service Portal', () => {
         assert.strictEqual(response.ok, true, 'Should load user tickets when authenticated');
         assert.ok(Array.isArray(data.tickets), 'Should return tickets array');
 
-        console.log(`✅ Portal displays user tickets (${data.tickets?.length || 0} tickets)`);
     });
 });
 
@@ -146,7 +141,6 @@ describe('Self-Service Portal', () => {
 describe('Complete Ticket Workflow with Analytics', () => {
     it('should create ticket, track analytics, and show in portal', async () => {
         if (!userToken || !adminToken) {
-            console.log('⚠️ Skipping - missing auth tokens');
             return;
         }
 
@@ -164,7 +158,6 @@ describe('Complete Ticket Workflow with Analytics', () => {
         assert.strictEqual(createResponse.ok, true, 'Should create ticket');
         testTicketId = createData.ticket.id;
 
-        console.log(`  ✓ Created test ticket #${createData.ticket.ticket_number}`);
 
         // Step 2: Verify ticket appears in user's list
         const { response: ticketsResponse, data: ticketsData } = await apiCall('/support/tickets', userToken);
@@ -173,7 +166,6 @@ describe('Complete Ticket Workflow with Analytics', () => {
         const createdTicket = ticketsData.tickets.find(t => t.id === testTicketId);
         assert.ok(createdTicket, 'Created ticket should appear in user list');
 
-        console.log('  ✓ Ticket appears in user ticket list');
 
         // Step 3: Wait a moment for auto-assignment
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -187,9 +179,7 @@ describe('Complete Ticket Workflow with Analytics', () => {
         assert.strictEqual(detailResponse.ok, true, 'Should load ticket details');
 
         if (detailData.ticket.assigned_to) {
-            console.log(`  ✓ Ticket auto-assigned to agent ${detailData.ticket.assigned_to}`);
         } else {
-            console.log('  ℹ Ticket not yet assigned (auto-assignment may be processing)');
         }
 
         // Step 5: Verify analytics include this ticket
@@ -203,7 +193,6 @@ describe('Complete Ticket Workflow with Analytics', () => {
         if (analyticsData.trends && analyticsData.trends.length > 0) {
             const todayTrends = analyticsData.trends[0];
             assert.ok(todayTrends.new_tickets > 0, 'Analytics should show new tickets');
-            console.log(`  ✓ Analytics show ${todayTrends.new_tickets} new ticket(s) today`);
         }
 
         console.log('✅ Complete workflow: Create → Assign → Track → Display works correctly');
@@ -211,7 +200,6 @@ describe('Complete Ticket Workflow with Analytics', () => {
 
     it('should track ticket in category analytics', async () => {
         if (!adminToken || !testTicketId) {
-            console.log('⚠️ Skipping - missing admin token or test ticket');
             return;
         }
 
@@ -240,7 +228,6 @@ describe('Complete Ticket Workflow with Analytics', () => {
 describe('Analytics Dashboard Integration', () => {
     it('should provide complete dashboard with all metrics', async () => {
         if (!adminToken) {
-            console.log('⚠️ Skipping - no admin token');
             return;
         }
 
@@ -267,7 +254,6 @@ describe('Analytics Dashboard Integration', () => {
 
     it('should handle dashboard for different time periods consistently', async () => {
         if (!adminToken) {
-            console.log('⚠️ Skipping - no admin token');
             return;
         }
 
@@ -301,7 +287,6 @@ describe('Analytics Dashboard Integration', () => {
 describe('Multi-Channel Support Integration', () => {
     it('should support tickets from different channels', async () => {
         if (!userToken) {
-            console.log('⚠️ Skipping - no user token');
             return;
         }
 
@@ -336,7 +321,6 @@ describe('Multi-Channel Support Integration', () => {
 
     it('should track email channel tickets separately', async () => {
         if (!adminToken) {
-            console.log('⚠️ Skipping - no admin token');
             return;
         }
 
@@ -347,7 +331,6 @@ describe('Multi-Channel Support Integration', () => {
             const emailTickets = data.tickets.filter(t => t.channel === 'email');
             const webTickets = data.tickets.filter(t => t.channel === 'web');
 
-            console.log(`✅ Channel tracking: ${emailTickets.length} email, ${webTickets.length} web tickets`);
         } else {
             console.log('✅ Multi-channel tracking available');
         }
@@ -362,7 +345,6 @@ describe('Real-Time Updates with Phase 4 Features', () => {
         // Analytics should reflect these in real-time
 
         if (!userToken || !adminToken) {
-            console.log('⚠️ Skipping - missing auth tokens');
             return;
         }
 
@@ -402,7 +384,6 @@ describe('Real-Time Updates with Phase 4 Features', () => {
 describe('Phase 4 Features Availability', () => {
     it('should have all Phase 4 analytics endpoints available', async () => {
         if (!adminToken) {
-            console.log('⚠️ Skipping - no admin token');
             return;
         }
 
@@ -457,7 +438,6 @@ describe('Phase 4 Features Availability', () => {
 describe('Phase 4 Performance', () => {
     it('should handle complex dashboard query efficiently', async () => {
         if (!adminToken) {
-            console.log('⚠️ Skipping - no admin token');
             return;
         }
 
@@ -475,7 +455,6 @@ describe('Phase 4 Performance', () => {
 
     it('should handle concurrent analytics and ticket operations', async () => {
         if (!userToken || !adminToken) {
-            console.log('⚠️ Skipping - missing auth tokens');
             return;
         }
 
