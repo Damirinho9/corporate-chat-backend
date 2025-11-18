@@ -149,11 +149,7 @@ async function loadUserInfo() {
         document.getElementById('userName').textContent = currentUser.name || 'Agent';
         document.getElementById('userEmail').textContent = currentUser.email || '';
 
-        // Check if user has support role
-        if (currentUser.role !== 'admin' && currentUser.role !== 'head') {
-            // You might want to check for specific support role
-            console.warn('User may not have agent permissions');
-        }
+        // Backend will handle authorization for agent-specific operations
     } catch (error) {
         console.error('Error loading user info:', error);
     }
