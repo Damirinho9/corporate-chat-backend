@@ -20,6 +20,8 @@ const {
     emitTicketAssigned,
     emitTicketStatusChanged
 } = require('../socket/supportHandler');
+const autoAssignment = require('../utils/autoAssignment');
+const workflowAutomation = require('../utils/workflowAutomation');
 
 const logger = createLogger('support-api');
 
@@ -125,9 +127,18 @@ router.post('/tickets',
                 priority
             });
 
-            // TODO: Trigger webhook for new ticket
-            // TODO: Auto-assign based on rules
-            // TODO: Send notification to support team
+            // Auto-assign ticket to best available agent
+            autoAssignment.assignTicket(ticket.id).catch(err => {
+                logger.error('Failed to auto-assign ticket', { error: err.message, ticketId: ticket.id });
+            });
+
+            // Trigger workflow automation
+            workflowAutomation.triggerWorkflow('ticket_created', {
+                ticket,
+                customer: user
+            }).catch(err => {
+                logger.error('Failed to trigger workflow', { error: err.message, ticketId: ticket.id });
+            });
 
             res.status(201).json({
                 success: true,
@@ -516,6 +527,13 @@ router.patch('/tickets/:id/status',
                 params
             );
 
+            // Decrement agent ticket count when ticket is resolved/closed
+            if ((status === 'resolved' || status === 'closed') && ticket.assigned_to) {
+                autoAssignment.decrementAgentTicketCount(ticket.assigned_to).catch(err => {
+                    logger.error('Failed to decrement agent ticket count', { error: err.message, agentId: ticket.assigned_to });
+                });
+            }
+
             // Add to status history
             await query(
                 `INSERT INTO ticket_status_history
@@ -551,6 +569,18 @@ router.patch('/tickets/:id/status',
             } catch (err) {
                 logger.error('Failed to emit status change event', { error: err.message, ticketId });
             }
+
+            // Trigger workflow automation for status changes
+            const workflowEvent = status === 'resolved' ? 'ticket_resolved' :
+                                  status === 'closed' ? 'ticket_closed' :
+                                  'ticket_status_changed';
+            workflowAutomation.triggerWorkflow(workflowEvent, {
+                ticket: { ...ticket, status },
+                old_status: oldStatus,
+                new_status: status
+            }).catch(err => {
+                logger.error('Failed to trigger workflow', { error: err.message, ticketId });
+            });
 
             res.json({
                 success: true,
@@ -627,6 +657,15 @@ router.patch('/tickets/:id/assign',
                         } catch (err) {
                             logger.error('Failed to emit assignment event', { error: err.message, ticketId });
                         }
+
+                        // Trigger workflow automation
+                        workflowAutomation.triggerWorkflow('ticket_assigned', {
+                            ticket,
+                            agent_id: assigned_to,
+                            agent_name: agent.name
+                        }).catch(err => {
+                            logger.error('Failed to trigger workflow', { error: err.message, ticketId });
+                        });
 
                         return query('SELECT name, email FROM users WHERE id = $1', [ticket.user_id])
                             .then(customerResult => {

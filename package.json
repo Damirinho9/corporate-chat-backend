@@ -16,6 +16,8 @@
     "test:phase2:email": "node --test tests/support/phase2-email.test.js",
     "test:phase2:socketio": "node --test tests/support/phase2-socketio.test.js",
     "test:phase2:integration": "node --test tests/support/phase2-integration.test.js",
+    "test:phase3": "node scripts/run-phase3-tests.js",
+    "test:phase3:automation": "node --test tests/support/phase3-automation.test.js",
     "test:dm": "node tests/directMessages.test.js",
     "db:init": "psql -U postgres -d corporate_chat -f database/schema.sql",
     "restore:snapshot": "node scripts/restore_production_snapshot.js",

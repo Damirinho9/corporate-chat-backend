@@ -578,6 +578,15 @@ const startServer = async () => {
       console.log('');
       console.log('✅ Ready to accept connections!');
       console.log('');
+
+      // Start SLA monitoring background job
+      try {
+        const slaMonitor = require('./utils/slaMonitor');
+        slaMonitor.start();
+        logger.info('SLA monitor started');
+      } catch (err) {
+        logger.error('Failed to start SLA monitor', { error: err.message });
+      }
     });
   } catch (error) {
     logger.error('Failed to start server:', error && error.stack ? error.stack : error);
@@ -588,6 +597,16 @@ const startServer = async () => {
 // Graceful shutdown
 const shutdown = async (signal) => {
   console.log(`\n⚠️ ${signal} received. Shutting down gracefully...`);
+
+  // Stop SLA monitor
+  try {
+    const slaMonitor = require('./utils/slaMonitor');
+    slaMonitor.stop();
+    console.log('✅ SLA monitor stopped');
+  } catch (err) {
+    console.error('⚠️ Error stopping SLA monitor:', err.message);
+  }
+
   server.close(async () => {
     console.log('✅ HTTP server closed');
     try {
