@@ -26,7 +26,9 @@ module.exports = {
         JITSI_DOMAIN: 'meet.jit.si',
         JITSI_APP_ID: 'corporate_chat',
         JITSI_APP_SECRET: 'your_jitsi_secret_change_in_production_min_32_chars',
-        JITSI_USE_JWT: 'false'
+        JITSI_USE_JWT: 'false',
+        // Phase 5 Metrics Reporting
+        METRICS_REPORTING_ENABLED: 'true'
       },
       env_production: {
         NODE_ENV: 'production',
