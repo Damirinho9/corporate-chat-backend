@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Support System Test Runner (Cross-platform)
- * Runs all automated tests and generates a report
+ * Phase 2 Test Runner (Cross-platform)
+ * Runs only Phase 2 tests (Email + Socket.IO + Integration)
  */
 
 const { spawn } = require('child_process');
@@ -64,7 +64,7 @@ function runTest(testFile, testName) {
 
 async function main() {
     log('╔════════════════════════════════════════════════════════════╗', 'blue');
-    log('║       Support System Automated Test Suite                 ║', 'blue');
+    log('║       Phase 2: Email + Socket.IO Test Suite               ║', 'blue');
     log('╚════════════════════════════════════════════════════════════╝', 'blue');
     log('');
 
@@ -86,93 +86,71 @@ async function main() {
     log('📋 Test Configuration:', 'blue');
     log(`   API URL: ${process.env.API_URL || 'http://localhost:3000'}`);
     log(`   Test User: ${process.env.TEST_USER_EMAIL || 'test@example.com'}`);
+    log(`   SMTP Configured: ${process.env.SMTP_PASS ? 'Yes' : 'No (emails will be skipped)'}`);
     log('');
 
     const results = {
-        api: false,
-        workflow: false,
-        phase2_email: false,
-        phase2_socketio: false,
-        phase2_integration: false
+        email: false,
+        socketio: false,
+        integration: false
     };
 
-    // Run API tests
-    results.api = await runTest('tests/support/api.test.js', 'API Tests');
+    // Run Email tests
+    results.email = await runTest('tests/support/phase2-email.test.js', 'Phase 2: Email Notification Tests');
 
-    if (results.api) {
-        log('\n✅ API Tests Passed', 'green');
+    if (results.email) {
+        log('\n✅ Email Tests Passed', 'green');
     } else {
-        log('\n❌ API Tests Failed', 'red');
+        log('\n❌ Email Tests Failed', 'red');
     }
 
     log('\n\n');
 
-    // Run workflow tests
-    results.workflow = await runTest('tests/support/workflow.test.js', 'Workflow Integration Tests');
+    // Run Socket.IO tests
+    results.socketio = await runTest('tests/support/phase2-socketio.test.js', 'Phase 2: Socket.IO Event Tests');
 
-    if (results.workflow) {
-        log('\n✅ Workflow Tests Passed', 'green');
+    if (results.socketio) {
+        log('\n✅ Socket.IO Tests Passed', 'green');
     } else {
-        log('\n❌ Workflow Tests Failed', 'red');
+        log('\n❌ Socket.IO Tests Failed', 'red');
     }
 
     log('\n\n');
 
-    // Run Phase 2: Email tests
-    results.phase2_email = await runTest('tests/support/phase2-email.test.js', 'Phase 2: Email Notification Tests');
+    // Run Integration tests
+    results.integration = await runTest('tests/support/phase2-integration.test.js', 'Phase 2: Integration Tests');
 
-    if (results.phase2_email) {
-        log('\n✅ Phase 2 Email Tests Passed', 'green');
+    if (results.integration) {
+        log('\n✅ Integration Tests Passed', 'green');
     } else {
-        log('\n❌ Phase 2 Email Tests Failed', 'red');
-    }
-
-    log('\n\n');
-
-    // Run Phase 2: Socket.IO tests
-    results.phase2_socketio = await runTest('tests/support/phase2-socketio.test.js', 'Phase 2: Socket.IO Event Tests');
-
-    if (results.phase2_socketio) {
-        log('\n✅ Phase 2 Socket.IO Tests Passed', 'green');
-    } else {
-        log('\n❌ Phase 2 Socket.IO Tests Failed', 'red');
-    }
-
-    log('\n\n');
-
-    // Run Phase 2: Integration tests
-    results.phase2_integration = await runTest('tests/support/phase2-integration.test.js', 'Phase 2: Integration Tests');
-
-    if (results.phase2_integration) {
-        log('\n✅ Phase 2 Integration Tests Passed', 'green');
-    } else {
-        log('\n❌ Phase 2 Integration Tests Failed', 'red');
+        log('\n❌ Integration Tests Failed', 'red');
     }
 
     // Summary
     log('\n\n');
     log('═'.repeat(60), 'blue');
-    log('📊 Test Summary', 'blue');
+    log('📊 Phase 2 Test Summary', 'blue');
     log('═'.repeat(60), 'blue');
     log('');
 
-    const allPassed = results.api && results.workflow && results.phase2_email && results.phase2_socketio && results.phase2_integration;
+    const allPassed = results.email && results.socketio && results.integration;
 
     if (allPassed) {
-        log('✅ All Tests Passed!', 'green');
+        log('✅ All Phase 2 Tests Passed!', 'green');
         log('');
-        log('🎉 Support system is working correctly', 'green');
+        log('🎉 Phase 2 Features Working:', 'green');
+        log('   • Email notifications (4 types)', 'green');
+        log('   • Socket.IO real-time events (6 types)', 'green');
+        log('   • End-to-end integration', 'green');
+        log('   • Typing indicators', 'green');
+        log('   • Multi-agent collaboration', 'green');
     } else {
-        log('❌ Some Tests Failed', 'red');
+        log('❌ Some Phase 2 Tests Failed', 'red');
         log('');
         log('Results:');
-        log(`  ${results.api ? '✅' : '❌'} API Tests`, results.api ? 'green' : 'red');
-        log(`  ${results.workflow ? '✅' : '❌'} Workflow Tests`, results.workflow ? 'green' : 'red');
-        log('');
-        log('Phase 2 Tests:');
-        log(`  ${results.phase2_email ? '✅' : '❌'} Email Notifications`, results.phase2_email ? 'green' : 'red');
-        log(`  ${results.phase2_socketio ? '✅' : '❌'} Socket.IO Events`, results.phase2_socketio ? 'green' : 'red');
-        log(`  ${results.phase2_integration ? '✅' : '❌'} Integration Tests`, results.phase2_integration ? 'green' : 'red');
+        log(`  ${results.email ? '✅' : '❌'} Email Notifications`, results.email ? 'green' : 'red');
+        log(`  ${results.socketio ? '✅' : '❌'} Socket.IO Events`, results.socketio ? 'green' : 'red');
+        log(`  ${results.integration ? '✅' : '❌'} Integration Tests`, results.integration ? 'green' : 'red');
     }
 
     log('');
@@ -181,13 +159,10 @@ async function main() {
 
     // Quick test command
     log('💡 Quick commands:', 'yellow');
-    log('   npm test                  - Run all tests');
-    log('   npm run test:support      - Run support tests only');
-    log('   npm run test:api          - Run API tests only');
-    log('   npm run test:phase2       - Run Phase 2 tests only');
-    log('   npm run test:phase2:email - Run email tests only');
-    log('   npm run test:phase2:socketio - Run Socket.IO tests only');
-    log('   npm run test:phase2:integration - Run integration tests only');
+    log('   npm run test:phase2              - Run all Phase 2 tests');
+    log('   npm run test:phase2:email        - Run email tests only');
+    log('   npm run test:phase2:socketio     - Run Socket.IO tests only');
+    log('   npm run test:phase2:integration  - Run integration tests only');
     log('');
 
     process.exit(allPassed ? 0 : 1);

@@ -12,6 +12,10 @@
     "test:support": "node scripts/run-support-tests.js",
     "test:api": "node --test tests/support/api.test.js",
     "test:workflow": "node --test tests/support/workflow.test.js",
+    "test:phase2": "node scripts/run-phase2-tests.js",
+    "test:phase2:email": "node --test tests/support/phase2-email.test.js",
+    "test:phase2:socketio": "node --test tests/support/phase2-socketio.test.js",
+    "test:phase2:integration": "node --test tests/support/phase2-integration.test.js",
     "test:dm": "node tests/directMessages.test.js",
     "db:init": "psql -U postgres -d corporate_chat -f database/schema.sql",
     "restore:snapshot": "node scripts/restore_production_snapshot.js",
@@ -45,7 +49,8 @@
     "winston": "^3.18.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "socket.io-client": "^4.8.1"
   },
   "license": "ISC"
 }
