@@ -106,23 +106,116 @@ function setupSocketIO() {
 
     socket.on('connect', () => {
         console.log('Socket.IO connected');
+        // Join support room if viewing a ticket
+        if (currentTicketId) {
+            socket.emit('support:join', { ticketId: currentTicketId, role: currentUser?.role });
+        }
     });
 
-    socket.on('ticket_updated', (data) => {
-        showToast('Обновление тикета', `Тикет #${data.ticket_number} был обновлён`, 'info');
+    socket.on('disconnect', () => {
+        console.log('Socket.IO disconnected');
+    });
+
+    // New ticket created (for agents - not used in customer interface)
+    socket.on('support:ticket_created', (data) => {
+        console.log('New ticket created:', data);
+    });
+
+    // Ticket updated (status, priority, etc.)
+    socket.on('support:ticket_updated', (data) => {
+        console.log('Ticket updated:', data);
+        if (data.updates.status) {
+            showToast('Статус изменён', `Новый статус: ${getStatusLabel(data.updates.status)}`, 'info');
+        }
         if (currentView === 'tickets') {
             loadMyTickets();
         }
-        if (currentTicketId === data.ticket_id) {
-            loadTicketDetail(data.ticket_id);
+        if (currentTicketId === data.ticketId) {
+            loadTicketDetail(data.ticketId);
         }
     });
 
-    socket.on('new_message', (data) => {
-        if (currentTicketId === data.ticket_id) {
-            loadTicketDetail(data.ticket_id);
+    // New message in ticket
+    socket.on('support:ticket_message', (data) => {
+        console.log('New message:', data);
+        // Only update if message is not from current user
+        if (data.message.author_email !== currentUser?.email) {
+            showToast('Новое сообщение', data.message.content.substring(0, 50) + '...', 'info');
+            if (currentTicketId === data.ticketId) {
+                loadTicketDetail(data.ticketId);
+            }
         }
     });
+
+    // Ticket assigned to agent
+    socket.on('support:ticket_assigned', (data) => {
+        console.log('Ticket assigned:', data);
+        if (currentTicketId === data.ticketId) {
+            loadTicketDetail(data.ticketId);
+        }
+    });
+
+    // Ticket status changed
+    socket.on('support:ticket_status_changed', (data) => {
+        console.log('Ticket status changed:', data);
+        const statusInfo = getStatusInfo(data.newStatus);
+        showToast('Статус обновлён', `${statusInfo.emoji} ${statusInfo.label}`, 'info');
+        if (currentTicketId === data.ticketId) {
+            loadTicketDetail(data.ticketId);
+        }
+        if (currentView === 'tickets') {
+            loadMyTickets();
+        }
+    });
+
+    // Someone is typing
+    socket.on('support:user_typing', (data) => {
+        if (currentTicketId === data.ticketId && data.userId !== currentUser?.id) {
+            showTypingIndicator(data.userName);
+        }
+    });
+}
+
+// Helper to get status info
+function getStatusInfo(status) {
+    const statuses = {
+        'new': { emoji: '🆕', label: 'Новый' },
+        'open': { emoji: '📂', label: 'Открыт' },
+        'in_progress': { emoji: '⚡', label: 'В работе' },
+        'waiting_customer': { emoji: '⏳', label: 'Ожидание клиента' },
+        'waiting_agent': { emoji: '⌛', label: 'Ожидание агента' },
+        'resolved': { emoji: '✅', label: 'Решён' },
+        'closed': { emoji: '🔒', label: 'Закрыт' }
+    };
+    return statuses[status] || { emoji: '📋', label: status };
+}
+
+function getStatusLabel(status) {
+    return getStatusInfo(status).label;
+}
+
+// Typing indicator
+let typingTimeout;
+function showTypingIndicator(userName) {
+    const indicator = document.getElementById('typingIndicator');
+    if (indicator) {
+        indicator.textContent = `${userName} печатает...`;
+        indicator.classList.remove('hidden');
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            indicator.classList.add('hidden');
+        }, 3000);
+    }
+}
+
+// Emit typing event
+let lastTypingEmit = 0;
+function onMessageTyping() {
+    const now = Date.now();
+    if (now - lastTypingEmit > 1000 && currentTicketId) { // Throttle to once per second
+        socket?.emit('support:typing', { ticketId: currentTicketId });
+        lastTypingEmit = now;
+    }
 }
 
 // ==================== USER MANAGEMENT ====================
@@ -556,6 +649,13 @@ async function openTicket(ticketId) {
 
 async function loadTicketDetail(ticketId) {
     try {
+        currentTicketId = ticketId;
+
+        // Join ticket room for real-time updates
+        if (socket && socket.connected) {
+            socket.emit('support:join', { ticketId, role: currentUser?.role });
+        }
+
         const response = await fetch(`${API_BASE}/support/tickets/${ticketId}`, {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -592,6 +692,12 @@ async function loadTicketDetail(ticketId) {
 
         // Setup reply button
         document.getElementById('send-reply-btn').onclick = () => sendTicketReply(ticketId);
+
+        // Setup typing indicator
+        const replyTextarea = document.getElementById('ticket-reply-text');
+        if (replyTextarea) {
+            replyTextarea.addEventListener('input', onMessageTyping);
+        }
 
         // Render rating section if resolved
         if (ticket.status === 'resolved' && !ticket.customer_rating) {

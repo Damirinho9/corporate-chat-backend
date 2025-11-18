@@ -103,25 +103,129 @@ function setupSocketIO() {
 
     socket.on('connect', () => {
         console.log('Socket.IO connected');
+        // Join support queue to receive new tickets
+        socket.emit('support:join', { role: currentUser?.role });
+        // Join ticket room if viewing a ticket
+        if (currentTicketId) {
+            socket.emit('support:join', { ticketId: currentTicketId, role: currentUser?.role });
+        }
     });
 
-    socket.on('new_ticket', (data) => {
-        showToast('New Ticket', `#${data.ticket_number} - ${data.subject}`, 'info');
+    socket.on('disconnect', () => {
+        console.log('Socket.IO disconnected');
+    });
+
+    // New ticket created - show notification and refresh queue
+    socket.on('support:ticket_created', (data) => {
+        const ticket = data.ticket;
+        showToast('Новый тикет', `#${ticket.ticket_number}: ${ticket.subject}`, 'success');
+        playNotificationSound();
         refreshCurrentView();
     });
 
-    socket.on('ticket_updated', (data) => {
-        if (currentTicketId === data.ticket_id) {
-            loadAgentTicketDetail(data.ticket_id);
+    // Ticket updated (status, priority, etc.)
+    socket.on('support:ticket_updated', (data) => {
+        console.log('Ticket updated:', data);
+        if (currentTicketId === data.ticketId) {
+            loadAgentTicketDetail(data.ticketId);
         }
         refreshCurrentView();
     });
 
-    socket.on('new_message', (data) => {
-        if (currentTicketId === data.ticket_id) {
-            loadAgentTicketDetail(data.ticket_id);
+    // New message in ticket
+    socket.on('support:ticket_message', (data) => {
+        console.log('New message:', data);
+        if (data.message.author_email !== currentUser?.email) {
+            if (currentTicketId === data.ticketId) {
+                loadAgentTicketDetail(data.ticketId);
+            } else {
+                showToast('Новое сообщение', `Тикет #${data.ticketId}`, 'info');
+            }
         }
     });
+
+    // Ticket assigned (to you or someone else)
+    socket.on('support:ticket_assigned_to_you', (data) => {
+        const ticket = data.ticket;
+        showToast('Назначен тикет', `#${ticket.ticket_number}: ${ticket.subject}`, 'success');
+        playNotificationSound();
+        refreshCurrentView();
+    });
+
+    socket.on('support:ticket_assigned', (data) => {
+        if (currentTicketId === data.ticketId) {
+            loadAgentTicketDetail(data.ticketId);
+        }
+        refreshCurrentView();
+    });
+
+    // Ticket status changed
+    socket.on('support:ticket_status_changed', (data) => {
+        console.log('Status changed:', data);
+        if (currentTicketId === data.ticketId) {
+            loadAgentTicketDetail(data.ticketId);
+        }
+        refreshCurrentView();
+    });
+
+    // General ticket activity notification
+    socket.on('support:ticket_activity', (data) => {
+        console.log('Ticket activity:', data);
+        refreshCurrentView();
+    });
+
+    // Someone is typing
+    socket.on('support:user_typing', (data) => {
+        if (currentTicketId === data.ticketId && data.userId !== currentUser?.id) {
+            showTypingIndicator(data.userName);
+        }
+    });
+}
+
+// Play notification sound
+function playNotificationSound() {
+    // Simple beep using Web Audio API
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        gainNode.gain.value = 0.1;
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.1);
+    } catch (e) {
+        console.log('Could not play notification sound:', e);
+    }
+}
+
+// Typing indicator (same as customer version)
+let typingTimeout;
+function showTypingIndicator(userName) {
+    const indicator = document.getElementById('typingIndicator');
+    if (indicator) {
+        indicator.textContent = `${userName} печатает...`;
+        indicator.classList.remove('hidden');
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            indicator.classList.add('hidden');
+        }, 3000);
+    }
+}
+
+// Emit typing event
+let lastTypingEmit = 0;
+function onMessageTyping() {
+    const now = Date.now();
+    if (now - lastTypingEmit > 1000 && currentTicketId) {
+        socket?.emit('support:typing', { ticketId: currentTicketId });
+        lastTypingEmit = now;
+    }
 }
 
 function startAutoRefresh() {
@@ -534,6 +638,13 @@ async function openAgentTicket(ticketId) {
 
 async function loadAgentTicketDetail(ticketId) {
     try {
+        currentTicketId = ticketId;
+
+        // Join ticket room for real-time updates
+        if (socket && socket.connected) {
+            socket.emit('support:join', { ticketId, role: currentUser?.role });
+        }
+
         const response = await fetch(`${API_BASE}/support/tickets/${ticketId}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
@@ -585,6 +696,12 @@ async function loadAgentTicketDetail(ticketId) {
         // Setup action buttons
         document.getElementById('send-agent-reply-btn').onclick = () => sendAgentReply(ticketId);
         document.getElementById('resolve-ticket-btn').onclick = () => resolveTicket(ticketId);
+
+        // Setup typing indicator
+        const replyTextarea = document.getElementById('agent-reply-text');
+        if (replyTextarea) {
+            replyTextarea.addEventListener('input', onMessageTyping);
+        }
 
     } catch (error) {
         console.error('Error loading ticket detail:', error);
