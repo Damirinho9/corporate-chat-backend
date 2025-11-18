@@ -46,6 +46,9 @@ const analyticsRoutes = require('./analytics');
 // REGISTRATION ROUTES
 const registrationRoutes = require('./registration');
 
+// MONITORING ROUTES
+const monitoringRoutes = require('./monitoring');
+
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -715,6 +718,9 @@ router.use('/analytics', analyticsRoutes);
 
 // ==================== REGISTRATION ROUTES ====================
 router.use('/registration', registrationRoutes);
+
+// ==================== MONITORING ROUTES ====================
+router.use('/monitoring', monitoringRoutes);
 
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {

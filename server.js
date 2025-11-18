@@ -12,8 +12,9 @@ const { pool, query } = require('./config/database');
 const { initializeSocket } = require('./socket/socketHandler');
 const apiRoutes = require('./routes/api');
 
-const Logger = require('./utils/logger');
-const logger = new Logger('server');
+const { createLogger } = require('./utils/logger');
+const logger = createLogger('server');
+const { requestTracingMiddleware, errorTrackingMiddleware } = require('./middleware/requestTracing');
 
 // Инициализация бэкапа - это не middleware, вызываем напрямую и безопасно
 try {
@@ -45,6 +46,9 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Request tracing with correlation IDs
+app.use(requestTracingMiddleware);
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 минут
   max: 1000, // Увеличено до 1000 запросов (было 100)
@@ -63,6 +67,10 @@ app.use('/api/', limiter);
 app.use('/uploads', express.static('uploads'));
 
 // ==================== ROUTES ====================
+// Health check route (no auth required)
+const healthRoutes = require('./routes/health');
+app.use('/', healthRoutes);
+
 app.use('/api', apiRoutes);
 
 // Раздача статики
@@ -93,9 +101,12 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found', path: req.path });
 });
 
+// Error tracking middleware
+app.use(errorTrackingMiddleware);
+
 // Error handler (должен быть последним)
 app.use((err, req, res, next) => {
-  logger.error('Unhandled error', err && err.stack ? err.stack : err);
+  logger.error('Unhandled error', { error: err.message, stack: err.stack });
   res.status(500).json({ error: err && err.message ? err.message : 'Internal server error' });
 });
 
