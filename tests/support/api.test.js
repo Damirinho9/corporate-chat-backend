@@ -117,9 +117,10 @@ describe('Support System API Tests', () => {
             }
 
             assert.strictEqual(res.status, 200);
-            assert.strictEqual(res.data.slug, testArticleSlug);
-            assert.ok(res.data.title, 'article should have title');
-            assert.ok(res.data.content, 'article should have content');
+            assert.ok(res.data.article, 'response should have article object');
+            assert.strictEqual(res.data.article.slug, testArticleSlug);
+            assert.ok(res.data.article.title, 'article should have title');
+            assert.ok(res.data.article.content, 'article should have content');
         });
 
         it('should search KB articles', async () => {
