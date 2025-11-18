@@ -85,29 +85,23 @@ describe('Support System API Tests', () => {
         it('should get KB articles', async () => {
             const res = await makeRequest('GET', '/api/support/kb/articles');
 
-            console.log(`   🔍 Response status: ${res.status}`);
-            console.log(`   🔍 Response data keys: ${Object.keys(res.data || {}).join(', ')}`);
-            console.log(`   🔍 Full response data:`, JSON.stringify(res.data, null, 2));
+            process.stdout.write(`   🔍 Response status: ${res.status}\n`);
+            process.stdout.write(`   🔍 Articles array length: ${res.data.articles?.length || 0}\n`);
 
             assert.strictEqual(res.status, 200);
             assert.ok(Array.isArray(res.data.articles), 'articles should be an array');
 
-            console.log(`   📚 Found ${res.data.articles?.length || 0} articles in response`);
-
             if (res.data.articles && res.data.articles.length > 0) {
-                console.log(`   First article: ${res.data.articles[0].title || 'no title'}`);
-                console.log(`   First article slug: ${res.data.articles[0].slug || 'NO SLUG!'}`);
                 testArticleSlug = res.data.articles[0].slug;
+                process.stdout.write(`   ✅ Set testArticleSlug to: ${testArticleSlug}\n`);
             } else {
-                console.log('   ⚠️  API returned empty articles array');
-                console.log('   This may indicate:');
-                console.log('   - Categories not visible (is_visible = false)');
-                console.log('   - Articles not published');
-                console.log('   - Foreign key issues');
+                process.stdout.write('   ⚠️  API returned empty articles array\n');
             }
         });
 
         it('should get single KB article by slug', async () => {
+            process.stdout.write(`   🔍 testArticleSlug value: "${testArticleSlug}"\n`);
+
             if (!testArticleSlug) {
                 console.log('⏭️  Skipping: no articles available');
                 console.log('   Run: psql -U postgres -d corporate_chat -p 5433 -f scripts/seed-support-kb.sql');
