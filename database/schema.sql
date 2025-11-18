@@ -295,3 +295,55 @@ CREATE INDEX IF NOT EXISTS idx_message_deletion_history_deleted_at
 
 COMMENT ON TABLE message_deletion_history IS 'Stores audit history for deleted messages by administrators and department heads';
 COMMENT ON FUNCTION can_send_direct_message IS 'Checks if a user can send direct messages to another user based on hierarchy';
+-- ==================== PHASE 5: METRICS REPORTS TABLE ====================
+CREATE TABLE IF NOT EXISTS support_metrics_reports (
+    id SERIAL PRIMARY KEY,
+    report_type VARCHAR(50) NOT NULL,  -- weekly, monthly, quarterly, custom
+    period_days INTEGER NOT NULL,
+    data JSONB NOT NULL,
+    generated_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_metrics_reports_type ON support_metrics_reports(report_type);
+CREATE INDEX idx_metrics_reports_generated ON support_metrics_reports(generated_at DESC);
+
+
+-- ==================== KB ANALYTICS TABLES ====================
+CREATE TABLE IF NOT EXISTS kb_article_views (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER REFERENCES kb_articles(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    search_query TEXT,
+    viewed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_kb_article_views_article ON kb_article_views(article_id);
+CREATE INDEX idx_kb_article_views_user ON kb_article_views(user_id);
+CREATE INDEX idx_kb_article_views_date ON kb_article_views(viewed_at DESC);
+
+CREATE TABLE IF NOT EXISTS kb_search_queries (
+    id SERIAL PRIMARY KEY,
+    query TEXT NOT NULL,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    results_count INTEGER DEFAULT 0,
+    searched_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_kb_search_queries_query ON kb_search_queries(query);
+CREATE INDEX idx_kb_search_queries_date ON kb_search_queries(searched_at DESC);
+CREATE INDEX idx_kb_search_queries_results ON kb_search_queries(results_count);
+
+CREATE TABLE IF NOT EXISTS kb_article_ratings (
+    id SERIAL PRIMARY KEY,
+    article_id INTEGER REFERENCES kb_articles(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    rating INTEGER CHECK (rating BETWEEN 1 AND 5),
+    feedback TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(article_id, user_id)
+);
+
+CREATE INDEX idx_kb_article_ratings_article ON kb_article_ratings(article_id);
+CREATE INDEX idx_kb_article_ratings_rating ON kb_article_ratings(rating);
+

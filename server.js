@@ -76,8 +76,10 @@ app.use('/api', apiRoutes);
 // Support system routes
 const supportRoutes = require('./routes/support');
 const supportAnalyticsRoutes = require('./routes/support-analytics');
+const phase5AnalyticsRoutes = require('./routes/phase5-analytics');
 app.use('/api/support', supportRoutes);
 app.use('/api/support/analytics', supportAnalyticsRoutes);
+app.use('/api/phase5', phase5AnalyticsRoutes);
 
 // Раздача статики
 app.use(express.static(path.join(__dirname, 'public')));
@@ -601,6 +603,15 @@ const startServer = async () => {
         logger.info('Email-to-ticket service initialized');
       } catch (err) {
         logger.error('Failed to start email-to-ticket service', { error: err.message });
+      }
+
+      // Start Phase 5 metrics reporting service
+      try {
+        const metricsReporting = require('./services/metricsReporting');
+        metricsReporting.start();
+        logger.info('Metrics reporting service initialized');
+      } catch (err) {
+        logger.error('Failed to start metrics reporting service', { error: err.message });
       }
     });
   } catch (error) {
