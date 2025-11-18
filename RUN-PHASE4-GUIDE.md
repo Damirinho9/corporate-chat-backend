@@ -472,6 +472,108 @@ console.log(stats);
 // }
 ```
 
+## 🧪 Testing Phase 4
+
+### Running Tests
+
+Phase 4 includes comprehensive test suites for all advanced features:
+
+```bash
+# Run all Phase 4 tests
+npm run test:phase4
+
+# Run individual test suites
+npm run test:phase4:analytics       # Analytics API tests
+npm run test:phase4:email           # Email-to-ticket tests
+npm run test:phase4:integration     # Integration tests
+```
+
+### Test Coverage
+
+#### Analytics Tests (`phase4-analytics.test.js`)
+Tests for all analytics endpoints:
+- ✅ Agent performance metrics
+- ✅ Ticket trends over time
+- ✅ Category distribution analytics
+- ✅ CSAT (Customer Satisfaction) analytics
+- ✅ Dashboard data aggregation
+- ✅ Authentication & authorization
+- ✅ Query parameters & filtering
+- ✅ Performance benchmarks
+
+#### Email-to-Ticket Tests (`phase4-email-to-ticket.test.js`)
+Tests for email integration service:
+- ✅ Category detection from keywords
+- ✅ Priority detection from keywords
+- ✅ Service configuration & status
+- ✅ Email ticket database queries
+- ✅ SLA configuration by priority
+- ✅ Integration with auto-assignment
+- ✅ Integration with workflows
+- ✅ Socket.IO event emissions
+
+#### Integration Tests (`phase4-integration.test.js`)
+End-to-end tests for complete workflows:
+- ✅ Self-service portal accessibility
+- ✅ Knowledge base search
+- ✅ Complete ticket workflow
+- ✅ Analytics dashboard integration
+- ✅ Multi-channel support tracking
+- ✅ Real-time updates
+- ✅ Feature availability checks
+- ✅ Performance under load
+
+### Test Requirements
+
+Before running tests, ensure:
+1. Server is running: `pm2 start corporate-chat` or `npm start`
+2. Database is accessible on port 5433
+3. Test users exist:
+   - `test@example.com` (password: `test123`)
+   - `admin@example.com` (password: `admin123`)
+
+### Test Results
+
+Example test run output:
+```
+╔════════════════════════════════════════════════════════════╗
+║       Phase 4: Advanced Features Test Suite              ║
+╚════════════════════════════════════════════════════════════╝
+
+✅ Server is running
+
+📋 Test Configuration:
+   API URL: http://localhost:3000
+   Test User: test@example.com
+   Admin User: admin@example.com
+
+═══════════════════════════════════════════════════════════
+🧪 Running Phase 4: Advanced Analytics Tests
+═══════════════════════════════════════════════════════════
+
+✅ Agent performance metrics returned
+✅ Agent analytics supports sorting and filtering
+✅ Ticket trends returned
+✅ Category analytics working
+✅ CSAT analytics returned
+✅ Dashboard data aggregates all analytics sections
+
+📊 Phase 4 Test Summary
+═══════════════════════════════════════════════════════════
+
+✅ All Phase 4 Tests Passed!
+
+🎉 Phase 4 Features Working:
+   • Advanced analytics dashboard
+   • Agent performance metrics
+   • Ticket trends & CSAT analytics
+   • Email-to-ticket integration
+   • Category & priority auto-detection
+   • Self-service customer portal
+   • Multi-channel support tracking
+   • Real-time analytics updates
+```
+
 ## 🎊 All Phases Complete!
 
 ### Phase 1: Core System ✅
