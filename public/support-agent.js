@@ -137,7 +137,7 @@ function startAutoRefresh() {
 
 async function loadUserInfo() {
     try {
-        const response = await fetch(`${API_BASE}/auth/me`, {
+        const response = await fetch(`${API_BASE}/auth/profile`, {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
@@ -344,7 +344,8 @@ async function loadSLAAtRisk() {
 
         if (!response.ok) throw new Error('Failed to load SLA at risk tickets');
 
-        const tickets = await response.json();
+        const ticketsData = await response.json();
+        const tickets = ticketsData.tickets || [];
 
         document.getElementById('at-risk-count').textContent = tickets.length;
 
@@ -401,8 +402,8 @@ async function loadQueue(status = '', sortBy = 'sla') {
 
         if (!response.ok) throw new Error('Failed to load queue');
 
-        const tickets = await response.json();
-        renderQueue(tickets);
+        const ticketsData = await response.json();
+        renderQueue(ticketsData.tickets || []);
 
     } catch (error) {
         console.error('Error loading queue:', error);
@@ -467,7 +468,8 @@ async function loadMyAssignedTickets() {
 
         if (!response.ok) throw new Error('Failed to load assigned tickets');
 
-        const tickets = await response.json();
+        const ticketsData = await response.json();
+        const tickets = ticketsData.tickets || [];
 
         document.getElementById('my-ticket-count').textContent = tickets.length;
 
@@ -852,8 +854,8 @@ async function loadKBManagement() {
 
         if (!response.ok) throw new Error('Failed to load KB articles');
 
-        const articles = await response.json();
-        renderKBManagement(articles);
+        const articlesData = await response.json();
+        renderKBManagement(articlesData.articles || []);
 
     } catch (error) {
         console.error('Error loading KB:', error);

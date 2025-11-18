@@ -129,7 +129,7 @@ function setupSocketIO() {
 
 async function loadUserInfo() {
     try {
-        const response = await fetch(`${API_BASE}/auth/me`, {
+        const response = await fetch(`${API_BASE}/auth/profile`, {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
@@ -345,8 +345,8 @@ async function loadKnowledgeBase(categorySlug = null, searchQuery = null) {
         // Load categories
         const categoriesResponse = await fetch(`${API_BASE}/support/kb/categories`);
         if (!categoriesResponse.ok) throw new Error('Failed to load categories');
-        const categories = await categoriesResponse.json();
-        renderCategories(categories);
+        const categoriesData = await categoriesResponse.json();
+        renderCategories(categoriesData.categories || []);
 
         // Load articles
         let url = `${API_BASE}/support/kb/articles`;
@@ -357,8 +357,8 @@ async function loadKnowledgeBase(categorySlug = null, searchQuery = null) {
 
         const articlesResponse = await fetch(url);
         if (!articlesResponse.ok) throw new Error('Failed to load articles');
-        const articles = await articlesResponse.json();
-        renderArticles(articles);
+        const articlesData = await articlesResponse.json();
+        renderArticles(articlesData.articles || []);
 
     } catch (error) {
         console.error('Error loading knowledge base:', error);
@@ -495,8 +495,8 @@ async function loadMyTickets() {
 
         if (!response.ok) throw new Error('Failed to load tickets');
 
-        const tickets = await response.json();
-        renderTickets(tickets);
+        const ticketsData = await response.json();
+        renderTickets(ticketsData.tickets || []);
 
     } catch (error) {
         console.error('Error loading tickets:', error);
