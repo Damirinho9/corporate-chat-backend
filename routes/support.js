@@ -6,6 +6,20 @@ const { query } = require('../config/database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { body, param, validationResult } = require('express-validator');
 const { createLogger } = require('../utils/logger');
+const {
+    sendTicketCreatedEmail,
+    sendTicketReplyEmail,
+    sendTicketStatusChangedEmail,
+    sendTicketAssignedEmail
+} = require('../utils/supportEmailService');
+const { getIO } = require('../socket/socketHandler');
+const {
+    emitTicketCreated,
+    emitTicketUpdated,
+    emitTicketMessage,
+    emitTicketAssigned,
+    emitTicketStatusChanged
+} = require('../socket/supportHandler');
 
 const logger = createLogger('support-api');
 
@@ -88,6 +102,19 @@ router.post('/tickets',
                 VALUES ($1, $2, $3, $4, true, $5, 'text')`,
                 [ticket.id, userId, user.name, user.email, description]
             );
+
+            // Send email notification to customer
+            sendTicketCreatedEmail(ticket, user).catch(err => {
+                logger.error('Failed to send ticket created email', { error: err.message, ticketId: ticket.id });
+            });
+
+            // Emit Socket.IO event for real-time updates
+            try {
+                const io = getIO();
+                emitTicketCreated(io, ticket, user);
+            } catch (err) {
+                logger.error('Failed to emit ticket created event', { error: err.message, ticketId: ticket.id });
+            }
 
             // Log ticket creation
             logger.info('Support ticket created', {
@@ -375,7 +402,36 @@ router.post('/tickets/:id/messages',
                 );
             }
 
-            // TODO: Send notification to customer/agent
+            // Send email notification (async, non-blocking)
+            const isFromCustomer = ticket.user_id === userId;
+            if (isFromCustomer && ticket.assigned_to) {
+                // Customer replied - notify assigned agent
+                query('SELECT name, email FROM users WHERE id = $1', [ticket.assigned_to])
+                    .then(agentResult => {
+                        if (agentResult.rows.length > 0) {
+                            sendTicketReplyEmail(ticket, messageResult.rows[0], user, agentResult.rows[0])
+                                .catch(err => logger.error('Failed to send reply email to agent', { error: err.message }));
+                        }
+                    });
+            } else if (!isFromCustomer && !is_internal) {
+                // Agent replied - notify customer
+                query('SELECT name, email FROM users WHERE id = $1', [ticket.user_id])
+                    .then(customerResult => {
+                        if (customerResult.rows.length > 0) {
+                            sendTicketReplyEmail(ticket, messageResult.rows[0], user, customerResult.rows[0])
+                                .catch(err => logger.error('Failed to send reply email to customer', { error: err.message }));
+                        }
+                    });
+            }
+
+            // Emit Socket.IO event for real-time message
+            try {
+                const io = getIO();
+                emitTicketMessage(io, ticketId, messageResult.rows[0], user);
+            } catch (err) {
+                logger.error('Failed to emit ticket message event', { error: err.message, ticketId });
+            }
+
             // TODO: Trigger webhook
 
             logger.info('Message added to ticket', {
@@ -475,6 +531,27 @@ router.patch('/tickets/:id/status',
                 userId
             });
 
+            // Send email notification to customer about status change (async, non-blocking)
+            Promise.all([
+                query('SELECT name, email FROM users WHERE id = $1', [ticket.user_id]),
+                query('SELECT name, email FROM users WHERE id = $1', [userId])
+            ]).then(([customerResult, agentResult]) => {
+                if (customerResult.rows.length > 0) {
+                    const customer = customerResult.rows[0];
+                    const agent = agentResult.rows.length > 0 ? agentResult.rows[0] : null;
+                    sendTicketStatusChangedEmail(ticket, oldStatus, status, customer, agent)
+                        .catch(err => logger.error('Failed to send status change email', { error: err.message }));
+                }
+            }).catch(err => logger.error('Failed to fetch users for status email', { error: err.message }));
+
+            // Emit Socket.IO event for status change
+            try {
+                const io = getIO();
+                emitTicketStatusChanged(io, ticketId, oldStatus, status);
+            } catch (err) {
+                logger.error('Failed to emit status change event', { error: err.message, ticketId });
+            }
+
             res.json({
                 success: true,
                 message: 'Ticket status updated',
@@ -532,6 +609,36 @@ router.patch('/tickets/:id/assign',
                 assignedTo: assigned_to,
                 assignedBy: req.user.id
             });
+
+            // Send email notification to assigned agent (async, non-blocking)
+            if (assigned_to) {
+                Promise.all([
+                    query('SELECT * FROM support_tickets WHERE id = $1', [ticketId]),
+                    query('SELECT name, email FROM users WHERE id = $1', [assigned_to])
+                ]).then(([ticketResult, agentResult]) => {
+                    if (ticketResult.rows.length > 0 && agentResult.rows.length > 0) {
+                        const ticket = ticketResult.rows[0];
+                        const agent = agentResult.rows[0];
+
+                        // Emit Socket.IO event
+                        try {
+                            const io = getIO();
+                            emitTicketAssigned(io, ticketId, assigned_to, ticket);
+                        } catch (err) {
+                            logger.error('Failed to emit assignment event', { error: err.message, ticketId });
+                        }
+
+                        return query('SELECT name, email FROM users WHERE id = $1', [ticket.user_id])
+                            .then(customerResult => {
+                                if (customerResult.rows.length > 0) {
+                                    const customer = customerResult.rows[0];
+                                    sendTicketAssignedEmail(ticket, agent, customer)
+                                        .catch(err => logger.error('Failed to send assignment email', { error: err.message }));
+                                }
+                            });
+                    }
+                }).catch(err => logger.error('Failed to fetch data for assignment email', { error: err.message }));
+            }
 
             res.json({
                 success: true,

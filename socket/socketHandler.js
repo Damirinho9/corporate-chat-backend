@@ -3,11 +3,15 @@ const jwt = require('jsonwebtoken');
 const { query } = require('../config/database');
 const { sendNewMessageNotification, sendMentionNotification } = require('../utils/pushNotifications');
 const { initializeCallHandlers } = require('./callSignaling');
+const { initializeSupportHandlers } = require('./supportHandler');
 
 // Store connected users
 const connectedUsers = new Map(); // userId -> socketId
 const userSockets = new Map(); // socketId -> userId
 const typingUsers = new Map(); // chatId -> Set of userIds
+
+// Store io instance
+let ioInstance = null;
 
 // Initialize Socket.IO
 const initializeSocket = (server) => {
@@ -93,6 +97,9 @@ const initializeSocket = (server) => {
 
         // ==================== INITIALIZE CALL HANDLERS ====================
         initializeCallHandlers(io, socket);
+
+        // ==================== INITIALIZE SUPPORT HANDLERS ====================
+        initializeSupportHandlers(io, socket);
 
         // ==================== UPDATED: Handle new message with file support ====================
         socket.on('send_message', async (data) => {
@@ -556,7 +563,18 @@ const initializeSocket = (server) => {
         }
     };
 
+    // Store io instance for access from other modules
+    ioInstance = io;
+
     return io;
+};
+
+// Get Socket.IO instance
+const getIO = () => {
+    if (!ioInstance) {
+        throw new Error('Socket.IO not initialized. Call initializeSocket first.');
+    }
+    return ioInstance;
 };
 
 // Get online users count
@@ -576,6 +594,7 @@ const isUserOnline = (userId) => {
 
 module.exports = {
     initializeSocket,
+    getIO,
     getOnlineUsersCount,
     getOnlineUsers,
     isUserOnline
