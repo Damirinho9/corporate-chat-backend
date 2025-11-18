@@ -687,7 +687,341 @@
             color: #c53030;
             font-size: 13px;
         }
+
+        /* ========== COLLAPSIBLE SECTIONS ========== */
+        .chevron {
+            display: inline-block;
+            transition: transform 0.2s ease;
+            font-size: 0.8em;
+            color: #a0aec0;
+        }
+
+        .chevron.expanded {
+            transform: rotate(180deg);
+        }
+
+        #chatsContainer .card h3 {
+            user-select: none;
+        }
+
+        #chatsContainer .card h3:hover .chevron {
+            color: #4a5568;
+        }
+
+        /* ========== BOTS & INTEGRATIONS STYLES ========== */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: #718096;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            bottom: -2px;
+        }
+
+        .tab-btn:hover {
+            color: #4299e1;
+            background: rgba(66, 153, 225, 0.1);
+        }
+
+        .tab-btn.active {
+            color: #4299e1;
+            border-bottom-color: #4299e1;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Bot Card Styles */
+        .bot-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+
+        .bot-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .bot-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .bot-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .bot-avatar {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .bot-details h4 {
+            margin: 0 0 5px 0;
+            font-size: 18px;
+            color: #2d3748;
+        }
+
+        .bot-details p {
+            margin: 0;
+            font-size: 14px;
+            color: #718096;
+        }
+
+        .bot-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .bot-status.active {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+
+        .bot-status.inactive {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .bot-card-body {
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+
+        .bot-token {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .bot-token code {
+            flex: 1;
+            padding: 8px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #4a5568;
+        }
+
+        .bot-permissions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .permission-badge {
+            padding: 4px 10px;
+            background: #ebf8ff;
+            color: #2c5282;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .bot-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Integration Card Styles */
+        .integrations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .integration-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .integration-card:hover {
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            transform: translateY(-4px);
+        }
+
+        .integration-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .integration-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #2d3748;
+        }
+
+        .integration-card p {
+            margin: 0 0 20px 0;
+            font-size: 14px;
+            color: #718096;
+            line-height: 1.5;
+        }
+
+        .integration-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .integration-status.connected {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+
+        .integration-status.disconnected {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .integration-status span {
+            font-size: 8px;
+        }
+
+        /* Documentation Styles */
+        .docs-section {
+            padding: 20px;
+        }
+
+        .docs-section h4 {
+            margin: 25px 0 15px 0;
+            color: #2d3748;
+            font-size: 18px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+
+        .docs-section pre {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+
+        .docs-section code {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .docs-section ul {
+            margin: 15px 0;
+        }
+
+        .docs-section li {
+            padding: 8px 0;
+            color: #4a5568;
+        }
+
+        /* Webhook Card Styles */
+        .webhook-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .webhook-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .webhook-info h4 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            color: #2d3748;
+        }
+
+        .webhook-info p {
+            margin: 0;
+            font-size: 14px;
+            color: #718096;
+        }
+
+        .webhook-events {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        .event-badge {
+            padding: 4px 10px;
+            background: #fef5e7;
+            color: #b7791f;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .webhook-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
     </style>
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -726,6 +1060,12 @@
                 </div>
                 <div class="nav-item" data-section="logs">
                     📋 Logs
+                </div>
+                <div class="nav-item" data-section="registration-requests">
+                    📝 Заявки на регистрацию
+                </div>
+                <div class="nav-item" data-section="bots">
+                    🤖 Боты и Интеграции
                 </div>
             </nav>
 
@@ -769,6 +1109,66 @@
                         <div class="stat-info">
                             <h4>Online Users</h4>
                             <p id="onlineUsers">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Period Filter -->
+                <div class="card" style="margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>📈 Аналитика</h3>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-sm" id="period-day" onclick="changeAnalyticsPeriod('day')">День</button>
+                            <button class="btn btn-sm btn-primary" id="period-week" onclick="changeAnalyticsPeriod('week')">Неделя</button>
+                            <button class="btn btn-sm" id="period-month" onclick="changeAnalyticsPeriod('month')">Месяц</button>
+                        </div>
+                    </div>
+
+                    <!-- Messages Timeline Chart -->
+                    <div style="margin-bottom: 30px; height: 250px;">
+                        <h4 style="margin-bottom: 15px; color: #4a5568;">Динамика сообщений</h4>
+                        <canvas id="messagesTimelineChart"></canvas>
+                    </div>
+
+                    <!-- Hourly Activity Chart -->
+                    <div style="margin-bottom: 30px; height: 250px;">
+                        <h4 style="margin-bottom: 15px; color: #4a5568;">Активность по часам</h4>
+                        <canvas id="hourlyActivityChart"></canvas>
+                    </div>
+
+                    <!-- Top Users and Chats -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+                        <div style="height: 300px;">
+                            <h4 style="margin-bottom: 15px; color: #4a5568;">Самые активные пользователи</h4>
+                            <canvas id="topUsersChart"></canvas>
+                        </div>
+                        <div style="height: 300px;">
+                            <h4 style="margin-bottom: 15px; color: #4a5568;">Самые активные чаты</h4>
+                            <canvas id="topChatsChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Departments Stats -->
+                    <div style="margin-bottom: 30px; height: 250px;">
+                        <h4 style="margin-bottom: 15px; color: #4a5568;">Активность по отделам</h4>
+                        <canvas id="departmentsChart"></canvas>
+                    </div>
+
+                    <!-- Response Time Stats -->
+                    <div class="stats-grid" style="margin-bottom: 20px;">
+                        <div class="stat-card">
+                            <div class="stat-icon blue">⏱️</div>
+                            <div class="stat-info">
+                                <h4>Среднее время отклика</h4>
+                                <p id="avgResponseTime">-</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon purple">📊</div>
+                            <div class="stat-info">
+                                <h4>Медиана времени отклика</h4>
+                                <p id="medianResponseTime">-</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -833,24 +1233,9 @@
                     </button>
                 </div>
 
-                <div class="card">
-                    <table id="chatsTable">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Name</th>
-                                <th>Тип</th>
-                                <th>Отдел</th>
-                                <th>Участники</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td colspan="6" style="text-align: center; color: #a0aec0;">Loading...</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div id="chatsContainer">
+                    <!-- Chat groups will be inserted here by JavaScript -->
+                    <div style="text-align: center; color: #a0aec0; padding: 20px;">Loading...</div>
                 </div>
             </div>
 
@@ -874,20 +1259,23 @@
             <div id="permissions" class="content-section">
                 <div class="header">
                     <h2>🛡️ Права и действия</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-success" onclick="savePermissions()">💾 Сохранить все права</button>
+                        <button class="btn btn-danger" onclick="resetPermissions()">🔄 Сбросить к умолчанию</button>
+                    </div>
                 </div>
 
                 <div class="card">
-                    <p class="permissions-intro">
-                        Разделённые права позволяют управлять самостоятельным удалением сообщений и модерацией чатов.
-                        Пользователи могут удалять свои сообщения только в течение пяти минут после отправки, а администраторы
-                        и руководители отделов модерируют переписку в пределах своих полномочий.
+                    <h3 style="margin-bottom: 15px; color: #2d3748;">📨 Права отправки сообщений</h3>
+                    <p style="margin-bottom: 20px; color: #718096;">
+                        Управляйте, кто кому может отправлять сообщения. Например, операторы не могут писать друг другу напрямую.
                     </p>
 
                     <div class="permissions-table-wrapper">
-                        <table class="permissions-table">
+                        <table class="permissions-table" id="permissionsMatrix">
                             <thead>
                                 <tr>
-                                    <th>Действие</th>
+                                    <th>От роли</th>
                                     <th>Админ</th>
                                     <th>Ассистент</th>
                                     <th>РОП</th>
@@ -901,6 +1289,16 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 30px;">
+                    <h3 style="margin-bottom: 15px; color: #2d3748;">⚙️ Общие права доступа</h3>
+                    <p style="margin-bottom: 20px; color: #718096;">
+                        Права на выполнение различных действий: создание пользователей, управление чатами, удаление сообщений и т.д.
+                    </p>
+                    <div id="generalPermissionsMatrix">
+                        <p style="text-align: center; color: #a0aec0;">Загрузка...</p>
                     </div>
                 </div>
             </div>
@@ -955,6 +1353,268 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- Registration Requests Section -->
+            <div id="registration-requests" class="content-section">
+                <div class="header">
+                    <h2>📝 Заявки на регистрацию</h2>
+                </div>
+
+                <!-- Tabs for filtering -->
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchRegistrationTab('pending')">
+                        ⏳ Ожидают
+                    </button>
+                    <button class="tab-btn" onclick="switchRegistrationTab('approved')">
+                        ✅ Одобрены
+                    </button>
+                    <button class="tab-btn" onclick="switchRegistrationTab('rejected')">
+                        ❌ Отклонены
+                    </button>
+                    <button class="tab-btn" onclick="switchRegistrationTab('all')">
+                        📋 Все
+                    </button>
+                </div>
+
+                <div class="card">
+                    <table id="registrationRequestsTable">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>ФИО</th>
+                                <th>Username</th>
+                                <th>Роль</th>
+                                <th>Отдел</th>
+                                <th>Статус</th>
+                                <th>Дата</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7" style="text-align: center; color: #a0aec0;">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Bots and Integrations Section -->
+            <div id="bots" class="content-section">
+                <div class="header">
+                    <h2>🤖 Боты и Интеграции</h2>
+                </div>
+
+                <!-- Tabs Navigation -->
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchBotsTab('bots-list')">
+                        🤖 Боты
+                    </button>
+                    <button class="tab-btn" onclick="switchBotsTab('webhooks')">
+                        🔗 Вебхуки
+                    </button>
+                    <button class="tab-btn" onclick="switchBotsTab('integrations')">
+                        🔌 Интеграции
+                    </button>
+                    <button class="tab-btn" onclick="switchBotsTab('docs')">
+                        📚 Документация
+                    </button>
+                </div>
+
+                <!-- Bots Tab -->
+                <div id="bots-list" class="tab-content active">
+                    <div class="section-actions">
+                        <button class="btn btn-primary" onclick="openCreateBotModal()">
+                            ➕ Создать бота
+                        </button>
+                    </div>
+
+                    <div class="card">
+                        <h3>📋 Список ботов</h3>
+                        <div id="botsListContainer">
+                            <p style="text-align: center; color: #a0aec0; padding: 20px;">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Webhooks Tab -->
+                <div id="webhooks" class="tab-content">
+                    <div class="section-actions">
+                        <button class="btn btn-primary" onclick="openCreateWebhookModal()">
+                            ➕ Создать вебхук
+                        </button>
+                    </div>
+
+                    <div class="card">
+                        <h3>🔗 Список вебхуков</h3>
+                        <div id="webhooksListContainer">
+                            <p style="text-align: center; color: #a0aec0; padding: 20px;">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Integrations Tab -->
+                <div id="integrations" class="tab-content">
+                    <div class="integrations-grid">
+                        <!-- Calendar Integration -->
+                        <div class="integration-card">
+                            <div class="integration-icon">📅</div>
+                            <h3>Google Calendar</h3>
+                            <p>Синхронизируйте встречи и получайте напоминания</p>
+                            <div class="integration-status disconnected">
+                                <span>●</span> Не подключено
+                            </div>
+                            <button class="btn btn-secondary" onclick="alert('Функция в разработке')">
+                                Настроить
+                            </button>
+                        </div>
+
+                        <!-- Jira Integration -->
+                        <div class="integration-card">
+                            <div class="integration-icon">📋</div>
+                            <h3>Jira</h3>
+                            <p>Уведомления о задачах и issues</p>
+                            <div class="integration-status disconnected">
+                                <span>●</span> Не подключено
+                            </div>
+                            <button class="btn btn-secondary" onclick="alert('Функция в разработке')">
+                                Настроить
+                            </button>
+                        </div>
+
+                        <!-- Trello Integration -->
+                        <div class="integration-card">
+                            <div class="integration-icon">📊</div>
+                            <h3>Trello</h3>
+                            <p>Управление досками и карточками</p>
+                            <div class="integration-status disconnected">
+                                <span>●</span> Не подключено
+                            </div>
+                            <button class="btn btn-secondary" onclick="alert('Функция в разработке')">
+                                Настроить
+                            </button>
+                        </div>
+
+                        <!-- CRM Integration -->
+                        <div class="integration-card">
+                            <div class="integration-icon">💼</div>
+                            <h3>CRM (Salesforce/HubSpot)</h3>
+                            <p>Уведомления о сделках и клиентах</p>
+                            <div class="integration-status disconnected">
+                                <span>●</span> Не подключено
+                            </div>
+                            <button class="btn btn-secondary" onclick="alert('Функция в разработке')">
+                                Настроить
+                            </button>
+                        </div>
+
+                        <!-- GitHub Integration -->
+                        <div class="integration-card">
+                            <div class="integration-icon">🐙</div>
+                            <h3>GitHub</h3>
+                            <p>Уведомления о commits, PR и issues</p>
+                            <div class="integration-status disconnected">
+                                <span>●</span> Не подключено
+                            </div>
+                            <button class="btn btn-secondary" onclick="alert('Функция в разработке')">
+                                Настроить
+                            </button>
+                        </div>
+
+                        <!-- Monitoring Integration -->
+                        <div class="integration-card">
+                            <div class="integration-icon">📡</div>
+                            <h3>Мониторинг</h3>
+                            <p>Алерты от серверов и приложений</p>
+                            <div class="integration-status disconnected">
+                                <span>●</span> Не подключено
+                            </div>
+                            <button class="btn btn-secondary" onclick="alert('Функция в разработке')">
+                                Настроить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Documentation Tab -->
+                <div id="docs" class="tab-content">
+                    <div class="card">
+                        <h3>📚 Документация по API</h3>
+                        <div class="docs-section">
+                            <h4>🤖 Bot Management API</h4>
+                            <p><strong>Создание бота:</strong></p>
+                            <pre><code>POST /api/bots
+Authorization: Bearer &lt;admin_token&gt;
+
+{
+  "name": "My Bot",
+  "username": "my_bot",
+  "description": "Helpful bot"
+}</code></pre>
+
+                            <p><strong>Добавление прав:</strong></p>
+                            <pre><code>POST /api/bots/:id/permissions
+Authorization: Bearer &lt;admin_token&gt;
+
+{
+  "permission_type": "send_messages",
+  "resource_type": "chat",
+  "resource_id": 5
+}</code></pre>
+
+                            <h4>🔗 Webhooks API</h4>
+                            <p><strong>Создание вебхука:</strong></p>
+                            <pre><code>POST /api/webhooks
+Authorization: Bearer &lt;admin_token&gt;
+
+{
+  "bot_id": 1,
+  "name": "My Webhook",
+  "url": "https://example.com/webhook",
+  "events": ["message.created", "user.joined"]
+}</code></pre>
+
+                            <h4>🤖 Bot API (для использования ботами)</h4>
+                            <p><strong>Отправка сообщения:</strong></p>
+                            <pre><code>POST /api/bot-api/messages
+X-Bot-Token: bot_abc123...
+
+{
+  "chat_id": 5,
+  "content": "Hello from bot!"
+}</code></pre>
+
+                            <h4>🔐 HMAC Signature Verification</h4>
+                            <p>Все webhook запросы включают заголовок <code>X-Webhook-Signature</code> с HMAC-SHA256 подписью.</p>
+                            <pre><code>const crypto = require('crypto');
+
+function verifySignature(secret, payload, signature) {
+  const hmac = crypto.createHmac('sha256', secret);
+  hmac.update(JSON.stringify(payload));
+  return hmac.digest('hex') === signature;
+}</code></pre>
+
+                            <h4>📋 Доступные события</h4>
+                            <ul style="list-style: none; padding-left: 0;">
+                                <li>✅ <code>message.created</code> - Новое сообщение</li>
+                                <li>✅ <code>message.updated</code> - Сообщение изменено</li>
+                                <li>✅ <code>message.deleted</code> - Сообщение удалено</li>
+                                <li>✅ <code>user.joined</code> - Пользователь присоединился</li>
+                                <li>✅ <code>user.left</code> - Пользователь вышел</li>
+                                <li>✅ <code>chat.created</code> - Чат создан</li>
+                                <li>✅ <code>chat.updated</code> - Чат обновлен</li>
+                                <li>✅ <code>call.started</code> - Звонок начался</li>
+                                <li>✅ <code>call.ended</code> - Звонок завершен</li>
+                                <li>✅ <code>file.uploaded</code> - Файл загружен</li>
+                                <li>✅ <code>reaction.added</code> - Реакция добавлена</li>
+                            </ul>
+
+                            <h4>🔗 Полная документация</h4>
+                            <p>📄 <a href="/BOTS_AND_INTEGRATIONS_GUIDE.md" target="_blank" style="color: #4299e1; text-decoration: underline; font-weight: 600;">BOTS_AND_INTEGRATIONS_GUIDE.md</a></p>
+                            <p style="margin-top: 10px; font-size: 13px; color: #718096;">Полное руководство с примерами кода для Python, Node.js и безопасности</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1039,6 +1699,49 @@
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeCreateDepartmentModal()">Отмена</button>
                     <button type="submit" class="btn btn-primary">Создать отдел</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Add User to Department -->
+    <div id="addUserToDepartmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Добавить пользователя в отдел</h2>
+                <button class="close-btn" onclick="closeAddUserToDepartmentModal()">×</button>
+            </div>
+            <form id="addUserToDepartmentForm" onsubmit="event.preventDefault(); addUserToDepartmentSubmit();">
+                <div class="modal-body">
+                    <input type="hidden" id="addUserDepartmentName">
+
+                    <div class="form-group">
+                        <label>Отдел</label>
+                        <input type="text" id="addUserDepartmentDisplay" disabled>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Выберите пользователя *</label>
+                        <select id="addUserSelectUser" required>
+                            <option value="">Выберите пользователя...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Роль в отделе</label>
+                        <select id="addUserSelectRole">
+                            <option value="">Не менять текущую роль</option>
+                            <option value="rop">РОП (Руководитель отдела)</option>
+                            <option value="operator">Оператор</option>
+                            <option value="employee">Сотрудник</option>
+                            <option value="assistant">Ассистент</option>
+                        </select>
+                        <small class="form-hint">Если не выбрано, пользователь сохранит текущую роль</small>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddUserToDepartmentModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Добавить</button>
                 </div>
             </form>
         </div>
@@ -1237,221 +1940,16 @@
         let usersCache = [];
         let chatsCache = [];
         let currentEditingUser = null;
-        let editChatState = {
-            chatId: null,
-            chat: null,
-            participants: [],
-            availableUsers: [],
-            pendingAdditions: new Set(),
-            filter: ''
+
+        // Analytics variables
+        let currentAnalyticsPeriod = 'week';
+        let charts = {
+            messagesTimeline: null,
+            hourlyActivity: null,
+            topUsers: null,
+            topChats: null,
+            departments: null
         };
-
-        const ROLE_ORDER = ['admin', 'assistant', 'rop', 'operator', 'employee'];
-        const ROLE_LABELS = {
-            admin: 'Админ',
-            assistant: 'Ассистент',
-            rop: 'РОП',
-            operator: 'Оператор',
-            employee: 'Сотрудник'
-        };
-
-        const PERMISSIONS_MATRIX = [
-            {
-                id: 'editOwnMessages',
-                label: 'Редактировать свои сообщения (до 5 минут после отправки)',
-                roles: {
-                    admin: true,
-                    assistant: true,
-                    rop: true,
-                    operator: true,
-                    employee: true
-                },
-                hint: 'Редактирование доступно всем ролям только в течение пяти минут после отправки собственного сообщения.'
-            },
-            {
-                id: 'deleteOwnMessages',
-                label: 'Удалять свои сообщения (до 5 минут после отправки)',
-                roles: {
-                    admin: true,
-                    assistant: true,
-                    rop: true,
-                    operator: true,
-                    employee: true
-                },
-                hint: 'Удаление доступно всем ролям в течение пяти минут после отправки собственного сообщения.'
-            },
-            {
-                id: 'deleteAnyMessages',
-                label: 'Удалять сообщения других участников',
-                roles: {
-                    admin: true,
-                    assistant: false,
-                    rop: 'department',
-                    operator: false,
-                    employee: false
-                },
-                hint: 'РОП может удалять сообщения только в чатах своего отдела; администратор — в любых чатах.'
-            }
-        ];
-
-        window.PERMISSIONS_MATRIX = PERMISSIONS_MATRIX;
-        let permissionsMatrixLoaded = false;
-
-        const createUserForm = document.getElementById('createUserForm');
-        const usernameInput = document.getElementById('createUsername');
-        const fullNameInput = document.getElementById('createFullName');
-        const passwordInput = document.getElementById('createPassword');
-        const roleSelect = document.getElementById('createRole');
-        const departmentField = document.getElementById('departmentField');
-        const departmentSelect = document.getElementById('departmentSelect');
-        const editUserModal = document.getElementById('editUserModal');
-        const editUserForm = document.getElementById('editUserForm');
-        const editChatModal = document.getElementById('editChatModal');
-        const editChatForm = document.getElementById('editChatForm');
-        const editChatNameInput = document.getElementById('editChatName');
-        const editChatTypeSelect = document.getElementById('editChatType');
-        const editChatDepartmentGroup = document.getElementById('editChatDepartmentGroup');
-        const editChatDepartmentInput = document.getElementById('editChatDepartment');
-        const editChatIdInput = document.getElementById('editChatId');
-        const currentParticipantsList = document.getElementById('currentParticipantsList');
-        const availableParticipantsList = document.getElementById('availableParticipantsList');
-        const editParticipantsSearchInput = document.getElementById('editParticipantsSearch');
-        const editUserIdInput = document.getElementById('editUserId');
-        const editFullNameInput = document.getElementById('editFullName');
-        const editUsernameInput = document.getElementById('editUsername');
-        const editRoleSelect = document.getElementById('editRole');
-        const editDepartmentField = document.getElementById('editDepartmentField');
-        const editDepartmentSelect = document.getElementById('editDepartmentSelect');
-        const editStatusSelect = document.getElementById('editStatus');
-        const editPasswordInput = document.getElementById('editInitialPassword');
-
-        const modalFocusMemory = new WeakMap();
-
-        function rememberModalFocus(modal) {
-            if (!modal) {
-                return;
-            }
-
-            const activeElement = document.activeElement;
-            if (activeElement && activeElement instanceof HTMLElement) {
-                modalFocusMemory.set(modal, activeElement);
-            } else {
-                modalFocusMemory.set(modal, null);
-            }
-        }
-
-        function restoreModalFocus(modal) {
-            if (!modal) {
-                return;
-            }
-
-            const previousElement = modalFocusMemory.get(modal);
-            modalFocusMemory.delete(modal);
-
-            if (previousElement && typeof previousElement.focus === 'function') {
-                try {
-                    previousElement.focus();
-                } catch (error) {
-                    console.warn('[modal] Unable to restore focus', error);
-                }
-            }
-        }
-
-        function openModalElement(modal, { focusTarget = null, focusSelector = null } = {}) {
-            if (!modal) {
-                return;
-            }
-
-            rememberModalFocus(modal);
-
-            modal.classList.add('show');
-            modal.style.display = 'flex';
-
-            let focusElement = null;
-            if (focusTarget && typeof focusTarget.focus === 'function') {
-                focusElement = focusTarget;
-            } else if (focusSelector) {
-                focusElement = modal.querySelector(focusSelector);
-            }
-
-            if (!focusElement) {
-                focusElement = modal.querySelector('[data-autofocus]')
-                    || modal.querySelector('input, select, textarea, button');
-            }
-
-            if (focusElement && typeof focusElement.focus === 'function') {
-                setTimeout(() => focusElement.focus(), 0);
-            }
-        }
-
-        // Check auth
-        if (!token || !currentUser || currentUser.role !== 'admin') {
-            window.location.href = '/';
-        }
-
-                <div class="form-group">
-                    <label>Username *</label>
-                    <input type="text" id="editUsername" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Role *</label>
-                    <select id="editRole" required>
-                        <option value="">Select role</option>
-                        <option value="admin">Админ</option>
-                        <option value="assistant">Assistant</option>
-                        <option value="rop">ROP</option>
-                        <option value="operator">Operator</option>
-                        <option value="employee">Сотрудник</option>
-                    </select>
-                </div>
-
-                <div class="form-group disabled" id="editDepartmentField">
-                    <label>Department *</label>
-                    <select id="editDepartmentSelect" disabled>
-                        <option value="">Выберите отдел</option>
-                    </select>
-                    <small class="form-hint">Отдел обязателен для РОПов, операторов и сотрудников.</small>
-                </div>
-
-                <div class="form-group">
-                    <label>Status *</label>
-                    <select id="editStatus" required>
-                        <option value="true">Active</option>
-                        <option value="false">Inactive</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Initial Password</label>
-                    <div class="password-inline">
-                        <input type="text" id="editInitialPassword" readonly>
-                        <button type="button" class="btn btn-secondary" onclick="copyEditPassword()">Копировать</button>
-                        <button type="button" class="btn btn-secondary" onclick="resetUserPassword()">Сбросить</button>
-                    </div>
-                    <small class="form-hint">Пароль показывается только администраторам. Сброс создаст новый случайный пароль и сохранит его.</small>
-                </div>
-
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('editUserModal')">Отмена</button>
-                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Toast -->
-    <div id="toast" class="toast"></div>
-
-    <script>
-        const API_URL = window.location.origin + '/api';
-        let token = localStorage.getItem('token') || '';
-        let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
-        let departmentsCache = [];
-        let manualUsernameOverride = false;
-        let usersCache = [];
-        let chatsCache = [];
-        let currentEditingUser = null;
         let editChatState = {
             chatId: null,
             chat: null,
@@ -1642,10 +2140,7 @@
                     await loadDepartments();
                     break;
                 case 'permissions':
-                    {
-                        const matrix = await ensurePermissionsMatrixLoaded();
-                        renderPermissionsMatrix(matrix);
-                    }
+                    await loadPermissions();
                     break;
                 case 'deletions':
                     await loadDeletionHistory();
@@ -1653,48 +2148,18 @@
                 case 'logs':
                     await loadLogs();
                     break;
-            }
-        }
-
-        function renderPermissionsMatrix(matrixData) {
-            const tbody = document.getElementById('permissionsMatrixBody');
-            if (!tbody) return;
-
-            const matrix = Array.isArray(matrixData) && matrixData.length
-                ? matrixData
-                : (Array.isArray(window.PERMISSIONS_MATRIX) && window.PERMISSIONS_MATRIX.length
-                    ? window.PERMISSIONS_MATRIX
-                    : PERMISSIONS_MATRIX);
-
-            if (!matrix.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="permissions-empty">Данные о правах недоступны</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = matrix.map(row => {
-                const columns = ROLE_ORDER.map(role => {
-                    const value = row.roles[role];
-
-                    if (value === 'department') {
-                        return `<td><span class="perm-chip perm-chip--limited" title="Только в чатах своего отдела">◐</span></td>`;
+                case 'registration-requests':
+                    await loadRegistrationRequests(currentRegistrationFilter === 'all' ? null : currentRegistrationFilter);
+                    break;
+                case 'bots':
+                    if (typeof loadBots === 'function') {
+                        await loadBots();
                     }
-
-                    return `<td><span class="perm-chip ${value ? 'perm-chip--allowed' : 'perm-chip--denied'}">${value ? '✔' : '✖'}</span></td>`;
-                }).join('');
-
-                const hintRow = row.hint
-                    ? `<tr class="permission-hint"><td colspan="${ROLE_ORDER.length + 1}">${row.hint}</td></tr>`
-                    : '';
-
-                return `
-                    <tr>
-                        <th scope="row">${row.label}</th>
-                        ${columns}
-                    </tr>
-                    ${hintRow}
-                `;
-            }).join('');
+                    break;
+            }
         }
+
+        // renderPermissionsMatrix moved to line 3309 - now loads from API instead of static data
 
         async function fetchPermissionsMatrix() {
             try {
@@ -1736,25 +2201,25 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const stats = await statsRes.json();
-                
+
                 document.getElementById('totalUsers').textContent = stats.overall.total_users || 0;
                 document.getElementById('onlineUsers').textContent = stats.overall.online_users || 0;
-                
+
                 // Load message stats
                 const msgRes = await fetch(`${API_URL}/messages/stats`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const msgStats = await msgRes.json();
-                
+
                 document.getElementById('totalMessages').textContent = msgStats.overall.total_messages || 0;
                 document.getElementById('totalChats').textContent = msgStats.overall.active_chats || 0;
-                
+
                 // Load recent activity
                 const logsRes = await fetch(`${API_URL}/admin/logs?limit=10`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const logs = await logsRes.json();
-                
+
                 const tbody = document.querySelector('#recentActivity tbody');
                 if (logs.logs && logs.logs.length > 0) {
                     tbody.innerHTML = logs.logs.map(log => `
@@ -1767,9 +2232,307 @@
                 } else {
                     tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #a0aec0;">No recent activity</td></tr>';
                 }
+
+                // Load analytics
+                await loadAnalytics(currentAnalyticsPeriod);
             } catch (err) {
                 console.error('Load dashboard error:', err);
             }
+        }
+
+        function changeAnalyticsPeriod(period) {
+            currentAnalyticsPeriod = period;
+
+            // Update button styles
+            ['day', 'week', 'month'].forEach(p => {
+                const btn = document.getElementById(`period-${p}`);
+                if (btn) {
+                    if (p === period) {
+                        btn.classList.add('btn-primary');
+                    } else {
+                        btn.classList.remove('btn-primary');
+                    }
+                }
+            });
+
+            loadAnalytics(period);
+        }
+
+        async function loadAnalytics(period) {
+            try {
+                // Load all analytics data in parallel
+                const [
+                    timelineRes,
+                    hourlyRes,
+                    usersRes,
+                    chatsRes,
+                    depsRes,
+                    responseTimeRes
+                ] = await Promise.all([
+                    fetch(`${API_URL}/analytics/messages/timeline?period=${period}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_URL}/analytics/activity/hourly?period=${period}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_URL}/analytics/users/active?period=${period}&limit=10`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_URL}/analytics/chats/active?period=${period}&limit=10`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_URL}/analytics/departments?period=${period}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API_URL}/analytics/response-time?period=${period}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                ]);
+
+                const timeline = await timelineRes.json();
+                const hourly = await hourlyRes.json();
+                const users = await usersRes.json();
+                const chats = await chatsRes.json();
+                const deps = await depsRes.json();
+                const responseTime = await responseTimeRes.json();
+
+                // Update charts
+                renderMessagesTimelineChart(timeline.data);
+                renderHourlyActivityChart(hourly.hours);
+                renderTopUsersChart(users.users);
+                renderTopChatsChart(chats.chats);
+                renderDepartmentsChart(deps.departments);
+
+                // Update response time stats
+                const avgMin = responseTime.average_response_time_minutes || 0;
+                const medianMin = responseTime.median_response_time_minutes || 0;
+                document.getElementById('avgResponseTime').textContent =
+                    avgMin > 60 ? `${Math.round(avgMin / 60)} ч` : `${avgMin} мин`;
+                document.getElementById('medianResponseTime').textContent =
+                    medianMin > 60 ? `${Math.round(medianMin / 60)} ч` : `${medianMin} мин`;
+
+            } catch (err) {
+                console.error('Load analytics error:', err);
+            }
+        }
+
+        // ==================== CHART RENDERING FUNCTIONS ====================
+        function renderMessagesTimelineChart(data) {
+            const ctx = document.getElementById('messagesTimelineChart');
+            if (!ctx) return;
+
+            // Destroy previous chart if exists
+            if (charts.messagesTimeline) {
+                charts.messagesTimeline.destroy();
+            }
+
+            // Handle empty or invalid data
+            if (!data || !Array.isArray(data) || data.length === 0) {
+                data = [];
+            }
+
+            const labels = data.map(d => new Date(d.time_bucket).toLocaleString('ru-RU', {
+                month: 'short',
+                day: 'numeric',
+                hour: currentAnalyticsPeriod === 'day' ? '2-digit' : undefined
+            }));
+            const values = data.map(d => parseInt(d.message_count));
+
+            charts.messagesTimeline = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Сообщения',
+                        data: values,
+                        borderColor: '#4299e1',
+                        backgroundColor: 'rgba(66, 153, 225, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderHourlyActivityChart(hours) {
+            const ctx = document.getElementById('hourlyActivityChart');
+            if (!ctx) return;
+
+            if (charts.hourlyActivity) {
+                charts.hourlyActivity.destroy();
+            }
+
+            // Handle empty or invalid data
+            if (!hours || !Array.isArray(hours)) {
+                hours = [];
+            }
+
+            // Fill missing hours with 0
+            const hourData = Array(24).fill(0);
+            hours.forEach(h => {
+                hourData[parseInt(h.hour)] = parseInt(h.message_count);
+            });
+
+            const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+
+            charts.hourlyActivity = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Сообщения',
+                        data: hourData,
+                        backgroundColor: 'rgba(102, 126, 234, 0.7)',
+                        borderColor: '#667eea',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderTopUsersChart(users) {
+            const ctx = document.getElementById('topUsersChart');
+            if (!ctx) return;
+
+            if (charts.topUsers) {
+                charts.topUsers.destroy();
+            }
+
+            // Handle empty or invalid data
+            if (!users || !Array.isArray(users) || users.length === 0) {
+                users = [];
+            }
+
+            const labels = users.map(u => u.name || u.username);
+            const values = users.map(u => parseInt(u.message_count));
+
+            charts.topUsers = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Сообщений',
+                        data: values,
+                        backgroundColor: 'rgba(72, 187, 120, 0.7)',
+                        borderColor: '#48bb78',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderTopChatsChart(chats) {
+            const ctx = document.getElementById('topChatsChart');
+            if (!ctx) return;
+
+            if (charts.topChats) {
+                charts.topChats.destroy();
+            }
+
+            // Handle empty or invalid data
+            if (!chats || !Array.isArray(chats) || chats.length === 0) {
+                chats = [];
+            }
+
+            const labels = chats.map(c => c.name);
+            const values = chats.map(c => parseInt(c.message_count));
+
+            charts.topChats = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Сообщений',
+                        data: values,
+                        backgroundColor: 'rgba(237, 137, 54, 0.7)',
+                        borderColor: '#ed8936',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderDepartmentsChart(departments) {
+            const ctx = document.getElementById('departmentsChart');
+            if (!ctx) return;
+
+            if (charts.departments) {
+                charts.departments.destroy();
+            }
+
+            // Handle empty or invalid data
+            if (!departments || !Array.isArray(departments) || departments.length === 0) {
+                departments = [];
+            }
+
+            const labels = departments.map(d => d.department);
+            const values = departments.map(d => parseInt(d.message_count));
+
+            charts.departments = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Сообщений',
+                        data: values,
+                        backgroundColor: 'rgba(159, 122, 234, 0.7)',
+                        borderColor: '#9f7aea',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
         }
 
         async function loadUsers() {
@@ -1833,9 +2596,33 @@ async function loadChats() {
                 const data = await res.json();
                 chatsCache = Array.isArray(data.chats) ? data.chats : [];
 
-                const tbody = document.querySelector('#chatsTable tbody');
-                if (chatsCache.length > 0) {
-                    tbody.innerHTML = chatsCache.map(chat => `
+                // Group chats by type
+                const departmentChats = [];
+                const groupChats = [];
+                const directChats = [];
+
+                chatsCache.forEach(chat => {
+                    if (chat.type === 'department') {
+                        departmentChats.push(chat);
+                    } else if (chat.type === 'group') {
+                        groupChats.push(chat);
+                    } else if (chat.type === 'direct') {
+                        directChats.push(chat);
+                    }
+                });
+
+                // Helper function to render chat row
+                const renderChatRow = (chat) => {
+                    let displayName = chat.name || 'Unnamed';
+                    if (chat.type === 'direct' && !chat.name) {
+                        if (chat.participants && Array.isArray(chat.participants) && chat.participants.length > 0) {
+                            displayName = '💬 ' + chat.participants.map(p => p.name).join(' ↔ ');
+                        } else {
+                            displayName = `💬 ЛС (ID: ${chat.id})`;
+                        }
+                    }
+
+                    return `
                         <tr>
                             <td>${chat.id}</td>
                             <td>${displayName}</td>
@@ -1847,14 +2634,73 @@ async function loadChats() {
                                 <button class="btn-delete" onclick="deleteChat(${chat.id})">Удалить</button>
                             </td>
                         </tr>
-                        `;
-                    }).join('');
+                    `;
+                };
+
+                // Helper function to create table section
+                const createTableSection = (title, chats, collapsible = false, collapsed = false) => {
+                    if (chats.length === 0) return '';
+
+                    const sectionId = title.replace(/\s+/g, '-').toLowerCase();
+                    const chevron = collapsible ? `<span class="chevron ${collapsed ? '' : 'expanded'}">▼</span>` : '';
+                    const tableClass = collapsed ? 'style="display: none;"' : '';
+
+                    return `
+                        <div class="card" style="margin-bottom: 20px;">
+                            <h3 style="margin: 0 0 15px 0; color: #2d3748; display: flex; align-items: center; gap: 10px; ${collapsible ? 'cursor: pointer;' : ''}"
+                                ${collapsible ? `onclick="toggleChatSection('${sectionId}')"` : ''}>
+                                ${chevron}
+                                ${title}
+                                <span style="color: #a0aec0; font-size: 0.9em; font-weight: normal;">(${chats.length})</span>
+                            </h3>
+                            <table id="${sectionId}-table" ${tableClass}>
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Тип</th>
+                                        <th>Отдел</th>
+                                        <th>Участники</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${chats.map(renderChatRow).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                };
+
+                // Build HTML
+                const container = document.getElementById('chatsContainer');
+                if (chatsCache.length > 0) {
+                    let html = '';
+                    html += createTableSection('🏢 Чаты отделов', departmentChats);
+                    html += createTableSection('👥 Групповые чаты', groupChats);
+                    html += createTableSection('💬 Личные чаты', directChats, true, true); // Collapsible and collapsed by default
+
+                    container.innerHTML = html;
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#a0aec0;">No chats found</td></tr>';
+                    container.innerHTML = '<div class="card" style="text-align: center; color: #a0aec0; padding: 20px;">No chats found</div>';
                 }
             } catch (err) {
                 console.error('Load chats error:', err);
                 showToast('Failed to load chats', 'error');
+            }
+        }
+
+        // Toggle function for collapsible sections
+        function toggleChatSection(sectionId) {
+            const table = document.getElementById(`${sectionId}-table`);
+            const chevron = event.currentTarget.querySelector('.chevron');
+
+            if (table.style.display === 'none') {
+                table.style.display = '';
+                chevron.classList.add('expanded');
+            } else {
+                table.style.display = 'none';
+                chevron.classList.remove('expanded');
             }
         }
 
@@ -1962,11 +2808,22 @@ async function loadChats() {
                                     <div style="margin-top: 15px;">
                                         <strong>Сотрудники:</strong>
                                         <div style="margin-top: 10px;">
-                                            ${otherUsers.map(user => `
-                                                <div style=\"background: #f7fafc; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;\">
-                                                    <span>${escapeHtml(user.name)} (${escapeHtml(user.username)}) • ${escapeHtml(ROLE_LABELS[user.role] || user.role || '—')}</span>
+                                            ${otherUsers.map(user => {
+                                                // Эмодзи в зависимости от роли
+                                                const roleEmoji = {
+                                                    'assistant': '🤝',
+                                                    'employee': '👨‍💼',
+                                                    'admin': '⚙️'
+                                                };
+                                                const emoji = roleEmoji[user.role] || '👤';
+
+                                                return `
+                                                <div style="background: #f7fafc; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                                                    <span>${emoji} ${escapeHtml(user.name)} (${escapeHtml(user.username)}) • ${escapeHtml(ROLE_LABELS[user.role] || user.role || '—')}</span>
+                                                    ${hasDepartmentIdentity ? `<button class='btn btn-sm btn-danger' onclick='removeUserFromDepartment(${user.id}, ${JSON.stringify(rawName)})'>Удалить</button>` : ''}
                                                 </div>
-                                            `).join('')}
+                                                `;
+                                            }).join('')}
                                         </div>
                                     </div>
                                 ` : ''}
@@ -2505,94 +3362,6 @@ async function loadChats() {
             }
         }
 
-        async function loadDeletionHistory() {
-            const tbody = document.getElementById('deletionHistoryBody');
-            if (!tbody) return;
-
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
-
-            try {
-                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.status === 403) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
-                    return;
-                }
-
-                if (!response.ok) {
-                    throw new Error(`Failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (!Array.isArray(data.history) || data.history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
-                    return;
-                }
-
-                const rowsHtml = data.history.map(entry => {
-                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
-                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
-                        ? deletedAtDate.toLocaleString('ru-RU')
-                        : '—';
-
-                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
-                    const deleterCell = entry.deleted_by_user_name
-                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
-                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
-
-                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
-                    const ownerCell = entry.deleted_message_user_name
-                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
-                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
-
-                    const roleKey = entry.deleted_by_role || 'employee';
-                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
-                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
-
-                    const scopeBadge = entry.deletion_scope === 'self'
-                        ? '<span class="badge badge-scope-self">Своё</span>'
-                        : '<span class="badge badge-scope-moderator">Модерация</span>';
-                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
-
-                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
-                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
-
-                    const contentParts = [];
-                    if (entry.original_content) {
-                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
-                    }
-                    if (entry.file_id) {
-                        const fileLink = buildAttachmentLink(entry.file_id);
-                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
-                    }
-
-                    const contentCell = contentParts.length
-                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
-                        : '<span style="color:#a0aec0;">—</span>';
-
-                    return `
-                        <tr>
-                            <td>${deletedAt}</td>
-                            <td>${deleterCell}</td>
-                            <td>${roleCell}</td>
-                            <td>${chatCell}</td>
-                            <td>${ownerCell}</td>
-                            <td>${scopeCell}</td>
-                            <td>${contentCell}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                tbody.innerHTML = rowsHtml;
-            } catch (error) {
-                console.error('Failed to load deletion history:', error);
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
-            }
-        }
-
         async function loadLogs() {
             try {
                 const res = await fetch(`${API_URL}/admin/logs?limit=100`, {
@@ -2616,6 +3385,69 @@ async function loadChats() {
             } catch (err) {
                 console.error('Load logs error:', err);
             }
+        }
+
+        // ========== REGISTRATION REQUESTS ==========
+        let currentRegistrationFilter = 'pending';
+
+        async function loadRegistrationRequests(status = null) {
+            try {
+                const url = status && status !== 'all'
+                    ? `${API_URL}/registration/requests?status=${status}`
+                    : `${API_URL}/registration/requests`;
+
+                const res = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+
+                const tbody = document.querySelector('#registrationRequestsTable tbody');
+                if (data.requests && data.requests.length > 0) {
+                    tbody.innerHTML = data.requests.map(request => {
+                        const roleNames = {
+                            'assistant': 'Ассистент',
+                            'rop': 'РОП',
+                            'operator': 'Оператор',
+                            'employee': 'Сотрудник'
+                        };
+
+                        const statusBadges = {
+                            'pending': '<span style="background: #fbbf24; color: #78350f; padding: 4px 8px; border-radius: 4px; font-size: 12px;">⏳ Ожидает</span>',
+                            'approved': '<span style="background: #34d399; color: #064e3b; padding: 4px 8px; border-radius: 4px; font-size: 12px;">✅ Одобрена</span>',
+                            'rejected': '<span style="background: #f87171; color: #7f1d1d; padding: 4px 8px; border-radius: 4px; font-size: 12px;">❌ Отклонена</span>'
+                        };
+
+                        return `
+                            <tr>
+                                <td>${request.email}</td>
+                                <td>${request.full_name}</td>
+                                <td>${request.username}</td>
+                                <td>${roleNames[request.role] || request.role}</td>
+                                <td>${request.department || '-'}</td>
+                                <td>${statusBadges[request.status] || request.status}</td>
+                                <td>${new Date(request.created_at).toLocaleString('ru-RU')}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Заявок не найдено</td></tr>';
+                }
+            } catch (err) {
+                console.error('Load registration requests error:', err);
+            }
+        }
+
+        function switchRegistrationTab(status) {
+            currentRegistrationFilter = status;
+
+            // Update active tab
+            document.querySelectorAll('#registration-requests .tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Load requests with filter
+            loadRegistrationRequests(status === 'all' ? null : status);
         }
 
         // ========== CREATE USER ==========
@@ -2986,88 +3818,6 @@ async function loadChats() {
             }
 
             try {
-                const res = await fetch(`${API_URL}/users/${userId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                const data = await res.json();
-                
-                if (data.success) {
-                    showToast('User deleted successfully!', 'success');
-                    loadUsers();
-                } else {
-                    showToast(data.error || 'Failed to delete user', 'error');
-                }
-            } catch (err) {
-                console.error('Delete user error:', err);
-                showToast('Ошибка удаления пользователя', 'error');
-            }
-        }
-
-        // initialisePermissionsMatrix already defined above at line 2765 - duplicate removed
-
-        // ========== TOAST (duplicate also removed) ==========
-
-        function updateUsernameFromFullName() {
-            if (!fullNameInput || manualUsernameOverride) {
-                return;
-            }
-
-            usernameInput.value = buildUsernameFromFullName(fullNameInput.value);
-        }
-
-        if (fullNameInput) {
-            fullNameInput.addEventListener('input', () => {
-                updateUsernameFromFullName();
-            });
-        }
-
-        if (usernameInput) {
-            usernameInput.addEventListener('input', () => {
-                manualUsernameOverride = true;
-            });
-            usernameInput.addEventListener('focus', () => {
-                if (!usernameInput.value) {
-                    manualUsernameOverride = false;
-                    updateUsernameFromFullName();
-                }
-            });
-        }
-
-        if (roleSelect) {
-            roleSelect.addEventListener('change', (event) => toggleDepartmentField(event.target));
-        }
-
-        createUserForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const payload = {
-                username: usernameInput.value.trim(),
-                password: passwordInput.value.trim(),
-                name: fullNameInput.value.trim(),
-                role: roleSelect.value,
-                department: departmentSelect.value || null
-            };
-
-            if (!payload.username || !payload.name || !payload.role) {
-                showToast('Заполните обязательные поля', 'error');
-                return;
-            }
-
-            const needsDepartment = shouldRequireDepartment(payload.role);
-            if (!needsDepartment) {
-                payload.department = null;
-            } else if (!payload.department) {
-                showToast('Выберите отдел для выбранной роли', 'error');
-                return;
-            }
-
-            if (!payload.password) {
-                payload.password = regeneratePassword(true);
-            }
-
-            try {
                 const res = await fetch(`${API_URL}/auth/register`, {
                     method: 'POST',
                     headers: {
@@ -3091,116 +3841,15 @@ async function loadChats() {
                 } else {
                     showToast(result.error || 'Failed to create user', 'error');
                 }
+                if (departmentField) {
+                    departmentField.classList.add('disabled');
+                }
+                updateDepartmentVisibility('', departmentField, departmentSelect, { preserveValue: false });
             } catch (err) {
                 console.error('Create user error:', err);
-                showToast('Failed to create user', 'error');
+                showToast('Ошибка создания пользователя', 'error');
             }
         });
-
-        if (editDepartmentSelect) {
-            editDepartmentSelect.addEventListener('change', () => {
-                editDepartmentSelect.dataset.lastValue = editDepartmentSelect.value;
-            });
-        }
-
-        if (editRoleSelect) {
-            editRoleSelect.addEventListener('change', (event) => {
-                const lastStoredValue = editDepartmentSelect ? (editDepartmentSelect.dataset.lastValue || editDepartmentSelect.value || '') : '';
-                const preferred = shouldRequireDepartment(event.target.value)
-                    ? lastStoredValue
-                    : null;
-                updateDepartmentVisibility(event.target.value, editDepartmentField, editDepartmentSelect, {
-                    preferredValue: preferred,
-                    autoSelectFirst: true,
-                    preserveValue: false
-                });
-            });
-        }
-
-        if (editUserForm) {
-            editUserForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-
-                const userId = Number(editUserIdInput ? editUserIdInput.value : '');
-                if (!userId) {
-                    showToast('Пользователь не выбран', 'error');
-                    return;
-                }
-
-                const name = editFullNameInput ? editFullNameInput.value.trim() : '';
-                const usernameValue = editUsernameInput ? editUsernameInput.value.trim() : '';
-                const roleValue = editRoleSelect ? editRoleSelect.value : '';
-                const isActiveValue = editStatusSelect ? editStatusSelect.value === 'true' : false;
-                const needsDept = shouldRequireDepartment(roleValue);
-                const departmentValue = needsDept && editDepartmentSelect ? (editDepartmentSelect.value || '') : '';
-                const normalizedDepartment = needsDept ? (departmentValue || null) : null;
-
-                if (!name || !usernameValue || !roleValue) {
-                    showToast('Заполните обязательные поля', 'error');
-                    return;
-                }
-
-                if (needsDept && !normalizedDepartment) {
-                    showToast('Выберите отдел для выбранной роли', 'error');
-                    return;
-                }
-
-                const updates = {};
-                const original = currentEditingUser;
-                if (original) {
-                    if (name !== original.name) updates.name = name;
-                    if (usernameValue !== original.username) updates.username = usernameValue;
-                    if (roleValue !== original.role) updates.role = roleValue;
-                    const originalDepartment = original.department || null;
-                    if ((normalizedDepartment || null) !== originalDepartment) {
-                        updates.department = normalizedDepartment;
-                    }
-                    const originalActive = original.is_active !== false;
-                    if (isActiveValue !== originalActive) {
-                        updates.isActive = isActiveValue;
-                    }
-                } else {
-                    updates.name = name;
-                    updates.username = usernameValue;
-                    updates.role = roleValue;
-                    updates.department = normalizedDepartment;
-                    updates.isActive = isActiveValue;
-                }
-
-                if (Object.keys(updates).length === 0) {
-                    showToast('Нет изменений для сохранения', 'error');
-                    return;
-                }
-
-                try {
-                    const res = await fetch(`${API_URL}/users/${userId}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(updates)
-                    });
-
-                    const result = await res.json().catch(() => ({}));
-
-                    if (res.ok) {
-                        showToast('Пользователь обновлен', 'success');
-                        closeModal('editUserModal');
-                        currentEditingUser = null;
-                        await loadUsers();
-                        if (updates.role !== undefined || updates.department !== undefined) {
-                            await loadDepartments();
-                        }
-                    } else {
-                        showToast(result.error || 'Ошибка обновления пользователя', 'error');
-                    }
-                } catch (error) {
-                    console.error('[editUserForm] error:', error);
-                    showToast('Ошибка обновления пользователя', 'error');
-                }
-            });
-        }
 
         if (editDepartmentSelect) {
             editDepartmentSelect.addEventListener('change', () => {
@@ -3325,23 +3974,242 @@ async function loadChats() {
                 } else {
                     showToast(data.error || 'Failed to delete user', 'error');
                 }
+                if (editDepartmentField) {
+                    editDepartmentField.classList.add('disabled');
+                }
+                if (editPasswordInput) {
+                    editPasswordInput.value = '';
+                }
+                updateDepartmentVisibility('', editDepartmentField, editDepartmentSelect, { preserveValue: false });
             } catch (err) {
                 console.error('Delete user error:', err);
-                showToast('Failed to delete user', 'error');
+                showToast('Ошибка удаления пользователя', 'error');
             }
         }
 
-        const initialisePermissionsMatrix = async () => {
-            const matrix = await ensurePermissionsMatrixLoaded();
-            renderPermissionsMatrix(matrix);
-        };
+        // ========== PERMISSIONS MANAGEMENT ==========
+        let permissionsData = null;
 
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                initialisePermissionsMatrix();
-            }, { once: true });
-        } else {
-            initialisePermissionsMatrix();
+        async function loadPermissions() {
+            try {
+                // Load messaging permissions
+                console.log('[loadPermissions] Fetching from:', `${API_URL}/permissions`);
+                const res = await fetch(`${API_URL}/permissions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                console.log('[loadPermissions] Response status:', res.status);
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    console.error('[loadPermissions] Error:', res.status, errorData);
+                    throw new Error(`Failed to load permissions: ${errorData.error || res.statusText}`);
+                }
+
+                permissionsData = await res.json();
+                console.log('[loadPermissions] Received data:', permissionsData);
+
+                if (!permissionsData) {
+                    throw new Error('Permissions data is null or undefined');
+                }
+
+                renderPermissionsMatrix(permissionsData);
+
+                // Load general permissions
+                await loadGeneralPermissions();
+            } catch (err) {
+                console.error('Load permissions error:', err);
+                const tbody = document.getElementById('permissionsMatrixBody');
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #f56565;">Ошибка загрузки прав доступа</td></tr>';
+                }
+            }
+        }
+
+        function renderPermissionsMatrix(data) {
+            const tbody = document.getElementById('permissionsMatrixBody');
+            if (!tbody) {
+                console.error('[renderPermissionsMatrix] Element permissionsMatrixBody not found');
+                return;
+            }
+
+            if (!data || !data.matrix || !data.roles) {
+                console.error('[renderPermissionsMatrix] Invalid data:', data);
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #f56565;">Ошибка: данные не получены</td></tr>';
+                return;
+            }
+
+            const { matrix, roles } = data;
+            const roleLabels = {
+                'admin': 'Админ',
+                'assistant': 'Ассистент',
+                'rop': 'РОП',
+                'operator': 'Оператор',
+                'employee': 'Сотрудник'
+            };
+
+            let html = '';
+
+            // Data rows
+            roles.forEach(fromRole => {
+                html += `<tr><td style="padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; font-weight: 600;">
+                    <span class="badge badge-${fromRole}">${roleLabels[fromRole]}</span>
+                </td>`;
+
+                roles.forEach(toRole => {
+                    const canSend = matrix[fromRole] && matrix[fromRole][toRole] !== undefined
+                        ? matrix[fromRole][toRole]
+                        : true;
+
+                    html += `<td style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">
+                        <input type="checkbox"
+                               data-from="${fromRole}"
+                               data-to="${toRole}"
+                               ${canSend ? 'checked' : ''}
+                               style="width: 20px; height: 20px; cursor: pointer;"
+                               onchange="markPermissionChanged(this)">
+                    </td>`;
+                });
+
+                html += '</tr>';
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        function markPermissionChanged(checkbox) {
+            checkbox.style.outline = '2px solid #4299e1';
+        }
+
+        async function resetPermissions() {
+            if (!confirm('Вы уверены, что хотите сбросить все права доступа к настройкам по умолчанию?')) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/permissions/reset`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (res.ok) {
+                    showToast('Права доступа сброшены к настройкам по умолчанию', 'success');
+                    await loadPermissions();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Ошибка сброса прав', 'error');
+                }
+            } catch (err) {
+                console.error('Reset permissions error:', err);
+                showToast('Ошибка сброса прав доступа', 'error');
+            }
+        }
+
+        // ========== GENERAL PERMISSIONS MANAGEMENT ==========
+        let generalPermissionsData = null;
+
+        async function loadGeneralPermissions() {
+            try {
+                const res = await fetch(`${API_URL}/permissions/general`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) {
+                    throw new Error('Failed to load general permissions');
+                }
+
+                generalPermissionsData = await res.json();
+                renderGeneralPermissionsMatrix(generalPermissionsData);
+            } catch (err) {
+                console.error('Load general permissions error:', err);
+                const elem = document.getElementById('generalPermissionsMatrix');
+                if (elem) {
+                    elem.innerHTML = '<p style="color: #f56565; text-align: center;">Ошибка загрузки общих прав</p>';
+                }
+            }
+        }
+
+        function renderGeneralPermissionsMatrix(data) {
+            const { permissions, categories, roles } = data;
+            const roleLabels = {
+                'admin': 'Админ',
+                'assistant': 'Ассистент',
+                'rop': 'РОП',
+                'operator': 'Оператор',
+                'employee': 'Сотрудник'
+            };
+
+            let html = '';
+
+            Object.keys(categories).forEach(categoryKey => {
+                const category = categories[categoryKey];
+                html += `<div style="margin-bottom: 30px;">`;
+                html += `<h4 style="margin-bottom: 15px; color: #2d3748; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0;">${category.label}</h4>`;
+                html += `<table style="border-collapse: collapse; width: 100%;">`;
+                html += '<thead><tr><th style="padding: 10px; background: #f7fafc; border: 1px solid #e2e8f0;">Право</th>';
+                roles.forEach(role => {
+                    html += `<th style="padding: 10px; background: #f7fafc; border: 1px solid #e2e8f0; text-align: center;">
+                        <span class="badge badge-${role}">${roleLabels[role]}</span>
+                    </th>`;
+                });
+                html += '</tr></thead><tbody>';
+                category.permissions.forEach(perm => {
+                    html += `<tr><td style="padding: 10px; border: 1px solid #e2e8f0;">${perm.label}</td>`;
+                    roles.forEach(role => {
+                        const canPerform = permissions[role] && permissions[role][perm.key] !== undefined ? permissions[role][perm.key] : false;
+                        html += `<td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center;">
+                            <input type="checkbox" data-role="${role}" data-permission="${perm.key}" ${canPerform ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;" onchange="markGeneralPermissionChanged(this)">
+                        </td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+            });
+            const elem = document.getElementById('generalPermissionsMatrix');
+            if (elem) elem.innerHTML = html;
+        }
+
+        function markGeneralPermissionChanged(checkbox) {
+            checkbox.style.outline = '2px solid #4299e1';
+        }
+
+        async function savePermissions() {
+            try {
+                const msgCheckboxes = document.querySelectorAll('#permissionsMatrix input[type="checkbox"]');
+                const msgUpdates = [];
+                msgCheckboxes.forEach(cb => {
+                    msgUpdates.push({ fromRole: cb.dataset.from, toRole: cb.dataset.to, canSend: cb.checked });
+                });
+                const msgRes = await fetch(`${API_URL}/permissions/batch`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ permissions: msgUpdates })
+                });
+                const genCheckboxes = document.querySelectorAll('#generalPermissionsMatrix input[type="checkbox"]');
+                const genUpdates = [];
+                genCheckboxes.forEach(cb => {
+                    genUpdates.push({ role: cb.dataset.role, permission: cb.dataset.permission, canPerform: cb.checked });
+                });
+                const genRes = await fetch(`${API_URL}/permissions/general/batch`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ updates: genUpdates })
+                });
+                if (msgRes.ok && genRes.ok) {
+                    showToast('Все права доступа сохранены успешно!', 'success');
+                    msgCheckboxes.forEach(cb => cb.style.outline = 'none');
+                    genCheckboxes.forEach(cb => cb.style.outline = 'none');
+                    await loadPermissions();
+                } else {
+                    showToast('Ошибка сохранения некоторых прав', 'error');
+                }
+            } catch (err) {
+                console.error('Save permissions error:', err);
+                showToast('Ошибка сохранения прав доступа', 'error');
+            }
         }
 
         // ========== TOAST ==========
@@ -3353,6 +4221,123 @@ async function loadChats() {
             setTimeout(() => {
                 toast.classList.remove('show');
             }, 3000);
+        }
+
+async function showCreateChatModal() {
+    selectedParticipants.clear();
+    const typeSelect = document.getElementById('newChatType');
+    if (typeSelect) {
+        typeSelect.value = 'group';
+        handleChatTypeChange();
+    }
+
+    const searchInput = document.getElementById('participantsSearch');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
+    openModalElement(document.getElementById('createChatModal'), { focusSelector: '#participantsSearch' });
+
+    await loadUsersForChat();
+}
+
+function closeCreateChatModal() {
+    const modal = document.getElementById('createChatModal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        restoreModalFocus(modal);
+    }
+
+    const form = document.getElementById('createChatForm');
+    if (form) {
+        form.reset();
+    }
+
+    const participantList = document.getElementById('participantsList');
+    if (participantList) {
+        participantList.innerHTML = '<p class="chat-participants-empty">Выберите участников</p>';
+    }
+
+    selectedParticipants.clear();
+}
+
+function handleChatTypeChange() {
+    const typeSelect = document.getElementById('newChatType');
+    const deptGroup = document.getElementById('chatDepartmentGroup');
+
+    if (!typeSelect || !deptGroup) {
+        return;
+    }
+
+    const type = typeSelect.value;
+
+    if (type === 'department') {
+        deptGroup.style.display = 'block';
+    } else {
+        deptGroup.style.display = 'none';
+    }
+}
+
+        function generateStrongPassword(length = 12) {
+            const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()_+';
+            const chars = [];
+
+            if (window.crypto && window.crypto.getRandomValues) {
+                const buffer = new Uint32Array(length);
+                window.crypto.getRandomValues(buffer);
+                for (let i = 0; i < length; i++) {
+                    chars.push(alphabet[buffer[i] % alphabet.length]);
+                }
+            } else {
+                for (let i = 0; i < length; i++) {
+                    chars.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
+                }
+            }
+
+            return chars.join('');
+        }
+
+        function regeneratePassword(silent = false) {
+            if (!passwordInput) return '';
+            const password = generateStrongPassword();
+            passwordInput.value = password;
+
+            if (!silent) {
+                showToast('Новый пароль сгенерирован', 'success');
+            }
+
+            return password;
+        }
+
+        function copyGeneratedPassword(targetInput = passwordInput) {
+            if (!targetInput || !targetInput.value) {
+                showToast('Нет пароля для копирования', 'error');
+                return;
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(targetInput.value)
+                    .then(() => showToast('Пароль скопирован', 'success'))
+                    .catch(() => showToast('Не удалось скопировать пароль', 'error'));
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = targetInput.value;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+
+                try {
+                    const success = document.execCommand('copy');
+                    showToast(success ? 'Пароль скопирован' : 'Не удалось скопировать пароль', success ? 'success' : 'error');
+                } catch (error) {
+                    showToast('Не удалось скопировать пароль', 'error');
+                }
+
+                document.body.removeChild(textarea);
+            }
         }
 
         // ========== LOGOUT ==========
@@ -3648,6 +4633,9 @@ function closeModalElement(modal) {
             break;
         case 'createDepartmentModal':
             closeCreateDepartmentModal();
+            break;
+        case 'addUserToDepartmentModal':
+            closeAddUserToDepartmentModal();
             break;
         default:
             modal.classList.remove('show');
@@ -4232,5 +5220,9 @@ setupModalAccessibility();
         }
 
 </script>
+
+<!-- Bots and Integrations UI Module -->
+<script src="/bots-ui.js"></script>
+
 </body>
 </html>

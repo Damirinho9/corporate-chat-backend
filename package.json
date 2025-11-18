@@ -10,7 +10,13 @@
     "postbuild": "node scripts/restore_production_snapshot.js",
     "test": "node tests/directMessages.test.js",
     "db:init": "psql -U postgres -d corporate_chat -f database/schema.sql",
-    "restore:snapshot": "node scripts/restore_production_snapshot.js"
+    "restore:snapshot": "node scripts/restore_production_snapshot.js",
+    "backup": "node scripts/backup.js",
+    "backup:now": "bash scripts/backup.sh backup",
+    "backup:check": "bash scripts/backup.sh check",
+    "backup:list": "bash scripts/backup.sh list",
+    "restore": "node scripts/restore.js",
+    "restore:list": "node scripts/restore.js list"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -26,9 +32,13 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^6.9.8",
     "pg": "^8.16.3",
     "sharp": "^0.33.5",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "web-push": "^3.6.7",
+    "winston": "^3.18.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

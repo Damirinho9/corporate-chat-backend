@@ -14,16 +14,43 @@ const userController = require('../controllers/userController');
 const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
 const departmentController = require('../controllers/departmentController');
+const permissionsController = require('../controllers/permissionsController');
+const generalPermissionsController = require('../controllers/generalPermissionsController');
 const { PERMISSIONS_MATRIX } = require('../config/permissionsMatrix');
 
 const { authenticateToken, requireAdmin, requireHead, requireAdminOrRop } = require('../middleware/auth');
 const { canAccessChat, canSendToChat, canCreateDirectMessage } = require('../middleware/permissions');
+const { logAdminAction } = require('../utils/adminLogger');
 
 const { body, param, query: queryValidator, validationResult } = require('express-validator');
 
 // ADMIN ROUTES - IMPORTS
 const adminBasic = require('./admin-basic');
 const adminExtended = require('./admin-extended');
+
+// PUSH NOTIFICATIONS ROUTES
+const pushRoutes = require('./push');
+
+// VIDEO/AUDIO CALLS ROUTES
+const callsRoutes = require('./calls');
+
+// BOTS AND INTEGRATIONS ROUTES
+const botsRoutes = require('./bots');
+const botApiRoutes = require('./botApi');
+const webhooksRoutes = require('./webhooks');
+const pollsRoutes = require('./polls');
+
+// ANALYTICS ROUTES
+const analyticsRoutes = require('./analytics');
+
+// REGISTRATION ROUTES
+const registrationRoutes = require('./registration');
+
+// MONITORING ROUTES
+const monitoringRoutes = require('./monitoring');
+
+// TEST ALERTS ROUTES
+const testAlertsRoutes = require('./test-alerts');
 
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
@@ -99,6 +126,73 @@ router.get('/users/department/:department',
     requireHead,
     userController.getUsersByDepartment
 );
+
+// ==================== ONLINE STATUS ====================
+// IMPORTANT: These routes must come BEFORE /users/:userId to avoid "online" being treated as a userId
+const { getOnlineUsers, isUserOnline } = require('../socket/socketHandler');
+
+router.get('/users/online', authenticateToken, async (req, res) => {
+    console.log('📊 GET /users/online - Request received');
+    try {
+        const onlineUserIds = getOnlineUsers();
+        console.log('📊 Online user IDs:', onlineUserIds);
+
+        // If no users online, return empty array
+        if (!onlineUserIds || onlineUserIds.length === 0) {
+            console.log('📊 No users online, returning empty array');
+            return res.json({
+                online: [],
+                count: 0
+            });
+        }
+
+        console.log('📊 Querying database for', onlineUserIds.length, 'users');
+        // Get user details for online users
+        const result = await query(
+            `SELECT id, username, name, role, department, last_seen
+             FROM users
+             WHERE id = ANY($1::int[]) AND is_active = true
+             ORDER BY name`,
+            [onlineUserIds]
+        );
+
+        console.log('📊 Found', result.rows.length, 'online users');
+        res.json({
+            online: result.rows,
+            count: result.rows.length
+        });
+    } catch (error) {
+        console.error('❌ Get online users error:', error);
+        res.status(500).json({ error: 'Failed to get online users' });
+    }
+});
+
+router.get('/users/:userId/status', authenticateToken, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const online = isUserOnline(parseInt(userId, 10));
+
+        let lastSeen = null;
+        if (!online) {
+            const result = await query(
+                'SELECT last_seen FROM users WHERE id = $1',
+                [userId]
+            );
+            if (result.rows.length > 0) {
+                lastSeen = result.rows[0].last_seen;
+            }
+        }
+
+        res.json({
+            userId: parseInt(userId, 10),
+            online,
+            lastSeen
+        });
+    } catch (error) {
+        console.error('Get user status error:', error);
+        res.status(500).json({ error: 'Failed to get user status' });
+    }
+});
 
 router.get('/users/:userId',
     authenticateToken,
@@ -607,6 +701,32 @@ router.get('/files/stats',
 );
 
 router.use('/files', fileRoutes);
+
+// ==================== PUSH NOTIFICATIONS ROUTES ====================
+router.use('/push', pushRoutes);
+
+// ==================== VIDEO/AUDIO CALLS ROUTES ====================
+router.use('/calls', callsRoutes);
+
+// ==================== BOTS AND INTEGRATIONS ROUTES ====================
+router.use('/bots', botsRoutes);
+router.use('/bot-api', botApiRoutes);
+router.use('/webhooks', webhooksRoutes);
+
+// ==================== POLLS ROUTES ====================
+router.use('/polls', pollsRoutes);
+
+// ==================== ANALYTICS ROUTES ====================
+router.use('/analytics', analyticsRoutes);
+
+// ==================== REGISTRATION ROUTES ====================
+router.use('/registration', registrationRoutes);
+
+// ==================== MONITORING ROUTES ====================
+router.use('/monitoring', monitoringRoutes);
+
+// ==================== TEST ALERTS ROUTES ====================
+router.use('/test-alerts', testAlertsRoutes);
 
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {

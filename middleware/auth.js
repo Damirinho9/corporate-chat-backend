@@ -227,6 +227,9 @@ const optionalAuth = async (req, res, next) => {
     }
 };
 
+// Combined middleware for admin-only endpoints: authenticate + require admin role
+const verifyAdmin = [authenticateToken, requireAdmin];
+
 module.exports = {
     generateToken,
     generateRefreshToken,
@@ -236,5 +239,6 @@ module.exports = {
     requireHead,
     requireRop,
     requireAdminOrRop,
-    verifyRefreshToken
+    verifyRefreshToken,
+    verifyAdmin
 };

@@ -12,8 +12,9 @@ const { pool, query } = require('./config/database');
 const { initializeSocket } = require('./socket/socketHandler');
 const apiRoutes = require('./routes/api');
 
-const Logger = require('./utils/logger');
-const logger = new Logger('server');
+const { createLogger } = require('./utils/logger');
+const logger = createLogger('server');
+const { requestTracingMiddleware, errorTrackingMiddleware } = require('./middleware/requestTracing');
 
 // Инициализация бэкапа - это не middleware, вызываем напрямую и безопасно
 try {
@@ -45,6 +46,9 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Request tracing with correlation IDs
+app.use(requestTracingMiddleware);
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 минут
   max: 1000, // Увеличено до 1000 запросов (было 100)
@@ -63,6 +67,10 @@ app.use('/api/', limiter);
 app.use('/uploads', express.static('uploads'));
 
 // ==================== ROUTES ====================
+// Health check route (no auth required)
+const healthRoutes = require('./routes/health');
+app.use('/', healthRoutes);
+
 app.use('/api', apiRoutes);
 
 // Раздача статики
@@ -93,9 +101,12 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found', path: req.path });
 });
 
+// Error tracking middleware
+app.use(errorTrackingMiddleware);
+
 // Error handler (должен быть последним)
 app.use((err, req, res, next) => {
-  logger.error('Unhandled error', err && err.stack ? err.stack : err);
+  logger.error('Unhandled error', { error: err.message, stack: err.stack });
   res.status(500).json({ error: err && err.message ? err.message : 'Internal server error' });
 });
 
@@ -344,6 +355,126 @@ async function applyIncrementalSchemaUpdates() {
         END IF;
       END$$
     `);
+
+    // ==================== PUSH NOTIFICATIONS TABLES ====================
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        user_agent TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `, 'Created push_subscriptions table');
+
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS notification_settings (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        enabled BOOLEAN DEFAULT true,
+        new_messages BOOLEAN DEFAULT true,
+        mentions BOOLEAN DEFAULT true,
+        direct_messages BOOLEAN DEFAULT true,
+        group_messages BOOLEAN DEFAULT true,
+        sound BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `, 'Created notification_settings table');
+
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS notification_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+        notification_type VARCHAR(50) NOT NULL,
+        title TEXT,
+        body TEXT,
+        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        success BOOLEAN DEFAULT true,
+        error_message TEXT
+      )
+    `, 'Created notification_logs table');
+
+    // Индексы для push notifications
+    const pushNotificationIndexes = [
+      `CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_push_subscriptions_active ON push_subscriptions(is_active)`,
+      `CREATE INDEX IF NOT EXISTS idx_notification_settings_user_id ON notification_settings(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_notification_logs_user_id ON notification_logs(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_notification_logs_sent_at ON notification_logs(sent_at DESC)`
+    ];
+
+    for (const sql of pushNotificationIndexes) {
+      await runOptionalQuery(sql);
+    }
+
+    // ==================== VIDEO/AUDIO CALLS TABLES ====================
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS calls (
+        id SERIAL PRIMARY KEY,
+        room_name VARCHAR(255) NOT NULL UNIQUE,
+        call_type VARCHAR(20) NOT NULL CHECK (call_type IN ('audio', 'video', 'screen')),
+        call_mode VARCHAR(20) NOT NULL CHECK (call_mode IN ('direct', 'group')),
+        initiated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        chat_id INTEGER REFERENCES chats(id) ON DELETE SET NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ongoing', 'ended', 'missed', 'declined')),
+        started_at TIMESTAMP,
+        ended_at TIMESTAMP,
+        duration INTEGER,
+        recording_url TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `, 'Created calls table');
+
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS call_participants (
+        id SERIAL PRIMARY KEY,
+        call_id INTEGER NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        joined_at TIMESTAMP,
+        left_at TIMESTAMP,
+        duration INTEGER,
+        status VARCHAR(20) DEFAULT 'invited' CHECK (status IN ('invited', 'ringing', 'joined', 'left', 'declined', 'missed')),
+        is_moderator BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(call_id, user_id)
+      )
+    `, 'Created call_participants table');
+
+    await runOptionalQuery(`
+      CREATE TABLE IF NOT EXISTS call_events (
+        id SERIAL PRIMARY KEY,
+        call_id INTEGER NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        event_type VARCHAR(50) NOT NULL,
+        event_data JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `, 'Created call_events table');
+
+    // Индексы для calls
+    const callsIndexes = [
+      `CREATE INDEX IF NOT EXISTS idx_calls_room_name ON calls(room_name)`,
+      `CREATE INDEX IF NOT EXISTS idx_calls_initiated_by ON calls(initiated_by)`,
+      `CREATE INDEX IF NOT EXISTS idx_calls_chat_id ON calls(chat_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_calls_status ON calls(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_calls_created_at ON calls(created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_call_participants_call_id ON call_participants(call_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_call_participants_user_id ON call_participants(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_call_participants_status ON call_participants(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_call_events_call_id ON call_events(call_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_call_events_created_at ON call_events(created_at DESC)`
+    ];
+
+    for (const sql of callsIndexes) {
+      await runOptionalQuery(sql);
+    }
 
     logger.info('Incremental schema updates complete');
   } catch (error) {
