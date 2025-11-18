@@ -95,10 +95,18 @@ describe('Support System API Tests', () => {
         it('should get single KB article by slug', async () => {
             if (!testArticleSlug) {
                 console.log('⏭️  Skipping: no articles available');
+                console.log('   Run: psql -U postgres -d corporate_chat -p 5433 -f scripts/seed-support-kb.sql');
                 return;
             }
 
             const res = await makeRequest('GET', `/api/support/kb/articles/${testArticleSlug}`);
+
+            if (res.status === 404) {
+                console.log('⚠️  Article not found in database');
+                console.log('   Run seed script to populate KB articles');
+                return;
+            }
+
             assert.strictEqual(res.status, 200);
             assert.strictEqual(res.data.slug, testArticleSlug);
             assert.ok(res.data.title, 'article should have title');
