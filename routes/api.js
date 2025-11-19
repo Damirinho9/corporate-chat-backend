@@ -32,6 +32,7 @@ const adminExtended = require('./admin-extended');
 const analyticsRoutes = require('./analytics');
 const registrationRoutes = require('./registration');
 const botsRoutes = require('./bots');
+const webhooksRoutes = require('./webhooks');
 
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
@@ -50,6 +51,7 @@ router.use('/', adminExtended);
 router.use('/analytics', analyticsRoutes);
 router.use('/registration', registrationRoutes);
 router.use('/bots', botsRoutes);
+router.use('/webhooks', webhooksRoutes);
 
 router.get('/chats/available-recipients', authenticateToken, getAvailableRecipients);
 
