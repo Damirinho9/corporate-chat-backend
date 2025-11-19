@@ -2933,14 +2933,6 @@
                         }
                 }
 
-                        if (otherGroupChats.length > 0) {
-                                html += `<div class="chat-section">
-                                                <h4>Групповые чаты</h4>
-                                                <ul>${otherGroupChats.map(chat => renderChatItem(chat)).join('')}</ul>
-                                        </div>`;
-                        }
-                }
-
                 if (activeSectionFilter === 'all' || activeSectionFilter === 'Ассистенты') {
                         // Убрали отдельную секцию "Ассистенты" с контактами, т.к. они уже показываются в отделе "Ассистенты"
                         // Оставляем только групповые чаты ассистентов, которые не являются department-type
