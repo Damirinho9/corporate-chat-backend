@@ -10,6 +10,7 @@ const path = require('path');
 
 const { pool, query } = require('./config/database');
 const { initializeSocket } = require('./socket/socketHandler');
+const { initWebPush } = require('./controllers/pushController');
 const apiRoutes = require('./routes/api');
 
 const Logger = require('./utils/logger');
@@ -28,6 +29,9 @@ try {
 const app = express();
 const server = http.createServer(app);
 const io = initializeSocket(server);
+
+// Initialize Web Push notifications
+initWebPush();
 
 // ==================== MIDDLEWARE ====================
 app.set('trust proxy', 1);

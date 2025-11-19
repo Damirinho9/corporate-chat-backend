@@ -1,6 +1,7 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const { query } = require('../config/database');
+const { sendNewMessageNotification } = require('../controllers/pushController');
 
 // Store connected users
 const connectedUsers = new Map(); // userId -> socketId
@@ -180,6 +181,36 @@ const initializeSocket = (server) => {
                     chatId,
                     message
                 });
+
+                // Send push notifications to offline users
+                try {
+                    const participantsResult = await query(
+                        `SELECT cp.user_id, c.name as chat_name, c.type as chat_type
+                         FROM chat_participants cp
+                         JOIN chats c ON c.id = cp.chat_id
+                         WHERE cp.chat_id = $1 AND cp.user_id != $2`,
+                        [chatId, userId]
+                    );
+
+                    for (const participant of participantsResult.rows) {
+                        // Check if user is offline (not in connectedUsers)
+                        if (!connectedUsers.has(participant.user_id)) {
+                            const chatName = participant.chat_type === 'direct'
+                                ? socket.user.name
+                                : participant.chat_name;
+
+                            sendNewMessageNotification(
+                                participant.user_id,
+                                socket.user.name,
+                                content || 'Файл',
+                                chatId,
+                                chatName
+                            ).catch(err => console.error('Push notification error:', err));
+                        }
+                    }
+                } catch (pushError) {
+                    console.error('Error sending push notifications:', pushError);
+                }
 
                 // Stop typing indicator
                 stopTyping(chatId, userId);

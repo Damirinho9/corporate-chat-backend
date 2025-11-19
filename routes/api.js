@@ -14,6 +14,7 @@ const userController = require('../controllers/userController');
 const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
 const departmentController = require('../controllers/departmentController');
+const pushController = require('../controllers/pushController');
 const { PERMISSIONS_MATRIX } = require('../config/permissionsMatrix');
 
 const { authenticateToken, requireAdmin, requireHead, requireAdminOrRop } = require('../middleware/auth');
@@ -607,6 +608,13 @@ router.get('/files/stats',
 );
 
 router.use('/files', fileRoutes);
+
+// ==================== PUSH NOTIFICATIONS ====================
+router.get('/push/vapid-public-key', pushController.getVapidPublicKey);
+router.post('/push/subscribe', authenticateToken, pushController.subscribe);
+router.post('/push/unsubscribe', authenticateToken, pushController.unsubscribe);
+router.get('/push/status', authenticateToken, pushController.getSubscriptionStatus);
+router.post('/push/test', authenticateToken, pushController.testPush);
 
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {
