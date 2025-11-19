@@ -37,5 +37,11 @@ tmp/
 dist/
 build/
 *.backup
+
+# Backups (keep structure, exclude data)
+backups/daily/
+backups/weekly/
+backups/monthly/
 backups/*.sql*
-backups/backup.log
+backups/*.log
+backups/before_restore_*
