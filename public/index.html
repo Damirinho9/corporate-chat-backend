@@ -1762,26 +1762,6 @@
             return fileId;
         }
 
-            let data = {};
-            try {
-                data = await res.json();
-            } catch (error) {
-                console.warn('[uploadFile] Не удалось распарсить ответ:', error);
-            }
-
-            if (!res.ok) {
-                const message = data?.error || `Не удалось загрузить файл (${res.status})`;
-                throw new Error(message);
-            }
-
-            const fileId = data?.file?.id;
-            if (!fileId) {
-                throw new Error('Сервер не вернул идентификатор файла');
-            }
-
-            return fileId;
-        }
-
         function renderMessageFile(msg) {
             if (!msg.file) return '';
             const f = msg.file;
