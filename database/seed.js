@@ -37,12 +37,12 @@ async function seedDatabase() {
     console.log('✅ Cleared existing data');
 
     // 1) Пользователи
-    // CONSTRAINT: admin/assistant must have NULL department, rop/operator/employee must have NOT NULL
+    // CONSTRAINT: admin must have NULL department, others must have NOT NULL
     const userRows = [
       // username, password_hash, initial_password, name, role, department, is_active
-      ['admin',        adminPassword, 'admin123', 'Главный администратор',      'admin',     null,       true],
-      ['assistant1',   userPassword,  'pass123',  'Ассистент Анна',             'assistant', null,       true],
-      ['assistant2',   userPassword,  'pass123',  'Ассистент Борис',            'assistant', null,       true],
+      ['admin',        adminPassword, 'admin123', 'Главный администратор',      'admin',     null,         true],
+      ['assistant1',   userPassword,  'pass123',  'Ассистент Анна',             'assistant', 'Ассистенты', true],
+      ['assistant2',   userPassword,  'pass123',  'Ассистент Борис',            'assistant', 'Ассистенты', true],
       ['rop_otdel2',   userPassword,  'pass123',  'РОП 2 отдел - Виктор',       'rop',       '2 отдел',  true],
       ['rop_otdel3',   userPassword,  'pass123',  'РОП 3 отдел - Галина',       'rop',       '3 отдел',  true],
       ['operator1',    userPassword,  'pass123',  'Оператор 2 отдел - Дмитрий', 'operator',  '2 отдел',  true],
@@ -76,16 +76,16 @@ async function seedDatabase() {
 
     // 2) Чаты
     const chatRows = [
-      // name,            type,        department,   created_by
-      ['Руководство',     'group',     null,         adminId],
-      ['Ассистенты',      'group',     null,         assistant1Id],
+      // name,            type,        department,     created_by
+      ['Руководство',     'group',     null,           adminId],
       // ВАЖНО: для чатов отделов name должен совпадать с department для синхронизации!
-      ['2 отдел',         'department','2 отдел',    ropOtdel2Id],
-      ['3 отдел',         'department','3 отдел',    ropOtdel3Id],
-      ['4 отдел',         'department','4 отдел',    employee1Id],
-      [null,              'direct',    null,         adminId],        // админ + ассистент1
-      [null,              'direct',    null,         ropOtdel2Id],    // роп 2 отдел + оператор1
-      [null,              'direct',    null,         assistant1Id],   // ассистент1 + оператор1
+      ['Ассистенты',      'department','Ассистенты',   assistant1Id],
+      ['2 отдел',         'department','2 отдел',      ropOtdel2Id],
+      ['3 отдел',         'department','3 отдел',      ropOtdel3Id],
+      ['4 отдел',         'department','4 отдел',      employee1Id],
+      [null,              'direct',    null,           adminId],        // админ + ассистент1
+      [null,              'direct',    null,           ropOtdel2Id],    // роп 2 отдел + оператор1
+      [null,              'direct',    null,           assistant1Id],   // ассистент1 + оператор1
     ];
     const chatsResult = await bulkInsert(
       'chats',
@@ -169,7 +169,7 @@ async function seedDatabase() {
 
     console.log('\n✅ Database seeded successfully!\n');
     console.log('👑 admin / admin123');
-    console.log('👔 assistant1 / pass123, assistant2 / pass123');
+    console.log('👔 assistant1 / pass123, assistant2 / pass123 (Ассистенты)');
     console.log('📊 rop_otdel2 / pass123 (2 отдел), rop_otdel3 / pass123 (3 отдел)');
     console.log('💼 operator1 / pass123, operator2 / pass123 (2 отдел), operator3 / pass123 (3 отдел)');
     console.log('👨‍💻 employee1 / pass123, employee2 / pass123 (4 отдел)\n');
