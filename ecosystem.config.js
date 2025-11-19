@@ -16,6 +16,7 @@ module.exports = {
         DB_SSL: 'false',
         CORS_ORIGIN: '*',
         JWT_SECRET: 'supersecretkey123',
+        JWT_REFRESH_SECRET: 'refreshsecretkey456',
         TOKEN_EXPIRES_IN: '7d',
         INIT_DB_ON_BOOT: false,
         // Push Notifications (Web Push / VAPID)
@@ -41,6 +42,7 @@ module.exports = {
         DB_SSL: 'false',
         CORS_ORIGIN: '*',
         JWT_SECRET: 'supersecretkey123',
+        JWT_REFRESH_SECRET: 'refreshsecretkey456',
         TOKEN_EXPIRES_IN: '7d',
         INIT_DB_ON_BOOT: false,
         // Push Notifications (Web Push / VAPID)
