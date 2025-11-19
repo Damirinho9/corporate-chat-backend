@@ -37,18 +37,19 @@ async function seedDatabase() {
     console.log('✅ Cleared existing data');
 
     // 1) Пользователи
+    // CONSTRAINT: admin/assistant must have NULL department, rop/operator/employee must have NOT NULL
     const userRows = [
       // username, password_hash, initial_password, name, role, department, is_active
-      ['admin',        adminPassword, 'admin123', 'Главный администратор',      'admin',     null,         true],
-      ['assistant1',   userPassword,  'pass123',  'Ассистент Анна',             'assistant', 'Ассистенты', true],
-      ['assistant2',   userPassword,  'pass123',  'Ассистент Борис',            'assistant', 'Ассистенты', true],
-      ['rop_otdel2',   userPassword,  'pass123',  'РОП 2 отдел - Виктор',       'rop',       '2 отдел',    true],
-      ['rop_otdel3',   userPassword,  'pass123',  'РОП 3 отдел - Галина',       'rop',       '3 отдел',    true],
-      ['operator1',    userPassword,  'pass123',  'Оператор 2 отдел - Дмитрий', 'operator',  '2 отдел',    true],
-      ['operator2',    userPassword,  'pass123',  'Оператор 2 отдел - Елена',   'operator',  '2 отдел',    true],
-      ['operator3',    userPassword,  'pass123',  'Оператор 3 отдел - Жанна',   'operator',  '3 отдел',    true],
-      ['employee1',    userPassword,  'pass123',  'Сотрудник 4 отдел - Иван',   'employee',  '4 отдел',    true],
-      ['employee2',    userPassword,  'pass123',  'Сотрудник 4 отдел - Мария',  'employee',  '4 отдел',    true],
+      ['admin',        adminPassword, 'admin123', 'Главный администратор',      'admin',     null,       true],
+      ['assistant1',   userPassword,  'pass123',  'Ассистент Анна',             'assistant', null,       true],
+      ['assistant2',   userPassword,  'pass123',  'Ассистент Борис',            'assistant', null,       true],
+      ['rop_otdel2',   userPassword,  'pass123',  'РОП 2 отдел - Виктор',       'rop',       '2 отдел',  true],
+      ['rop_otdel3',   userPassword,  'pass123',  'РОП 3 отдел - Галина',       'rop',       '3 отдел',  true],
+      ['operator1',    userPassword,  'pass123',  'Оператор 2 отдел - Дмитрий', 'operator',  '2 отдел',  true],
+      ['operator2',    userPassword,  'pass123',  'Оператор 2 отдел - Елена',   'operator',  '2 отдел',  true],
+      ['operator3',    userPassword,  'pass123',  'Оператор 3 отдел - Жанна',   'operator',  '3 отдел',  true],
+      ['employee1',    userPassword,  'pass123',  'Сотрудник 4 отдел - Иван',   'employee',  '4 отдел',  true],
+      ['employee2',    userPassword,  'pass123',  'Сотрудник 4 отдел - Мария',  'employee',  '4 отдел',  true],
     ];
     const usersResult = await bulkInsert(
       'users',
@@ -77,7 +78,7 @@ async function seedDatabase() {
     const chatRows = [
       // name,            type,        department,   created_by
       ['Руководство',     'group',     null,         adminId],
-      ['Ассистенты',      'department','Ассистенты', assistant1Id],
+      ['Ассистенты',      'group',     null,         assistant1Id],
       // ВАЖНО: для чатов отделов name должен совпадать с department для синхронизации!
       ['2 отдел',         'department','2 отдел',    ropOtdel2Id],
       ['3 отдел',         'department','3 отдел',    ropOtdel3Id],
@@ -168,8 +169,8 @@ async function seedDatabase() {
 
     console.log('\n✅ Database seeded successfully!\n');
     console.log('👑 admin / admin123');
-    console.log('👔 assistant1 / pass123, assistant2 / pass123 (Ассистенты)');
-    console.log('📊 rop_otdel2 / pass123, rop_otdel3 / pass123');
+    console.log('👔 assistant1 / pass123, assistant2 / pass123');
+    console.log('📊 rop_otdel2 / pass123 (2 отдел), rop_otdel3 / pass123 (3 отдел)');
     console.log('💼 operator1 / pass123, operator2 / pass123 (2 отдел), operator3 / pass123 (3 отдел)');
     console.log('👨‍💻 employee1 / pass123, employee2 / pass123 (4 отдел)\n');
   } catch (e) {
