@@ -39,16 +39,16 @@ async function seedDatabase() {
     // 1) Пользователи
     const userRows = [
       // username, password_hash, initial_password, name, role, department, is_active
-      ['admin',        adminPassword, 'admin123', 'Главный администратор',      'admin',     null,       true],
-      ['assistant1',   userPassword,  'pass123',  'Ассистент Анна',             'assistant', null,       true],
-      ['assistant2',   userPassword,  'pass123',  'Ассистент Борис',            'assistant', null,       true],
-      ['rop_sales',    userPassword,  'pass123',  'РОП Sales - Виктор',         'rop',       'Sales',    true],
-      ['rop_marketing',userPassword,  'pass123',  'РОП Marketing - Галина',     'rop',       'Marketing',true],
-      ['operator1',    userPassword,  'pass123',  'Оператор Sales - Дмитрий',   'operator',  'Sales',    true],
-      ['operator2',    userPassword,  'pass123',  'Оператор Sales - Елена',     'operator',  'Sales',    true],
-      ['operator3',    userPassword,  'pass123',  'Оператор Marketing - Жанна', 'operator',  'Marketing',true],
-      ['employee1',    userPassword,  'pass123',  'Сотрудник IT - Иван',        'employee',  'IT',       true],
-      ['employee2',    userPassword,  'pass123',  'Сотрудник IT - Мария',       'employee',  'IT',       true],
+      ['admin',        adminPassword, 'admin123', 'Главный администратор',      'admin',     null,         true],
+      ['assistant1',   userPassword,  'pass123',  'Ассистент Анна',             'assistant', 'Ассистенты', true],
+      ['assistant2',   userPassword,  'pass123',  'Ассистент Борис',            'assistant', 'Ассистенты', true],
+      ['rop_otdel2',   userPassword,  'pass123',  'РОП 2 отдел - Виктор',       'rop',       '2 отдел',    true],
+      ['rop_otdel3',   userPassword,  'pass123',  'РОП 3 отдел - Галина',       'rop',       '3 отдел',    true],
+      ['operator1',    userPassword,  'pass123',  'Оператор 2 отдел - Дмитрий', 'operator',  '2 отдел',    true],
+      ['operator2',    userPassword,  'pass123',  'Оператор 2 отдел - Елена',   'operator',  '2 отдел',    true],
+      ['operator3',    userPassword,  'pass123',  'Оператор 3 отдел - Жанна',   'operator',  '3 отдел',    true],
+      ['employee1',    userPassword,  'pass123',  'Сотрудник 4 отдел - Иван',   'employee',  '4 отдел',    true],
+      ['employee2',    userPassword,  'pass123',  'Сотрудник 4 отдел - Мария',  'employee',  '4 отдел',    true],
     ];
     const usersResult = await bulkInsert(
       'users',
@@ -65,8 +65,8 @@ async function seedDatabase() {
     const adminId        = byUsername['admin'];
     const assistant1Id   = byUsername['assistant1'];
     const assistant2Id   = byUsername['assistant2'];
-    const ropSalesId     = byUsername['rop_sales'];
-    const ropMarketingId = byUsername['rop_marketing'];
+    const ropOtdel2Id    = byUsername['rop_otdel2'];
+    const ropOtdel3Id    = byUsername['rop_otdel3'];
     const operator1Id    = byUsername['operator1'];
     const operator2Id    = byUsername['operator2'];
     const operator3Id    = byUsername['operator3'];
@@ -75,16 +75,16 @@ async function seedDatabase() {
 
     // 2) Чаты
     const chatRows = [
-      // name,            type,        department, created_by
-      ['Руководство',     'group',     null,       adminId],
-      ['Все ассистенты',  'group',     null,       adminId],
+      // name,            type,        department,   created_by
+      ['Руководство',     'group',     null,         adminId],
+      ['Ассистенты',      'department','Ассистенты', assistant1Id],
       // ВАЖНО: для чатов отделов name должен совпадать с department для синхронизации!
-      ['Sales',           'department','Sales',    ropSalesId],
-      ['Marketing',       'department','Marketing',ropMarketingId],
-      ['IT',              'department','IT',       employee1Id],
-      [null,              'direct',    null,       adminId],        // админ + ассистент1
-      [null,              'direct',    null,       ropSalesId],     // роп sales + оператор1
-      [null,              'direct',    null,       assistant1Id],   // ассистент1 + оператор1
+      ['2 отдел',         'department','2 отдел',    ropOtdel2Id],
+      ['3 отдел',         'department','3 отдел',    ropOtdel3Id],
+      ['4 отдел',         'department','4 отдел',    employee1Id],
+      [null,              'direct',    null,         adminId],        // админ + ассистент1
+      [null,              'direct',    null,         ropOtdel2Id],    // роп 2 отдел + оператор1
+      [null,              'direct',    null,         assistant1Id],   // ассистент1 + оператор1
     ];
     const chatsResult = await bulkInsert(
       'chats',
@@ -97,9 +97,9 @@ async function seedDatabase() {
     // Имена чатов по порядку вставки
     const managementChatId = chatsResult.rows[0].id;
     const assistantsChatId = chatsResult.rows[1].id;
-    const salesChatId      = chatsResult.rows[2].id;
-    const marketingChatId  = chatsResult.rows[3].id;
-    const itChatId         = chatsResult.rows[4].id;
+    const otdel2ChatId     = chatsResult.rows[2].id;
+    const otdel3ChatId     = chatsResult.rows[3].id;
+    const otdel4ChatId     = chatsResult.rows[4].id;
     const directChat1Id    = chatsResult.rows[5].id;
     const directChat2Id    = chatsResult.rows[6].id;
     const directChat3Id    = chatsResult.rows[7].id;
@@ -108,33 +108,32 @@ async function seedDatabase() {
     const participants = [
       // Руководство: админ + два РОПа
       [managementChatId, adminId],
-      [managementChatId, ropSalesId],
-      [managementChatId, ropMarketingId],
+      [managementChatId, ropOtdel2Id],
+      [managementChatId, ropOtdel3Id],
 
-      // Все ассистенты: админ + оба ассистента
-      [assistantsChatId, adminId],
+      // Ассистенты: оба ассистента
       [assistantsChatId, assistant1Id],
       [assistantsChatId, assistant2Id],
 
-      // Отдел продаж: РОП + два оператора Sales
-      [salesChatId, ropSalesId],
-      [salesChatId, operator1Id],
-      [salesChatId, operator2Id],
+      // 2 отдел: РОП + два оператора
+      [otdel2ChatId, ropOtdel2Id],
+      [otdel2ChatId, operator1Id],
+      [otdel2ChatId, operator2Id],
 
-      // Отдел маркетинга: РОП + оператор Marketing
-      [marketingChatId, ropMarketingId],
-      [marketingChatId, operator3Id],
+      // 3 отдел: РОП + оператор
+      [otdel3ChatId, ropOtdel3Id],
+      [otdel3ChatId, operator3Id],
 
-      // Отдел IT: два сотрудника
-      [itChatId, employee1Id],
-      [itChatId, employee2Id],
+      // 4 отдел: два сотрудника
+      [otdel4ChatId, employee1Id],
+      [otdel4ChatId, employee2Id],
 
       // Direct 1: админ + ассистент1
       [directChat1Id, adminId],
       [directChat1Id, assistant1Id],
 
-      // Direct 2: РОП Sales + оператор1
-      [directChat2Id, ropSalesId],
+      // Direct 2: РОП 2 отдел + оператор1
+      [directChat2Id, ropOtdel2Id],
       [directChat2Id, operator1Id],
 
       // Direct 3: ассистент1 + оператор1
@@ -147,20 +146,20 @@ async function seedDatabase() {
     // 4) Приветственные сообщения
     const messages = [
       // management
-      [managementChatId, adminId,     'Добро пожаловать в корпоративный чат! 👋'],
-      [managementChatId, ropSalesId,  'Привет, руководство! Готовы к работе.'],
+      [managementChatId, adminId,      'Добро пожаловать в корпоративный чат! 👋'],
+      [managementChatId, ropOtdel2Id,  'Привет, руководство! Готовы к работе.'],
       // assistants
-      [assistantsChatId, assistant1Id,'Здравствуйте, ассистенты! Это общий чат для всех помощников.'],
-      // sales
-      [salesChatId,      ropSalesId,  'Отдел продаж, приветствую! Начинаем работу.'],
-      [salesChatId,      operator1Id, 'Здравствуйте! Готов к задачам.'],
-      // marketing
-      [marketingChatId,  ropMarketingId, 'Отдел маркетинга на связи!'],
-      // IT
-      [itChatId,         employee1Id, 'IT отдел готов помочь с технической поддержкой!'],
+      [assistantsChatId, assistant1Id, 'Здравствуйте, ассистенты! Это общий чат для всех помощников.'],
+      // 2 отдел
+      [otdel2ChatId,     ropOtdel2Id,  '2 отдел, приветствую! Начинаем работу.'],
+      [otdel2ChatId,     operator1Id,  'Здравствуйте! Готов к задачам.'],
+      // 3 отдел
+      [otdel3ChatId,     ropOtdel3Id,  '3 отдел на связи!'],
+      // 4 отдел
+      [otdel4ChatId,     employee1Id,  '4 отдел готов помочь!'],
       // direct 1
-      [directChat1Id,    adminId,     'Привет! Как дела?'],
-      [directChat1Id,    assistant1Id,'Отлично, спасибо!'],
+      [directChat1Id,    adminId,      'Привет! Как дела?'],
+      [directChat1Id,    assistant1Id, 'Отлично, спасибо!'],
     ];
     await bulkInsert('messages', ['chat_id','user_id','content'], messages);
     console.log('✅ Added welcome messages');
@@ -169,10 +168,10 @@ async function seedDatabase() {
 
     console.log('\n✅ Database seeded successfully!\n');
     console.log('👑 admin / admin123');
-    console.log('👔 assistant1 / pass123, assistant2 / pass123');
-    console.log('📊 rop_sales / pass123, rop_marketing / pass123');
-    console.log('💼 operator1 / pass123, operator2 / pass123, operator3 / pass123');
-    console.log('👨‍💻 employee1 / pass123, employee2 / pass123\n');
+    console.log('👔 assistant1 / pass123, assistant2 / pass123 (Ассистенты)');
+    console.log('📊 rop_otdel2 / pass123, rop_otdel3 / pass123');
+    console.log('💼 operator1 / pass123, operator2 / pass123 (2 отдел), operator3 / pass123 (3 отдел)');
+    console.log('👨‍💻 employee1 / pass123, employee2 / pass123 (4 отдел)\n');
   } catch (e) {
     await query('ROLLBACK');
     console.error('❌ Error seeding database:', e);
