@@ -13,9 +13,9 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
         const result = await query(`
             SELECT
                 w.*,
-                u.name as created_by_name
+                b.name as bot_name
             FROM webhooks w
-            LEFT JOIN users u ON w.created_by = u.id
+            LEFT JOIN bots b ON w.bot_id = b.id
             ORDER BY w.created_at DESC
         `);
 
@@ -32,17 +32,17 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
  */
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const { name, url, events, secret } = req.body;
+        const { name, url, events, secret, bot_id } = req.body;
 
         if (!name || !url) {
             return res.status(400).json({ error: 'Name and URL are required' });
         }
 
         const result = await query(`
-            INSERT INTO webhooks (name, url, events, secret, created_by)
+            INSERT INTO webhooks (name, url, events, secret, bot_id)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING *
-        `, [name, url, JSON.stringify(events || []), secret, req.user.id]);
+        `, [name, url, events || [], secret, bot_id]);
 
         res.status(201).json({ webhook: result.rows[0] });
     } catch (error) {
@@ -70,7 +70,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $6
             RETURNING *
-        `, [name, url, events ? JSON.stringify(events) : null, secret, is_active, id]);
+        `, [name, url, events || null, secret, is_active, id]);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Webhook not found' });
