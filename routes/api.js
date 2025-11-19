@@ -14,6 +14,7 @@ const userController = require('../controllers/userController');
 const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
 const departmentController = require('../controllers/departmentController');
+const permissionsController = require('../controllers/permissionsController');
 const pushController = require('../controllers/pushController');
 const { PERMISSIONS_MATRIX } = require('../config/permissionsMatrix');
 
