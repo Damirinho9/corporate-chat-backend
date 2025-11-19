@@ -25,7 +25,7 @@ if (process.env.DATABASE_URL) {
             database: url.pathname.slice(1), // Remove leading slash
             user: url.username,
             password: String(password), // Ensure it's a string
-            ssl: process.env.NODE_ENV === 'production' ? {
+            ssl: process.env.DB_SSL === 'true' ? {
                 rejectUnauthorized: false
             } : false
         };
@@ -58,7 +58,7 @@ if (process.env.DATABASE_URL) {
         database: process.env.DB_NAME || 'corporate_chat',
         user: process.env.DB_USER || 'postgres',
         password: String(dbPassword),
-        ssl: process.env.NODE_ENV === 'production' ? {
+        ssl: process.env.DB_SSL === 'true' ? {
             rejectUnauthorized: false
         } : false
     };
