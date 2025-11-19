@@ -28,6 +28,11 @@ const { body, param, query: queryValidator, validationResult } = require('expres
 const adminBasic = require('./admin-basic');
 const adminExtended = require('./admin-extended');
 
+// Additional routes
+const analyticsRoutes = require('./analytics');
+const registrationRoutes = require('./registration');
+const botsRoutes = require('./bots');
+
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -40,6 +45,12 @@ const validate = (req, res, next) => {
 // ==================== ADMIN ROUTES ====================
 router.use('/', adminBasic);
 router.use('/', adminExtended);
+
+// Additional routes
+router.use('/analytics', analyticsRoutes);
+router.use('/registration', registrationRoutes);
+router.use('/bots', botsRoutes);
+
 router.get('/chats/available-recipients', authenticateToken, getAvailableRecipients);
 
 // ==================== PERMISSIONS MATRIX ====================
