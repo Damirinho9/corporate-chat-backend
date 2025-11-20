@@ -67,6 +67,18 @@ app.use('/api/', limiter);
 app.use('/uploads', express.static('uploads'));
 
 // ==================== ROUTES ====================
+// Support system routes (must be before /api to avoid route conflicts)
+const healthRoutes = require('./routes/health');
+const supportRoutes = require('./routes/support');
+const supportAnalyticsRoutes = require('./routes/support-analytics');
+const phase5AnalyticsRoutes = require('./routes/phase5-analytics');
+
+app.use('/', healthRoutes);
+app.use('/api/support', supportRoutes);
+app.use('/api/support/analytics', supportAnalyticsRoutes);
+app.use('/api/phase5', phase5AnalyticsRoutes);
+
+// General API routes (must be after specific routes like /api/support)
 app.use('/api', apiRoutes);
 
 // Раздача статики
