@@ -13,8 +13,8 @@ const { initializeSocket } = require('./socket/socketHandler');
 const { initWebPush } = require('./controllers/pushController');
 const apiRoutes = require('./routes/api');
 
-const Logger = require('./utils/logger');
-const logger = new Logger('server');
+const { createLogger } = require('./utils/logger');
+const logger = createLogger('server');
 
 // Инициализация бэкапа - это не middleware, вызываем напрямую и безопасно
 try {
