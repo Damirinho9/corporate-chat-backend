@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../config/database');
 const { getAvailableRecipients } = require('../controllers/chatController');
+const { getOnlineUsers } = require('../socket/socketHandler');
 
 // ==================== IMPORTS ====================
 const { uploadSingle, uploadMultiple, validateFile } = require('../middleware/fileUpload');
@@ -101,6 +102,15 @@ router.get('/auth/profile', authenticateToken, authController.getProfile);
 // ==================== USER ROUTES ====================
 router.get('/users', authenticateToken, requireAdmin, userController.getAllUsers);
 router.get('/users/stats', authenticateToken, requireAdmin, userController.getUserStats);
+router.get('/users/online', authenticateToken, (req, res) => {
+    try {
+        const onlineUserIds = getOnlineUsers();
+        res.json({ online: onlineUserIds, count: onlineUserIds.length });
+    } catch (error) {
+        console.error('Get online users error:', error);
+        res.status(500).json({ error: 'Failed to get online users' });
+    }
+});
 
 router.get('/users/role/:role',
     authenticateToken,
