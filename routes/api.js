@@ -34,6 +34,7 @@ const analyticsRoutes = require('./analytics');
 const registrationRoutes = require('./registration');
 const botsRoutes = require('./bots');
 const webhooksRoutes = require('./webhooks');
+const callsRoutes = require('./calls');
 
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
@@ -53,6 +54,7 @@ router.use('/analytics', analyticsRoutes);
 router.use('/registration', registrationRoutes);
 router.use('/bots', botsRoutes);
 router.use('/webhooks', webhooksRoutes);
+router.use('/calls', callsRoutes);
 
 router.get('/chats/available-recipients', authenticateToken, getAvailableRecipients);
 
