@@ -185,25 +185,35 @@ spec → контекст → план → изменения → check → фи
 
 ---
 
-## [ПРОЕКТНАЯ СЕКЦИЯ — заполни под свой стек]
+## [ПРОЕКТНАЯ СЕКЦИЯ]
 
 ### Стек проекта
-- Язык: [Python / TypeScript / Go / ...]
-- Фреймворк: [FastAPI / Nest / Next / ...]
-- Тесты: [pytest / jest / vitest / ...]
-- Линтер: [ruff / eslint / golangci-lint / ...]
+- **Язык**: Node.js (JavaScript)
+- **Фреймворк**: Express.js
+- **База данных**: PostgreSQL
+- **Real-time**: Socket.io
+- **Тесты**: Jest (30+ тестов)
+- **Процесс-менеджмент**: PM2
 
 ### Check-команда
 ```bash
 # Основная команда проверки:
 bash scripts/check_all.sh
+
+# Альтернативно:
+npm test
 ```
 
 ### Особо осторожные зоны
-- [путь к аутентификации]
-- [путь к интеграциям]
-- [путь к критичной логике]
+- `middleware/auth.js` — аутентификация и JWT
+- `config/permissionsMatrix.js` — матрица прав доступа
+- `socket/socketHandler.js` — WebSocket real-time логика
+- `controllers/authController.js` — логин/регистрация
+- `database/migrations/` — схема БД (только через миграции!)
 
-### Ключевые ADR
-- docs/decisions/0001-... — [о чём]
-- docs/decisions/0002-... — [о чём]
+### Ключевые особенности
+- Support система (тикеты, SLA, автоназначение) — `routes/support.js`
+- Web Push уведомления — `controllers/pushController.js`
+- Jitsi видеозвонки — интеграция на клиенте
+- Боты и вебхуки для внешних интеграций
+- Матрица прав 5 ролей: admin, rop, assistant, operator, employee
