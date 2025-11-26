@@ -1195,11 +1195,19 @@
         }
 
         .typing-indicator {
+            position: absolute;
+            bottom: 60px;
+            left: 15px;
             padding: 8px 15px;
             font-size: 12px;
             color: var(--text-secondary);
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             font-style: italic;
             animation: fadeIn 0.3s ease;
+            z-index: 10;
+            pointer-events: none;
         }
 
         .typing-indicator::after {
@@ -3167,6 +3175,15 @@
                 emptyState.remove();
             }
 
+            // Deduplication: check if message already exists (prevent double-add)
+            if (!isTempSending && message.id) {
+                const existing = messagesContainer.querySelector(`[data-real-message-id="${message.id}"]`);
+                if (existing) {
+                    console.log('[appendMessage] Skipping duplicate message:', message.id);
+                    return;
+                }
+            }
+
             const isOwn = message.user_id === currentUser.id;
             const userName = message.user_name || 'Unknown';
             const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
@@ -3220,6 +3237,9 @@
             messageEl.className = `message ${isOwn ? 'own' : ''} ${isTempSending || message.isSending ? 'sending' : ''}`;
             if (isTempSending || message.isSending) {
                 messageEl.setAttribute('data-message-id', message.id);
+            } else if (message.id) {
+                // Real message - add deduplication attribute
+                messageEl.setAttribute('data-real-message-id', message.id);
             }
             messageEl.innerHTML = `
                 <div class="message-avatar" style="background: ${avatarColor};">${initials}</div>
@@ -3298,11 +3318,18 @@
 
         function scrollToBottom(force = false) {
             const container = document.getElementById('messagesContainer');
-            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+            if (!container) return;
+
+            const scrollThreshold = 150; // More forgiving threshold
+            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < scrollThreshold;
 
             // Auto-scroll only if user is near bottom or force is true
             if (force || isNearBottom) {
-                container.scrollTop = container.scrollHeight;
+                // Use smooth scroll for better UX (only when forced, instant otherwise)
+                container.scrollTo({
+                    top: container.scrollHeight,
+                    behavior: force ? 'smooth' : 'auto'
+                });
             }
         }
 
@@ -3401,8 +3428,9 @@
                         }
 
                         if (data.message) {
-                            appendMessage(data.message);
-                            scrollToBottom(true); // Force scroll after sending
+                            // Don't append here - WebSocket will handle it to avoid duplicates
+                            // Just keep scroll position
+                            scrollToBottom(true);
                         }
                     }
                     selectedFiles = [];
@@ -3437,12 +3465,12 @@
                     }
 
                     if (data.message) {
-                        // Remove temp message and add real message
+                        // Remove temp message - WebSocket will add real message to avoid duplicates
                         if (tempMessageId) {
                             const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                             if (tempEl) tempEl.remove();
                         }
-                        appendMessage(data.message);
+                        // Don't append here - let WebSocket handle it
                         scrollToBottom(true);
                     } else {
                         // Remove temp message on error
