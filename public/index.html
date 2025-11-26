@@ -90,11 +90,11 @@
         @keyframes slideUp {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(10px) translateZ(0);
             }
             to {
                 opacity: 1;
-                transform: translateY(0);
+                transform: translateY(0) translateZ(0);
             }
         }
 
@@ -674,6 +674,10 @@
             scroll-behavior: smooth;
             min-height: 0;
             scroll-padding-bottom: calc(140px + var(--safe-area-bottom, 0px));
+            /* Performance optimizations for smooth scrolling */
+            will-change: scroll-position;
+            contain: layout style paint;
+            -webkit-overflow-scrolling: touch;
         }
 
         .messages-container::-webkit-scrollbar {
@@ -697,8 +701,12 @@
             display: flex;
             gap: 10px;
             position: relative;
-            animation: slideUp 0.3s ease;
-            transition: opacity 0.3s ease;
+            animation: slideUp 0.2s ease-out;
+            transition: opacity 0.2s ease;
+            /* GPU acceleration for smooth animations */
+            will-change: transform, opacity;
+            transform: translateZ(0);
+            backface-visibility: hidden;
         }
 
         .message.sending {
@@ -3313,24 +3321,30 @@
                 ` : ''}
             `;
 
-            messagesContainer.appendChild(messageEl);
+            // Use requestAnimationFrame for smooth rendering without forced reflow
+            requestAnimationFrame(() => {
+                messagesContainer.appendChild(messageEl);
+            });
         }
 
         function scrollToBottom(force = false) {
             const container = document.getElementById('messagesContainer');
             if (!container) return;
 
-            const scrollThreshold = 150; // More forgiving threshold
-            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < scrollThreshold;
+            // Wait for DOM to render before calculating scroll position
+            requestAnimationFrame(() => {
+                const scrollThreshold = 150; // More forgiving threshold
+                const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < scrollThreshold;
 
-            // Auto-scroll only if user is near bottom or force is true
-            if (force || isNearBottom) {
-                // Use smooth scroll for better UX (only when forced, instant otherwise)
-                container.scrollTo({
-                    top: container.scrollHeight,
-                    behavior: force ? 'smooth' : 'auto'
-                });
-            }
+                // Auto-scroll only if user is near bottom or force is true
+                if (force || isNearBottom) {
+                    // Use smooth scroll for better UX (only when forced, instant otherwise)
+                    container.scrollTo({
+                        top: container.scrollHeight,
+                        behavior: force ? 'smooth' : 'auto'
+                    });
+                }
+            });
         }
 
         function escapeHtml(text) {
