@@ -2428,7 +2428,7 @@
         }
 
         // ==================== LOAD CHATS ====================
-        let contacts = { departments: [], assistants: { users: [] } };
+        let contacts = { departments: [], assistants: { users: [] }, admins: { users: [] } };
 
         function rebuildDirectChatLookup() {
             directChatByUser.clear();
@@ -2496,12 +2496,13 @@
                 console.log('[loadChats] Данные получены:', {
                     chatsCount: chatsData.chats?.length || 0,
                     departments: contactsData.departments?.length || 0,
-                    assistants: contactsData.assistants?.users?.length || 0
+                    assistants: contactsData.assistants?.users?.length || 0,
+                    admins: contactsData.admins?.users?.length || 0
                 });
 
                 chats = chatsData.chats || [];
                 rebuildDirectChatLookup();
-                contacts = contactsData || { departments: [], assistants: { users: [] } };
+                contacts = contactsData || { departments: [], assistants: { users: [] }, admins: { users: [] } };
 
                 renderChats();
                 restoreLastActiveChat();
@@ -2956,6 +2957,17 @@
                                 html += `<div class="chat-section">
                                         <h4>Ассистенты (Групповой чат)</h4>
                                         <ul>${assistants.map(renderChatItem).join('')}</ul>
+                                </div>`;
+                        }
+                }
+
+                // Admins section (only visible to admins)
+                if (activeSectionFilter === 'all' || activeSectionFilter === 'Администраторы') {
+                        const adminContacts = contacts.admins?.users || [];
+                        if (adminContacts.length > 0 && currentUser.role === 'admin') {
+                                html += `<div class="chat-section">
+                                        <h4>Администраторы</h4>
+                                        <ul>${adminContacts.map(user => renderContactItem(user, { nested: false })).join('')}</ul>
                                 </div>`;
                         }
                 }
