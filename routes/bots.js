@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../middleware/auth');
-const { requireAdmin } = require('../middleware/permissions');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 // GET /api/bots - Все боты
-router.get('/', requireAuth, requireAdmin, async (req, res) => {
+router.get('/', authenticateToken, requireAdmin, async (req, res) => {
     try {
         // TODO: Implement get bots logic
         res.json([]);
@@ -18,7 +17,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // POST /api/bots - Создать бота
-router.post('/', requireAuth, requireAdmin, async (req, res) => {
+router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { name, username, description } = req.body;
 
@@ -37,7 +36,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // GET /api/bots/:id - Бот по ID
-router.get('/:id', requireAuth, requireAdmin, async (req, res) => {
+router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -56,7 +55,7 @@ router.get('/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // PUT /api/bots/:id - Обновить бота
-router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
+router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -75,7 +74,7 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // DELETE /api/bots/:id - Удалить бота
-router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -94,7 +93,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // POST /api/bots/:id/regenerate-token - Обновить токен бота
-router.post('/:id/regenerate-token', requireAuth, requireAdmin, async (req, res) => {
+router.post('/:id/regenerate-token', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
 

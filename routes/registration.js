@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../middleware/auth');
-const { requireAdmin } = require('../middleware/permissions');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 // POST /api/registration/request - Заявка на регистрацию
 router.post('/request', async (req, res) => {
@@ -23,7 +22,7 @@ router.post('/request', async (req, res) => {
 });
 
 // GET /api/registration/requests - Все заявки (admin)
-router.get('/requests', requireAuth, requireAdmin, async (req, res) => {
+router.get('/requests', authenticateToken, requireAdmin, async (req, res) => {
     try {
         // TODO: Implement get requests logic
         res.json([]);
@@ -37,7 +36,7 @@ router.get('/requests', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // PUT /api/registration/requests/:id/approve - Одобрить (admin)
-router.put('/requests/:id/approve', requireAuth, requireAdmin, async (req, res) => {
+router.put('/requests/:id/approve', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -56,7 +55,7 @@ router.put('/requests/:id/approve', requireAuth, requireAdmin, async (req, res) 
 });
 
 // PUT /api/registration/requests/:id/reject - Отклонить (admin)
-router.put('/requests/:id/reject', requireAuth, requireAdmin, async (req, res) => {
+router.put('/requests/:id/reject', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
 

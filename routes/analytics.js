@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../middleware/auth');
-const { requireAdmin } = require('../middleware/permissions');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 // GET /api/analytics/messages - Аналитика сообщений
-router.get('/messages', requireAuth, requireAdmin, async (req, res) => {
+router.get('/messages', authenticateToken, requireAdmin, async (req, res) => {
     try {
         // TODO: Implement analytics logic
         res.json({
@@ -25,7 +24,7 @@ router.get('/messages', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // GET /api/analytics/users - Аналитика пользователей
-router.get('/users', requireAuth, requireAdmin, async (req, res) => {
+router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
     try {
         // TODO: Implement analytics logic
         res.json({
@@ -47,7 +46,7 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // GET /api/analytics/activity - Активность системы
-router.get('/activity', requireAuth, requireAdmin, async (req, res) => {
+router.get('/activity', authenticateToken, requireAdmin, async (req, res) => {
     try {
         // TODO: Implement analytics logic
         res.json({
