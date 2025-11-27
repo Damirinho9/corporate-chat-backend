@@ -124,7 +124,7 @@ app.get('/', (req, res) => {
 });
 
 // Фолбэк для SPA-маршрутов фронтенда: отдаём index.html для любых не-API GET запросов
-app.get('*', (req, res, next) => {
+app.get('/*', (req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return next();
   }
@@ -499,6 +499,27 @@ const HOST = '0.0.0.0';
 const startServer = async () => {
   const maxAttempts = parseInt(process.env.DB_CONNECTION_RETRIES || '5', 10);
   const delayMs = parseInt(process.env.DB_CONNECTION_RETRY_DELAY_MS || '5000', 10);
+  let serverStarted = false;
+
+  const startHttpServer = () => {
+    if (serverStarted) return;
+    serverStarted = true;
+
+    server.listen(PORT, HOST, () => {
+      console.log('');
+      console.log('╔════════════════════════════════════════════╗');
+      console.log('║     Corporate Chat Backend Server         ║');
+      console.log('╚════════════════════════════════════════════╝');
+      console.log('');
+      console.log(`🚀 Server running on ${HOST}:${PORT}`);
+      console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🌐 HTTPS: https://corporate-chat-backend.onrender.com`);
+      console.log(`🏥 Health: /api/health`);
+      console.log('');
+      console.log('✅ Ready to accept connections!');
+      console.log('');
+    });
+  };
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -508,28 +529,15 @@ const startServer = async () => {
 
       await initDatabase();
 
-      server.listen(PORT, HOST, () => {
-        console.log('');
-        console.log('╔════════════════════════════════════════════╗');
-        console.log('║     Corporate Chat Backend Server         ║');
-        console.log('╚════════════════════════════════════════════╝');
-        console.log('');
-        console.log(`🚀 Server running on ${HOST}:${PORT}`);
-        console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
-        console.log(`🌐 HTTPS: https://corporate-chat-backend.onrender.com`);
-        console.log(`🏥 Health: /api/health`);
-        console.log('');
-        console.log('✅ Ready to accept connections!');
-        console.log('');
-      });
-
+      startHttpServer();
       return; // Successful start, exit the retry loop
     } catch (error) {
       logger.error('Failed to start server:', error && error.stack ? error.stack : error);
 
       if (attempt === maxAttempts) {
-        logger.error('Max DB connection attempts reached. Exiting.');
-        process.exit(1);
+        logger.error('Max DB connection attempts reached. Starting HTTP server without DB connection; API calls may fail until the database is available.');
+        startHttpServer();
+        return;
       }
 
       logger.info(`Retrying DB connection in ${delayMs / 1000} seconds...`);
