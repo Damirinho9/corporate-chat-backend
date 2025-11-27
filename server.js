@@ -124,17 +124,24 @@ app.get('/', (req, res) => {
 });
 
 // Фолбэк для SPA-маршрутов фронтенда: отдаём index.html для любых не-API GET запросов
-app.get('*', (req, res, next) => {
+// Используем регулярное выражение вместо path-шаблонов, чтобы избежать ошибок path-to-regexp
+const spaFallbackPattern = /^\/(?!api(?:\/|$)|socket\.io(?:\/|$)|uploads(?:\/|$)).*/;
+
+app.use(spaFallbackPattern, (req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return next();
   }
 
-  if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/uploads')) {
+  const safePublicDir = path.resolve(publicDir);
+
+  let cleanedPath;
+  try {
+    cleanedPath = decodeURIComponent(req.path.replace(/^\//, ''));
+  } catch (err) {
+    logger.warn(`Failed to decode path ${req.path}: ${err.message}`);
     return next();
   }
 
-  const safePublicDir = path.resolve(publicDir);
-  const cleanedPath = decodeURIComponent(req.path.replace(/^\//, ''));
   const requestedPath = path.join(safePublicDir, cleanedPath);
   const resolvedPath = path.resolve(requestedPath);
 
@@ -497,12 +504,13 @@ const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
 
 const startServer = async () => {
-  try {
-    logger.info('Connecting to database...');
-    await pool.query('SELECT NOW()');
-    logger.info('Database connected successfully');
+  const maxAttempts = parseInt(process.env.DB_CONNECTION_RETRIES || '5', 10);
+  const delayMs = parseInt(process.env.DB_CONNECTION_RETRY_DELAY_MS || '5000', 10);
+  let serverStarted = false;
 
-    await initDatabase();
+  const startHttpServer = () => {
+    if (serverStarted) return;
+    serverStarted = true;
 
     server.listen(PORT, HOST, () => {
       console.log('');
@@ -518,9 +526,30 @@ const startServer = async () => {
       console.log('✅ Ready to accept connections!');
       console.log('');
     });
-  } catch (error) {
-    logger.error('Failed to start server:', error && error.stack ? error.stack : error);
-    process.exit(1);
+  };
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      logger.info(`Connecting to database (attempt ${attempt}/${maxAttempts})...`);
+      await pool.query('SELECT NOW()');
+      logger.info('Database connected successfully');
+
+      await initDatabase();
+
+      startHttpServer();
+      return; // Successful start, exit the retry loop
+    } catch (error) {
+      logger.error('Failed to start server:', error && error.stack ? error.stack : error);
+
+      if (attempt === maxAttempts) {
+        logger.error('Max DB connection attempts reached. Starting HTTP server without DB connection; API calls may fail until the database is available.');
+        startHttpServer();
+        return;
+      }
+
+      logger.info(`Retrying DB connection in ${delayMs / 1000} seconds...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
 };
 
