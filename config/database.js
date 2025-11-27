@@ -44,12 +44,13 @@ if (process.env.DATABASE_URL) {
     }
 } else {
     // Fallback to individual environment variables
-    const dbPassword = process.env.DB_PASSWORD;
+    // Support both DB_PASSWORD (new) and DB_PASS (legacy PM2 env)
+    const dbPassword = process.env.DB_PASSWORD || process.env.DB_PASS;
 
     // Validate password
     if (!dbPassword || dbPassword === 'null' || dbPassword === 'undefined') {
-        console.error('ERROR: DB_PASSWORD is not set or invalid');
-        throw new Error('Invalid database password. Please set DB_PASSWORD environment variable.');
+        console.error('ERROR: DB_PASSWORD/DB_PASS is not set or invalid');
+        throw new Error('Invalid database password. Please set DB_PASSWORD or DB_PASS environment variable.');
     }
 
     poolConfig = {
