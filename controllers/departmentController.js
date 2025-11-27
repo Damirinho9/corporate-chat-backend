@@ -156,8 +156,21 @@ const getContactsStructured = async (req, res) => {
 
         const departmentMap = new Map();
         const assistants = [];
+        const admins = [];
 
         usersResult.rows.forEach((row) => {
+            // Collect admins (excluding current user to avoid self-chat)
+            if (row.role === 'admin' && row.is_active && row.id !== req.user.id) {
+                admins.push({
+                    id: row.id,
+                    username: row.username,
+                    name: row.name,
+                    role: row.role,
+                    is_active: row.is_active,
+                    last_seen: row.last_seen
+                });
+            }
+
             if (row.role === 'assistant' && row.is_active) {
                 assistants.push({
                     id: row.id,
@@ -200,6 +213,10 @@ const getContactsStructured = async (req, res) => {
             assistants: {
                 name: 'Ассистенты',
                 users: assistants.sort((a, b) => collator.compare(a.name || a.username || '', b.name || b.username || ''))
+            },
+            admins: {
+                name: 'Администраторы',
+                users: admins.sort((a, b) => collator.compare(a.name || a.username || '', b.name || b.username || ''))
             }
         };
 

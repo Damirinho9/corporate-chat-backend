@@ -10,10 +10,11 @@ const path = require('path');
 
 const { pool, query } = require('./config/database');
 const { initializeSocket } = require('./socket/socketHandler');
+const { initWebPush } = require('./controllers/pushController');
 const apiRoutes = require('./routes/api');
 
-const Logger = require('./utils/logger');
-const logger = new Logger('server');
+const { createLogger } = require('./utils/logger');
+const logger = createLogger('server');
 
 // Инициализация бэкапа - это не middleware, вызываем напрямую и безопасно
 try {
@@ -28,6 +29,9 @@ try {
 const app = express();
 const server = http.createServer(app);
 const io = initializeSocket(server);
+
+// Initialize Web Push notifications
+initWebPush();
 
 // ==================== MIDDLEWARE ====================
 app.set('trust proxy', 1);
@@ -63,7 +67,19 @@ app.use('/api/', limiter);
 app.use('/uploads', express.static('uploads'));
 
 // ==================== ROUTES ====================
+// Support system routes (must be before /api to avoid route conflicts)
+const healthRoutes = require('./routes/health');
+const supportRoutes = require('./routes/support');
+const supportAnalyticsRoutes = require('./routes/support-analytics');
+const phase5AnalyticsRoutes = require('./routes/phase5-analytics');
+
+app.use('/api/support', supportRoutes);
+app.use('/api/support/analytics', supportAnalyticsRoutes);
+app.use('/api/phase5', phase5AnalyticsRoutes);
+
+// General API routes (must be after specific routes like /api/support)
 app.use('/api', apiRoutes);
+app.use('/api', healthRoutes);
 
 // Раздача статики
 app.use(express.static(path.join(__dirname, 'public')));
@@ -86,6 +102,25 @@ app.get('/', (req, res) => {
       endpoints: { health: '/api/health', auth: '/api/auth/login', chats: '/api/chats' }
     });
   }
+});
+
+// Фолбэк для SPA-маршрутов фронтенда: отдаём index.html для любых не-API GET запросов
+app.get('*', (req, res, next) => {
+  if (
+    req.path.startsWith('/api') ||
+    req.path.startsWith('/socket.io') ||
+    req.path.startsWith('/uploads') ||
+    req.path.includes('.') // запросы к статическим ресурсам должны получить 404
+  ) {
+    return next();
+  }
+
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+
+  return next();
 });
 
 // 404

@@ -90,11 +90,11 @@
         @keyframes slideUp {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(10px) translateZ(0);
             }
             to {
                 opacity: 1;
-                transform: translateY(0);
+                transform: translateY(0) translateZ(0);
             }
         }
 
@@ -674,6 +674,10 @@
             scroll-behavior: smooth;
             min-height: 0;
             scroll-padding-bottom: calc(140px + var(--safe-area-bottom, 0px));
+            /* Performance optimizations for smooth scrolling */
+            will-change: scroll-position;
+            contain: layout style paint;
+            -webkit-overflow-scrolling: touch;
         }
 
         .messages-container::-webkit-scrollbar {
@@ -697,8 +701,12 @@
             display: flex;
             gap: 10px;
             position: relative;
-            animation: slideUp 0.3s ease;
-            transition: opacity 0.3s ease;
+            animation: slideUp 0.2s ease-out;
+            transition: opacity 0.2s ease;
+            /* GPU acceleration for smooth animations */
+            will-change: transform, opacity;
+            transform: translateZ(0);
+            backface-visibility: hidden;
         }
 
         .message.sending {
@@ -1195,11 +1203,19 @@
         }
 
         .typing-indicator {
+            position: absolute;
+            bottom: 60px;
+            left: 15px;
             padding: 8px 15px;
             font-size: 12px;
             color: var(--text-secondary);
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             font-style: italic;
             animation: fadeIn 0.3s ease;
+            z-index: 10;
+            pointer-events: none;
         }
 
         .typing-indicator::after {
@@ -1475,6 +1491,7 @@
                     </div>
                     <div class="header-actions">
                         <button class="icon-btn" id="adminBtn" title="Админ-панель" style="display:none">🛠️</button>
+                        <button class="icon-btn" id="notificationsBtn" title="Включить уведомления" style="display:none">🔔</button>
                         <button class="icon-btn" id="themeToggle" title="Тема">🌓</button>
                         <button class="icon-btn" id="logoutBtn" title="Выход">🚪</button>
                     </div>
@@ -1740,26 +1757,6 @@
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
-
-            let data = {};
-            try {
-                data = await res.json();
-            } catch (error) {
-                console.warn('[uploadFile] Не удалось распарсить ответ:', error);
-            }
-
-            if (!res.ok) {
-                const message = data?.error || `Не удалось загрузить файл (${res.status})`;
-                throw new Error(message);
-            }
-
-            const fileId = data?.file?.id;
-            if (!fileId) {
-                throw new Error('Сервер не вернул идентификатор файла');
-            }
-
-            return fileId;
-        }
 
             let data = {};
             try {
@@ -2203,7 +2200,152 @@
             connectSocket();
             loadChats();
             loadUserPermissions();
+            initPushNotifications();
         }
+
+        // ==================== PUSH NOTIFICATIONS ====================
+        let pushSubscription = null;
+        let swRegistration = null;
+
+        async function initPushNotifications() {
+            // Check if push is supported
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                console.log('Push notifications not supported');
+                return;
+            }
+
+            try {
+                // Register service worker
+                swRegistration = await navigator.serviceWorker.register('/sw.js');
+                console.log('Service Worker registered');
+
+                // Check current subscription status
+                pushSubscription = await swRegistration.pushManager.getSubscription();
+
+                // Update UI
+                updateNotificationButton();
+
+                // Show button
+                const notifBtn = document.getElementById('notificationsBtn');
+                if (notifBtn) {
+                    notifBtn.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Push init error:', error);
+            }
+        }
+
+        function updateNotificationButton() {
+            const btn = document.getElementById('notificationsBtn');
+            if (!btn) return;
+
+            if (Notification.permission === 'denied') {
+                btn.textContent = '🔕';
+                btn.title = 'Уведомления заблокированы';
+                btn.disabled = true;
+            } else if (pushSubscription) {
+                btn.textContent = '🔔';
+                btn.title = 'Уведомления включены';
+                btn.classList.add('active');
+            } else {
+                btn.textContent = '🔕';
+                btn.title = 'Включить уведомления';
+                btn.classList.remove('active');
+            }
+        }
+
+        async function togglePushNotifications() {
+            if (!swRegistration) {
+                alert('Service Worker не зарегистрирован');
+                return;
+            }
+
+            try {
+                if (pushSubscription) {
+                    // Unsubscribe
+                    await pushSubscription.unsubscribe();
+
+                    // Notify server
+                    await fetch(`${API_URL}/push/unsubscribe`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ endpoint: pushSubscription.endpoint })
+                    });
+
+                    pushSubscription = null;
+                    updateNotificationButton();
+                    console.log('Push unsubscribed');
+                } else {
+                    // Request permission
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted') {
+                        alert('Разрешите уведомления в настройках браузера');
+                        updateNotificationButton();
+                        return;
+                    }
+
+                    // Get VAPID public key
+                    const keyResponse = await fetch(`${API_URL}/push/vapid-public-key`);
+                    if (!keyResponse.ok) {
+                        throw new Error('Push notifications not configured on server');
+                    }
+                    const { publicKey } = await keyResponse.json();
+
+                    // Subscribe
+                    pushSubscription = await swRegistration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(publicKey)
+                    });
+
+                    // Send subscription to server
+                    await fetch(`${API_URL}/push/subscribe`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ subscription: pushSubscription })
+                    });
+
+                    updateNotificationButton();
+                    console.log('Push subscribed');
+                }
+            } catch (error) {
+                console.error('Toggle push error:', error);
+                alert('Ошибка: ' + error.message);
+            }
+        }
+
+        // Helper function to convert VAPID key
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding)
+                .replace(/-/g, '+')
+                .replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        // Handle notification click from service worker
+        navigator.serviceWorker?.addEventListener('message', event => {
+            if (event.data?.type === 'NOTIFICATION_CLICK') {
+                const { chatId } = event.data.data || {};
+                if (chatId) {
+                    // Open the specific chat
+                    const chatEl = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+                    if (chatEl) {
+                        chatEl.click();
+                    }
+                }
+            }
+        });
 
         function updateUserUI(user) {
             const userName = user.name || user.username || '?';
@@ -2286,7 +2428,7 @@
         }
 
         // ==================== LOAD CHATS ====================
-        let contacts = { departments: [], assistants: { users: [] } };
+        let contacts = { departments: [], assistants: { users: [] }, admins: { users: [] } };
 
         function rebuildDirectChatLookup() {
             directChatByUser.clear();
@@ -2354,12 +2496,13 @@
                 console.log('[loadChats] Данные получены:', {
                     chatsCount: chatsData.chats?.length || 0,
                     departments: contactsData.departments?.length || 0,
-                    assistants: contactsData.assistants?.users?.length || 0
+                    assistants: contactsData.assistants?.users?.length || 0,
+                    admins: contactsData.admins?.users?.length || 0
                 });
 
                 chats = chatsData.chats || [];
                 rebuildDirectChatLookup();
-                contacts = contactsData || { departments: [], assistants: { users: [] } };
+                contacts = contactsData || { departments: [], assistants: { users: [] }, admins: { users: [] } };
 
                 renderChats();
                 restoreLastActiveChat();
@@ -2807,14 +2950,6 @@
                         }
                 }
 
-                        if (otherGroupChats.length > 0) {
-                                html += `<div class="chat-section">
-                                                <h4>Групповые чаты</h4>
-                                                <ul>${otherGroupChats.map(chat => renderChatItem(chat)).join('')}</ul>
-                                        </div>`;
-                        }
-                }
-
                 if (activeSectionFilter === 'all' || activeSectionFilter === 'Ассистенты') {
                         // Убрали отдельную секцию "Ассистенты" с контактами, т.к. они уже показываются в отделе "Ассистенты"
                         // Оставляем только групповые чаты ассистентов, которые не являются department-type
@@ -2822,6 +2957,17 @@
                                 html += `<div class="chat-section">
                                         <h4>Ассистенты (Групповой чат)</h4>
                                         <ul>${assistants.map(renderChatItem).join('')}</ul>
+                                </div>`;
+                        }
+                }
+
+                // Admins section (only visible to admins)
+                if (activeSectionFilter === 'all' || activeSectionFilter === 'Администраторы') {
+                        const adminContacts = contacts.admins?.users || [];
+                        if (adminContacts.length > 0 && currentUser.role === 'admin') {
+                                html += `<div class="chat-section">
+                                        <h4>Администраторы</h4>
+                                        <ul>${adminContacts.map(user => renderContactItem(user, { nested: false })).join('')}</ul>
                                 </div>`;
                         }
                 }
@@ -3049,6 +3195,15 @@
                 emptyState.remove();
             }
 
+            // Deduplication: check if message already exists (prevent double-add)
+            if (!isTempSending && message.id) {
+                const existing = messagesContainer.querySelector(`[data-real-message-id="${message.id}"]`);
+                if (existing) {
+                    console.log('[appendMessage] Skipping duplicate message:', message.id);
+                    return;
+                }
+            }
+
             const isOwn = message.user_id === currentUser.id;
             const userName = message.user_name || 'Unknown';
             const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
@@ -3102,6 +3257,9 @@
             messageEl.className = `message ${isOwn ? 'own' : ''} ${isTempSending || message.isSending ? 'sending' : ''}`;
             if (isTempSending || message.isSending) {
                 messageEl.setAttribute('data-message-id', message.id);
+            } else if (message.id) {
+                // Real message - add deduplication attribute
+                messageEl.setAttribute('data-real-message-id', message.id);
             }
             messageEl.innerHTML = `
                 <div class="message-avatar" style="background: ${avatarColor};">${initials}</div>
@@ -3175,17 +3333,30 @@
                 ` : ''}
             `;
 
-            messagesContainer.appendChild(messageEl);
+            // Use requestAnimationFrame for smooth rendering without forced reflow
+            requestAnimationFrame(() => {
+                messagesContainer.appendChild(messageEl);
+            });
         }
 
         function scrollToBottom(force = false) {
             const container = document.getElementById('messagesContainer');
-            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+            if (!container) return;
 
-            // Auto-scroll only if user is near bottom or force is true
-            if (force || isNearBottom) {
-                container.scrollTop = container.scrollHeight;
-            }
+            // Wait for DOM to render before calculating scroll position
+            requestAnimationFrame(() => {
+                const scrollThreshold = 150; // More forgiving threshold
+                const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < scrollThreshold;
+
+                // Auto-scroll only if user is near bottom or force is true
+                if (force || isNearBottom) {
+                    // Use smooth scroll for better UX (only when forced, instant otherwise)
+                    container.scrollTo({
+                        top: container.scrollHeight,
+                        behavior: force ? 'smooth' : 'auto'
+                    });
+                }
+            });
         }
 
         function escapeHtml(text) {
@@ -3283,8 +3454,9 @@
                         }
 
                         if (data.message) {
-                            appendMessage(data.message);
-                            scrollToBottom(true); // Force scroll after sending
+                            // Don't append here - WebSocket will handle it to avoid duplicates
+                            // Just keep scroll position
+                            scrollToBottom(true);
                         }
                     }
                     selectedFiles = [];
@@ -3319,12 +3491,12 @@
                     }
 
                     if (data.message) {
-                        // Remove temp message and add real message
+                        // Remove temp message - WebSocket will add real message to avoid duplicates
                         if (tempMessageId) {
                             const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                             if (tempEl) tempEl.remove();
                         }
-                        appendMessage(data.message);
+                        // Don't append here - let WebSocket handle it
                         scrollToBottom(true);
                     } else {
                         // Remove temp message on error
@@ -3396,6 +3568,7 @@
 
             document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
             document.getElementById('logoutBtn')?.addEventListener('click', logout);
+            document.getElementById('notificationsBtn')?.addEventListener('click', togglePushNotifications);
             document.getElementById('sendBtn')?.addEventListener('click', sendMessage);
             document.getElementById('mobileBackBtn')?.addEventListener('click', closeMobileChat);
 

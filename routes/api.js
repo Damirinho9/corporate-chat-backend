@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../config/database');
 const { getAvailableRecipients } = require('../controllers/chatController');
+const { getOnlineUsers } = require('../socket/socketHandler');
 
 // ==================== IMPORTS ====================
 const { uploadSingle, uploadMultiple, validateFile } = require('../middleware/fileUpload');
@@ -14,6 +15,9 @@ const userController = require('../controllers/userController');
 const chatController = require('../controllers/chatController');
 const messageController = require('../controllers/messageController');
 const departmentController = require('../controllers/departmentController');
+const permissionsController = require('../controllers/permissionsController');
+const generalPermissionsController = require('../controllers/generalPermissionsController');
+const pushController = require('../controllers/pushController');
 const { PERMISSIONS_MATRIX } = require('../config/permissionsMatrix');
 
 const { authenticateToken, requireAdmin, requireHead, requireAdminOrRop } = require('../middleware/auth');
@@ -24,6 +28,13 @@ const { body, param, query: queryValidator, validationResult } = require('expres
 // ADMIN ROUTES - IMPORTS
 const adminBasic = require('./admin-basic');
 const adminExtended = require('./admin-extended');
+
+// Additional routes
+const analyticsRoutes = require('./analytics');
+const registrationRoutes = require('./registration');
+const botsRoutes = require('./bots');
+const webhooksRoutes = require('./webhooks');
+const callsRoutes = require('./calls');
 
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
@@ -37,6 +48,14 @@ const validate = (req, res, next) => {
 // ==================== ADMIN ROUTES ====================
 router.use('/', adminBasic);
 router.use('/', adminExtended);
+
+// Additional routes
+router.use('/analytics', analyticsRoutes);
+router.use('/registration', registrationRoutes);
+router.use('/bots', botsRoutes);
+router.use('/webhooks', webhooksRoutes);
+router.use('/calls', callsRoutes);
+
 router.get('/chats/available-recipients', authenticateToken, getAvailableRecipients);
 
 // ==================== PERMISSIONS MATRIX ====================
@@ -85,6 +104,15 @@ router.get('/auth/profile', authenticateToken, authController.getProfile);
 // ==================== USER ROUTES ====================
 router.get('/users', authenticateToken, requireAdmin, userController.getAllUsers);
 router.get('/users/stats', authenticateToken, requireAdmin, userController.getUserStats);
+router.get('/users/online', authenticateToken, (req, res) => {
+    try {
+        const onlineUserIds = getOnlineUsers();
+        res.json({ online: onlineUserIds, count: onlineUserIds.length });
+    } catch (error) {
+        console.error('Get online users error:', error);
+        res.status(500).json({ error: 'Failed to get online users' });
+    }
+});
 
 router.get('/users/role/:role',
     authenticateToken,
@@ -607,6 +635,13 @@ router.get('/files/stats',
 );
 
 router.use('/files', fileRoutes);
+
+// ==================== PUSH NOTIFICATIONS ====================
+router.get('/push/vapid-public-key', pushController.getVapidPublicKey);
+router.post('/push/subscribe', authenticateToken, pushController.subscribe);
+router.post('/push/unsubscribe', authenticateToken, pushController.unsubscribe);
+router.get('/push/status', authenticateToken, pushController.getSubscriptionStatus);
+router.post('/push/test', authenticateToken, pushController.testPush);
 
 // ==================== HEALTH CHECK ====================
 router.get('/health', (req, res) => {
