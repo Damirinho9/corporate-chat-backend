@@ -3,7 +3,7 @@
 const { query } = require('../config/database');
 const { createLogger } = require('../utils/logger');
 const supportAnalytics = require('./supportAnalytics');
-const emailService = require('./emailService');
+const emailService = require('../utils/emailService');
 
 const logger = createLogger('metrics-reporting');
 

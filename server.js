@@ -73,25 +73,44 @@ const supportRoutes = require('./routes/support');
 const supportAnalyticsRoutes = require('./routes/support-analytics');
 const phase5AnalyticsRoutes = require('./routes/phase5-analytics');
 
-app.use('/', healthRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/support/analytics', supportAnalyticsRoutes);
 app.use('/api/phase5', phase5AnalyticsRoutes);
 
 // General API routes (must be after specific routes like /api/support)
 app.use('/api', apiRoutes);
+app.use('/api', healthRoutes);
+
+const publicDir = path.join(__dirname, 'public');
+const indexPath = path.join(publicDir, 'index.html');
 
 // Раздача статики
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(publicDir));
 
 // 🔧 Админ-панель по короткому пути /admin
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin-panel.html'));
 });
 
+// Явно обрабатываем favicon и service worker, чтобы избежать лишних проксирований
+app.get('/favicon.ico', (req, res, next) => {
+  const faviconPath = path.join(publicDir, 'favicon.ico');
+  if (fs.existsSync(faviconPath)) {
+    return res.sendFile(faviconPath);
+  }
+  return next();
+});
+
+app.get('/service-worker.js', (req, res, next) => {
+  const swPath = path.join(publicDir, 'service-worker.js');
+  if (fs.existsSync(swPath)) {
+    return res.sendFile(swPath);
+  }
+  return next();
+});
+
 // Главная страница
 app.get('/', (req, res) => {
-  const indexPath = path.join(__dirname, 'public', 'index.html');
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
@@ -102,6 +121,43 @@ app.get('/', (req, res) => {
       endpoints: { health: '/api/health', auth: '/api/auth/login', chats: '/api/chats' }
     });
   }
+});
+
+// Фолбэк для SPA-маршрутов фронтенда: отдаём index.html для любых не-API GET запросов
+app.get('*', (req, res, next) => {
+  const ext = path.extname(req.path).toLowerCase();
+  const assetExtensions = new Set([
+    '.js',
+    '.css',
+    '.json',
+    '.map',
+    '.ico',
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.svg',
+    '.webp',
+    '.woff',
+    '.woff2',
+    '.ttf',
+    '.eot'
+  ]);
+
+  if (
+    req.path.startsWith('/api') ||
+    req.path.startsWith('/socket.io') ||
+    req.path.startsWith('/uploads') ||
+    (ext && assetExtensions.has(ext)) // запросы к статическим ресурсам должны получить 404
+  ) {
+    return next();
+  }
+
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+
+  return next();
 });
 
 // 404
