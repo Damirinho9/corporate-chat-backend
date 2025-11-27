@@ -55,7 +55,7 @@ if (process.env.DATABASE_URL) {
 
     poolConfig = {
         host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT) || 5432,
+        port: parseInt(process.env.DB_PORT) || 5433,
         database: process.env.DB_NAME || 'corporate_chat',
         user: process.env.DB_USER || 'postgres',
         password: String(dbPassword),
