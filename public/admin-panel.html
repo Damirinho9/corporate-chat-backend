@@ -1623,7 +1623,7 @@ async function loadChats() {
                     tbody.innerHTML = chatsCache.map(chat => `
                         <tr>
                             <td>${chat.id}</td>
-                            <td>${displayName}</td>
+                            <td>${chat.name || 'N/A'}</td>
                             <td>${chat.type || 'N/A'}</td>
                             <td>${chat.department_name || 'N/A'}</td>
                             <td>${chat.participant_count || 0}</td>
@@ -1632,8 +1632,7 @@ async function loadChats() {
                                 <button class="btn-delete" onclick="deleteChat(${chat.id})">Удалить</button>
                             </td>
                         </tr>
-                        `;
-                    }).join('');
+                        `).join('');
                 } else {
                     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#a0aec0;">No chats found</td></tr>';
                 }
