@@ -106,7 +106,14 @@ app.get('/', (req, res) => {
 
 // Фолбэк для SPA-маршрутов фронтенда: отдаём index.html для любых не-API GET запросов
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) return next();
+  if (
+    req.path.startsWith('/api') ||
+    req.path.startsWith('/socket.io') ||
+    req.path.startsWith('/uploads') ||
+    req.path.includes('.') // запросы к статическим ресурсам должны получить 404
+  ) {
+    return next();
+  }
 
   const indexPath = path.join(__dirname, 'public', 'index.html');
   if (fs.existsSync(indexPath)) {
