@@ -133,11 +133,12 @@ app.get('*', (req, res, next) => {
     return next();
   }
 
-  const requestedPath = path.join(publicDir, req.path);
-  const resolvedPath = path.normalize(requestedPath);
+  const cleanedPath = req.path.replace(/^\//, '');
+  const requestedPath = path.join(publicDir, cleanedPath);
+  const resolvedPath = path.resolve(requestedPath);
 
   // Если запрашивается реальный статический файл внутри /public, отдаём его напрямую
-  const isWithinPublic = resolvedPath.startsWith(publicDir);
+  const isWithinPublic = resolvedPath.startsWith(publicDir + path.sep);
   if (isWithinPublic && fs.existsSync(resolvedPath)) {
     const stat = fs.statSync(resolvedPath);
     if (stat.isFile()) {
