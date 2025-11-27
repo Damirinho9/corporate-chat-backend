@@ -124,7 +124,8 @@ app.get('/', (req, res) => {
 });
 
 // Фолбэк для SPA-маршрутов фронтенда: отдаём index.html для любых не-API GET запросов
-app.get('/*', (req, res, next) => {
+// Используем явный wildcard-параметр, чтобы избежать ошибок path-to-regexp
+app.get('/:path(*)', (req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return next();
   }
