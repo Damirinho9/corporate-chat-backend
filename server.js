@@ -133,16 +133,21 @@ app.get('*', (req, res, next) => {
     return next();
   }
 
-  const cleanedPath = req.path.replace(/^\//, '');
-  const requestedPath = path.join(publicDir, cleanedPath);
+  const safePublicDir = path.resolve(publicDir);
+  const cleanedPath = decodeURIComponent(req.path.replace(/^\//, ''));
+  const requestedPath = path.join(safePublicDir, cleanedPath);
   const resolvedPath = path.resolve(requestedPath);
 
-  // Если запрашивается реальный статический файл внутри /public, отдаём его напрямую
-  const isWithinPublic = resolvedPath.startsWith(publicDir + path.sep);
+  // Не отдаём файлы вне /public даже при попытках обхода
+  const isWithinPublic = resolvedPath.startsWith(safePublicDir + path.sep) || resolvedPath === safePublicDir;
   if (isWithinPublic && fs.existsSync(resolvedPath)) {
-    const stat = fs.statSync(resolvedPath);
-    if (stat.isFile()) {
-      return res.sendFile(resolvedPath);
+    try {
+      const stat = fs.statSync(resolvedPath);
+      if (stat.isFile()) {
+        return res.sendFile(resolvedPath);
+      }
+    } catch (err) {
+      logger.warn(`Static file lookup failed for ${resolvedPath}: ${err.message}`);
     }
   }
 
