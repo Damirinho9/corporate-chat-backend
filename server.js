@@ -125,32 +125,24 @@ app.get('/', (req, res) => {
 
 // Фолбэк для SPA-маршрутов фронтенда: отдаём index.html для любых не-API GET запросов
 app.get('*', (req, res, next) => {
-  const ext = path.extname(req.path).toLowerCase();
-  const assetExtensions = new Set([
-    '.js',
-    '.css',
-    '.json',
-    '.map',
-    '.ico',
-    '.png',
-    '.jpg',
-    '.jpeg',
-    '.gif',
-    '.svg',
-    '.webp',
-    '.woff',
-    '.woff2',
-    '.ttf',
-    '.eot'
-  ]);
-
-  if (
-    req.path.startsWith('/api') ||
-    req.path.startsWith('/socket.io') ||
-    req.path.startsWith('/uploads') ||
-    (ext && assetExtensions.has(ext)) // запросы к статическим ресурсам должны получить 404
-  ) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
     return next();
+  }
+
+  if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/uploads')) {
+    return next();
+  }
+
+  const requestedPath = path.join(publicDir, req.path);
+  const resolvedPath = path.normalize(requestedPath);
+
+  // Если запрашивается реальный статический файл внутри /public, отдаём его напрямую
+  const isWithinPublic = resolvedPath.startsWith(publicDir);
+  if (isWithinPublic && fs.existsSync(resolvedPath)) {
+    const stat = fs.statSync(resolvedPath);
+    if (stat.isFile()) {
+      return res.sendFile(resolvedPath);
+    }
   }
 
   if (fs.existsSync(indexPath)) {
