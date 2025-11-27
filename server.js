@@ -106,7 +106,13 @@ app.get('/', (req, res) => {
 
 // SPA fallback: serve index.html for non-API, non-file routes
 // This allows client-side routing to work (e.g., /chat/123, /profile, etc.)
-app.get('*', (req, res, next) => {
+// Note: Express 5 doesn't support app.get('*'), use middleware instead
+app.use((req, res, next) => {
+  // Only handle GET requests
+  if (req.method !== 'GET') {
+    return next();
+  }
+
   // Skip API routes, websocket, uploads
   if (
     req.path.startsWith('/api') ||
