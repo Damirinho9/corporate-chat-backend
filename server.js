@@ -81,7 +81,7 @@ app.use('/api/phase5', phase5AnalyticsRoutes);
 app.use('/api', apiRoutes);
 app.use('/api', healthRoutes);
 
-// Раздача статики
+// Раздача статики (MUST be before SPA fallback)
 app.use(express.static(path.join(__dirname, 'public')));
 
 // 🔧 Админ-панель по короткому пути /admin
@@ -104,17 +104,19 @@ app.get('/', (req, res) => {
   }
 });
 
-// Фолбэк для SPA-маршрутов фронтенда: отдаём index.html для любых не-API GET запросов
+// SPA fallback: serve index.html for non-API, non-file routes
+// This allows client-side routing to work (e.g., /chat/123, /profile, etc.)
 app.get('*', (req, res, next) => {
+  // Skip API routes, websocket, uploads
   if (
     req.path.startsWith('/api') ||
     req.path.startsWith('/socket.io') ||
-    req.path.startsWith('/uploads') ||
-    req.path.includes('.') // запросы к статическим ресурсам должны получить 404
+    req.path.startsWith('/uploads')
   ) {
     return next();
   }
 
+  // Serve index.html for SPA routes (no file extension = client route)
   const indexPath = path.join(__dirname, 'public', 'index.html');
   if (fs.existsSync(indexPath)) {
     return res.sendFile(indexPath);
