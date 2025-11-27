@@ -44,19 +44,23 @@ if (process.env.DATABASE_URL) {
     }
 } else {
     // Fallback to individual environment variables
-    const dbPassword = process.env.DB_PASSWORD;
+    // Support common password/user/db env var aliases used across environments
+    const dbPassword =
+        process.env.DB_PASSWORD ||
+        process.env.DB_PASS ||
+        process.env.POSTGRES_PASSWORD;
 
     // Validate password
     if (!dbPassword || dbPassword === 'null' || dbPassword === 'undefined') {
-        console.error('ERROR: DB_PASSWORD is not set or invalid');
-        throw new Error('Invalid database password. Please set DB_PASSWORD environment variable.');
+        console.error('ERROR: DB_PASSWORD/DB_PASS is not set or invalid');
+        throw new Error('Invalid database password. Please set DB_PASSWORD or DB_PASS environment variable.');
     }
 
     poolConfig = {
-        host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT) || 5432,
-        database: process.env.DB_NAME || 'corporate_chat',
-        user: process.env.DB_USER || 'postgres',
+        host: process.env.DB_HOST || process.env.POSTGRES_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || process.env.POSTGRES_PORT) || 5433,
+        database: process.env.DB_NAME || process.env.POSTGRES_DB || 'corporate_chat',
+        user: process.env.DB_USER || process.env.POSTGRES_USER || 'postgres',
         password: String(dbPassword),
         ssl: process.env.NODE_ENV === 'production' ? {
             rejectUnauthorized: false
