@@ -497,30 +497,44 @@ const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
 
 const startServer = async () => {
-  try {
-    logger.info('Connecting to database...');
-    await pool.query('SELECT NOW()');
-    logger.info('Database connected successfully');
+  const maxAttempts = parseInt(process.env.DB_CONNECTION_RETRIES || '5', 10);
+  const delayMs = parseInt(process.env.DB_CONNECTION_RETRY_DELAY_MS || '5000', 10);
 
-    await initDatabase();
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      logger.info(`Connecting to database (attempt ${attempt}/${maxAttempts})...`);
+      await pool.query('SELECT NOW()');
+      logger.info('Database connected successfully');
 
-    server.listen(PORT, HOST, () => {
-      console.log('');
-      console.log('╔════════════════════════════════════════════╗');
-      console.log('║     Corporate Chat Backend Server         ║');
-      console.log('╚════════════════════════════════════════════╝');
-      console.log('');
-      console.log(`🚀 Server running on ${HOST}:${PORT}`);
-      console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🌐 HTTPS: https://corporate-chat-backend.onrender.com`);
-      console.log(`🏥 Health: /api/health`);
-      console.log('');
-      console.log('✅ Ready to accept connections!');
-      console.log('');
-    });
-  } catch (error) {
-    logger.error('Failed to start server:', error && error.stack ? error.stack : error);
-    process.exit(1);
+      await initDatabase();
+
+      server.listen(PORT, HOST, () => {
+        console.log('');
+        console.log('╔════════════════════════════════════════════╗');
+        console.log('║     Corporate Chat Backend Server         ║');
+        console.log('╚════════════════════════════════════════════╝');
+        console.log('');
+        console.log(`🚀 Server running on ${HOST}:${PORT}`);
+        console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`🌐 HTTPS: https://corporate-chat-backend.onrender.com`);
+        console.log(`🏥 Health: /api/health`);
+        console.log('');
+        console.log('✅ Ready to accept connections!');
+        console.log('');
+      });
+
+      return; // Successful start, exit the retry loop
+    } catch (error) {
+      logger.error('Failed to start server:', error && error.stack ? error.stack : error);
+
+      if (attempt === maxAttempts) {
+        logger.error('Max DB connection attempts reached. Exiting.');
+        process.exit(1);
+      }
+
+      logger.info(`Retrying DB connection in ${delayMs / 1000} seconds...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
 };
 
