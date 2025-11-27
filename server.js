@@ -124,18 +124,24 @@ app.get('/', (req, res) => {
 });
 
 // Фолбэк для SPA-маршрутов фронтенда: отдаём index.html для любых не-API GET запросов
-// Используем middleware без path-шаблона, чтобы избежать ошибок path-to-regexp
-app.use((req, res, next) => {
+// Используем регулярное выражение вместо path-шаблонов, чтобы избежать ошибок path-to-regexp
+const spaFallbackPattern = /^\/(?!api(?:\/|$)|socket\.io(?:\/|$)|uploads(?:\/|$)).*/;
+
+app.use(spaFallbackPattern, (req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return next();
   }
 
-  if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/uploads')) {
+  const safePublicDir = path.resolve(publicDir);
+
+  let cleanedPath;
+  try {
+    cleanedPath = decodeURIComponent(req.path.replace(/^\//, ''));
+  } catch (err) {
+    logger.warn(`Failed to decode path ${req.path}: ${err.message}`);
     return next();
   }
 
-  const safePublicDir = path.resolve(publicDir);
-  const cleanedPath = decodeURIComponent(req.path.replace(/^\//, ''));
   const requestedPath = path.join(safePublicDir, cleanedPath);
   const resolvedPath = path.resolve(requestedPath);
 
