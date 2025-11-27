@@ -217,3 +217,77 @@ npm test
 - Jitsi видеозвонки — интеграция на клиенте
 - Боты и вебхуки для внешних интеграций
 - Матрица прав 5 ролей: admin, rop, assistant, operator, employee
+
+### 🛡️ Система прав доступа (Permissions System)
+
+Проект имеет **двухуровневую систему прав**:
+
+#### 1. Матрица прав на сообщения (Message Permissions)
+**Файлы**: `config/permissionsMatrix.js`, `public/admin-panel.html` (секция "Права и действия")
+
+**3 базовых права:**
+- ✅ Редактировать свои сообщения (до 5 минут)
+- ✅ Удалять свои сообщения (до 5 минут)
+- ✅ Удалять сообщения других (админ везде, РОП только в своем отделе)
+
+#### 2. Общие права доступа (General Permissions) — **СУПЕР-ПУПЕР ULTIMATE ТАБЛИЦА** 🎯
+**Файлы**:
+- Backend: `controllers/generalPermissionsController.js`
+- Миграция: `database/migrations/008_create_general_permissions.sql`
+- Frontend: `public/admin-panel.html` (секция "⚙️ Общие права доступа")
+- API: `/api/permissions/general`, `/api/permissions/general/batch`, `/api/permissions/general/reset`
+
+**24 права в 7 категориях:**
+
+**Управление пользователями (5):**
+- create_user — Создание пользователей
+- edit_user — Редактирование пользователей
+- delete_user — Удаление пользователей
+- reset_password — Сброс паролей
+- view_all_users — Просмотр всех пользователей
+
+**Управление отделами (4):**
+- create_department — Создание отделов
+- edit_department — Редактирование отделов
+- delete_department — Удаление отделов
+- manage_department_members — Управление сотрудниками отдела
+
+**Управление чатами (4):**
+- create_chat — Создание чатов
+- edit_chat — Редактирование чатов
+- delete_chat — Удаление чатов
+- manage_chat_participants — Управление участниками
+
+**Управление сообщениями (3):**
+- edit_messages — Редактирование сообщений
+- delete_messages — Удаление сообщений
+- view_all_messages — Просмотр всех сообщений
+
+**Управление файлами (3):**
+- upload_files — Загрузка файлов
+- delete_any_file — Удаление любых файлов
+- view_all_files — Просмотр всех файлов
+
+**Логи и мониторинг (2):**
+- view_logs — Просмотр логов
+- view_admin_logs — Просмотр логов администратора
+
+**Системные права (3):**
+- manage_permissions — Управление правами
+- access_admin_panel — Доступ к админ-панели
+- manage_settings — Управление настройками
+
+**Как работает:**
+1. Админ открывает `/admin-panel.html` → таб "Права"
+2. Видит 2 секции:
+   - "🛡️ Права и действия" (3 права на сообщения)
+   - "⚙️ Общие права доступа" (7 таблиц по категориям, 24 права)
+3. Для каждого права — чекбоксы для 5 ролей (admin, assistant, rop, operator, employee)
+4. Кнопка "💾 Сохранить все права" — сохраняет ВСЕ изменения разом
+5. Кнопка "Сбросить к умолчаниям" — возвращает права по умолчанию из миграции 008
+
+**Важно:**
+- **НЕ удалять** карточку "⚙️ Общие права доступа" из admin-panel.html — это супер-таблица!
+- **НЕ удалять** функции: `loadGeneralPermissions()`, `renderGeneralPermissionsMatrix()`, `savePermissions()`, `resetPermissions()`
+- Таблица `role_general_permissions` создается миграцией 008, содержит 120 записей (24 права × 5 ролей)
+- Backend контроллер полностью реализован в `controllers/generalPermissionsController.js`
