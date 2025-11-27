@@ -73,13 +73,13 @@ const supportRoutes = require('./routes/support');
 const supportAnalyticsRoutes = require('./routes/support-analytics');
 const phase5AnalyticsRoutes = require('./routes/phase5-analytics');
 
-app.use('/', healthRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/support/analytics', supportAnalyticsRoutes);
 app.use('/api/phase5', phase5AnalyticsRoutes);
 
 // General API routes (must be after specific routes like /api/support)
 app.use('/api', apiRoutes);
+app.use('/api', healthRoutes);
 
 // Раздача статики
 app.use(express.static(path.join(__dirname, 'public')));
@@ -102,6 +102,18 @@ app.get('/', (req, res) => {
       endpoints: { health: '/api/health', auth: '/api/auth/login', chats: '/api/chats' }
     });
   }
+});
+
+// Фолбэк для SPA-маршрутов фронтенда: отдаём index.html для любых не-API GET запросов
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) return next();
+
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+
+  return next();
 });
 
 // 404
