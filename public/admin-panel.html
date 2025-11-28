@@ -1786,7 +1786,9 @@ async function loadChats() {
 
                 const tbody = document.querySelector('#chatsTable tbody');
                 if (chatsCache.length > 0) {
-                    tbody.innerHTML = chatsCache.map(chat => `
+                    tbody.innerHTML = chatsCache.map(chat => {
+                        const displayName = escapeHtml(chat.name || 'Unnamed Chat');
+                        return `
                         <tr>
                             <td>${chat.id}</td>
                             <td>${displayName}</td>
