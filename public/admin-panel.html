@@ -1287,6 +1287,38 @@
             </form>
         </div>
     </div>
+
+    <!-- Modal for Add User to Department -->
+    <div id="addUserToDepartmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Добавить пользователя в отдел</h2>
+                <button class="close-btn" onclick="closeAddUserToDepartmentModal()">×</button>
+            </div>
+            <form id="addUserToDepartmentForm" onsubmit="event.preventDefault(); addUserToDepartmentSubmit();">
+                <div class="modal-body">
+                    <input type="hidden" id="addUserDepartmentName">
+
+                    <div class="form-group">
+                        <label>Отдел</label>
+                        <input type="text" id="addUserDepartmentDisplay" readonly style="background: #f7fafc; cursor: not-allowed;">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Выберите пользователя *</label>
+                        <select id="addUserSelectUser" required>
+                            <option value="">Выберите пользователя...</option>
+                        </select>
+                        <small class="form-hint">Только пользователи без отдела или с другими отделами</small>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddUserToDepartmentModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Добавить пользователя</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <!-- Toast -->
     <div id="toast" class="toast"></div>
 
@@ -2307,9 +2339,6 @@ async function loadChats() {
                     select.innerHTML += `<option value="${user.id}">${user.name} (${user.username}) • ${displayRole}${departmentInfo}</option>`;
                 });
 
-                // Reset role selection
-                document.getElementById('addUserSelectRole').value = '';
-
                 // Show modal
                 openModalElement(document.getElementById('addUserToDepartmentModal'), { focusSelector: '#addUserSelectUser' });
             } catch (error) {
@@ -2330,7 +2359,6 @@ async function loadChats() {
         async function addUserToDepartmentSubmit() {
             const departmentName = document.getElementById('addUserDepartmentName').value;
             const userId = parseInt(document.getElementById('addUserSelectUser').value);
-            const role = document.getElementById('addUserSelectRole').value || undefined;
 
             if (!userId) {
                 showToast('Выберите пользователя', 'error');
@@ -2339,9 +2367,6 @@ async function loadChats() {
 
             try {
                 const body = { userId };
-                if (role) {
-                    body.role = role;
-                }
 
                 const res = await fetch(`${API_URL}/departments/${encodeURIComponent(departmentName)}/users`, {
                     method: 'POST',
