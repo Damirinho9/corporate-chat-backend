@@ -1713,7 +1713,7 @@
         function handleFiles(files) {
             Array.from(files).forEach(file => {
                 if (file.size > 10 * 1024 * 1024) {
-                    alert(`Файл ${file.name} слишком большой (макс 10MB)`);
+                    showToast(`Файл ${file.name} слишком большой (макс 10MB)`, 'error');
                     return;
                 }
                 const fileObj = { file, id: Date.now() + Math.random(), previewUrl: null, uploadedId: null };
@@ -2256,7 +2256,7 @@
 
         async function togglePushNotifications() {
             if (!swRegistration) {
-                alert('Service Worker не зарегистрирован');
+                showToast('Service Worker не зарегистрирован', 'error');
                 return;
             }
 
@@ -2282,7 +2282,7 @@
                     // Request permission
                     const permission = await Notification.requestPermission();
                     if (permission !== 'granted') {
-                        alert('Разрешите уведомления в настройках браузера');
+                        showToast('Разрешите уведомления в настройках браузера', 'warning');
                         updateNotificationButton();
                         return;
                     }
@@ -2315,7 +2315,7 @@
                 }
             } catch (error) {
                 console.error('Toggle push error:', error);
-                alert('Ошибка: ' + error.message);
+                showToast('Ошибка: ' + error.message, 'error');
             }
         }
 

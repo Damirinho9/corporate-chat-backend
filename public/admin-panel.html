@@ -1225,6 +1225,68 @@
         </div>
     </div>
 
+
+    <!-- Modal for Assign Department Head -->
+    <div id="assignHeadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>👤 Назначить РОПа</h2>
+                <button class="close-btn" onclick="closeAssignHeadModal()">×</button>
+            </div>
+            <form id="assignHeadForm" onsubmit="event.preventDefault(); submitAssignHead();">
+                <div class="modal-body">
+                    <input type="hidden" id="assignHeadDeptName">
+
+                    <div class="form-group">
+                        <label>Отдел</label>
+                        <input type="text" id="assignHeadDeptDisplay" readonly style="background: #f7fafc; cursor: not-allowed;">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Выберите РОПа *</label>
+                        <select id="assignHeadUserSelect" required>
+                            <option value="">Выберите пользователя...</option>
+                        </select>
+                        <small class="form-hint">Показываются только пользователи с ролью РОП</small>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAssignHeadModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Назначить РОПа</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Rename Department -->
+    <div id="renameDepartmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ Переименовать отдел</h2>
+                <button class="close-btn" onclick="closeRenameDepartmentModal()">×</button>
+            </div>
+            <form id="renameDepartmentForm" onsubmit="event.preventDefault(); submitRenameDepartment();">
+                <div class="modal-body">
+                    <input type="hidden" id="renameDeptOldName">
+
+                    <div class="form-group">
+                        <label>Текущее название</label>
+                        <input type="text" id="renameDeptOldDisplay" readonly style="background: #f7fafc; cursor: not-allowed;">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Новое название *</label>
+                        <input type="text" id="renameDeptNewName" placeholder="Введите новое название отдела" required minlength="3" maxlength="100">
+                        <small class="form-hint">Минимум 3 символа, максимум 100</small>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeRenameDepartmentModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Переименовать</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <!-- Toast -->
     <div id="toast" class="toast"></div>
 
@@ -1540,64 +1602,6 @@
         const editStatusSelect = document.getElementById('editStatus');
         const editPasswordInput = document.getElementById('editInitialPassword');
 
-        const modalFocusMemory = new WeakMap();
-
-        function rememberModalFocus(modal) {
-            if (!modal) {
-                return;
-            }
-
-            const activeElement = document.activeElement;
-            if (activeElement && activeElement instanceof HTMLElement) {
-                modalFocusMemory.set(modal, activeElement);
-            } else {
-                modalFocusMemory.set(modal, null);
-            }
-        }
-
-        function restoreModalFocus(modal) {
-            if (!modal) {
-                return;
-            }
-
-            const previousElement = modalFocusMemory.get(modal);
-            modalFocusMemory.delete(modal);
-
-            if (previousElement && typeof previousElement.focus === 'function') {
-                try {
-                    previousElement.focus();
-                } catch (error) {
-                    console.warn('[modal] Unable to restore focus', error);
-                }
-            }
-        }
-
-        function openModalElement(modal, { focusTarget = null, focusSelector = null } = {}) {
-            if (!modal) {
-                return;
-            }
-
-            rememberModalFocus(modal);
-
-            modal.classList.add('show');
-            modal.style.display = 'flex';
-
-            let focusElement = null;
-            if (focusTarget && typeof focusTarget.focus === 'function') {
-                focusElement = focusTarget;
-            } else if (focusSelector) {
-                focusElement = modal.querySelector(focusSelector);
-            }
-
-            if (!focusElement) {
-                focusElement = modal.querySelector('[data-autofocus]')
-                    || modal.querySelector('input, select, textarea, button');
-            }
-
-            if (focusElement && typeof focusElement.focus === 'function') {
-                setTimeout(() => focusElement.focus(), 0);
-            }
-        }
 
         // Check auth
         if (!token || !currentUser || currentUser.role !== 'admin') {
@@ -2005,10 +2009,41 @@ async function loadChats() {
         }
 
         function showRenameDepartmentModal(departmentName) {
-            const newName = prompt(`Введите новое название отдела "${departmentName}".\n\n⚠️ Внимание: Название отдела будет синхронизировано с названием чата отдела!`, departmentName);
-            if (!newName || newName.trim() === '' || newName === departmentName) return;
+            // Set old department name in hidden and display fields
+            document.getElementById('renameDeptOldName').value = departmentName;
+            document.getElementById('renameDeptOldDisplay').value = departmentName;
+            document.getElementById('renameDeptNewName').value = '';
 
-            renameDepartment(departmentName, newName.trim());
+            // Show modal
+            document.getElementById('renameDepartmentModal').classList.add('show');
+
+            // Focus on new name input
+            setTimeout(() => {
+                document.getElementById('renameDeptNewName').focus();
+            }, 100);
+        }
+
+        function closeRenameDepartmentModal() {
+            document.getElementById('renameDepartmentModal').classList.remove('show');
+            document.getElementById('renameDepartmentForm').reset();
+        }
+
+        function submitRenameDepartment() {
+            const oldName = document.getElementById('renameDeptOldName').value;
+            const newName = document.getElementById('renameDeptNewName').value.trim();
+
+            if (!newName || newName.length < 3) {
+                showToast('Название должно быть не менее 3 символов', 'warning');
+                return;
+            }
+
+            if (newName === oldName) {
+                showToast('Новое название совпадает со старым', 'warning');
+                return;
+            }
+
+            renameDepartment(oldName, newName);
+            closeRenameDepartmentModal();
         }
 
         async function renameDepartment(oldName, newName) {
@@ -2040,12 +2075,55 @@ async function loadChats() {
             }
         }
 
-        function showAssignHeadModal(departmentName) {
-            // Простой prompt для демонстрации - можно заменить на модальное окно
-            const userId = prompt(`Введите ID пользователя для назначения РОПом отдела ${departmentName}:`);
-            if (!userId) return;
+        async function showAssignHeadModal(departmentName) {
+            // Set department name in hidden and display fields
+            document.getElementById('assignHeadDeptName').value = departmentName;
+            document.getElementById('assignHeadDeptDisplay').value = departmentName;
 
-            assignDepartmentHead(departmentName, parseInt(userId));
+            // Load users with role 'rop'
+            try {
+                await ensureUsersCacheLoaded();
+                const ropUsers = usersCache.filter(u => u.role === 'rop');
+
+                const select = document.getElementById('assignHeadUserSelect');
+                select.innerHTML = '<option value="">Выберите пользователя...</option>';
+
+                ropUsers.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = `${user.full_name} (${user.username})${user.department_name ? ' - ' + user.department_name : ''}`;
+                    select.appendChild(option);
+                });
+
+                if (ropUsers.length === 0) {
+                    select.innerHTML = '<option value="">Нет доступных РОПов</option>';
+                    showToast('Нет пользователей с ролью РОП', 'warning');
+                }
+
+                // Show modal
+                document.getElementById('assignHeadModal').classList.add('show');
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showToast('Ошибка загрузки пользователей', 'error');
+            }
+        }
+
+        function closeAssignHeadModal() {
+            document.getElementById('assignHeadModal').classList.remove('show');
+            document.getElementById('assignHeadForm').reset();
+        }
+
+        function submitAssignHead() {
+            const departmentName = document.getElementById('assignHeadDeptName').value;
+            const userId = parseInt(document.getElementById('assignHeadUserSelect').value);
+
+            if (!userId) {
+                showToast('Выберите пользователя', 'warning');
+                return;
+            }
+
+            assignDepartmentHead(departmentName, userId);
+            closeAssignHeadModal();
         }
 
         async function assignDepartmentHead(departmentName, userId) {
@@ -2241,357 +2319,6 @@ async function loadChats() {
             }
         }
 
-        async function loadDeletionHistory() {
-            const tbody = document.getElementById('deletionHistoryBody');
-            if (!tbody) return;
-
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
-
-            try {
-                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.status === 403) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
-                    return;
-                }
-
-                if (!response.ok) {
-                    throw new Error(`Failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (!Array.isArray(data.history) || data.history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
-                    return;
-                }
-
-                const rowsHtml = data.history.map(entry => {
-                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
-                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
-                        ? deletedAtDate.toLocaleString('ru-RU')
-                        : '—';
-
-                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
-                    const deleterCell = entry.deleted_by_user_name
-                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
-                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
-
-                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
-                    const ownerCell = entry.deleted_message_user_name
-                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
-                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
-
-                    const roleKey = entry.deleted_by_role || 'employee';
-                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
-                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
-
-                    const scopeBadge = entry.deletion_scope === 'self'
-                        ? '<span class="badge badge-scope-self">Своё</span>'
-                        : '<span class="badge badge-scope-moderator">Модерация</span>';
-                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
-
-                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
-                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
-
-                    const contentParts = [];
-                    if (entry.original_content) {
-                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
-                    }
-                    if (entry.file_id) {
-                        const fileLink = buildAttachmentLink(entry.file_id);
-                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
-                    }
-
-                    const contentCell = contentParts.length
-                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
-                        : '<span style="color:#a0aec0;">—</span>';
-
-                    return `
-                        <tr>
-                            <td>${deletedAt}</td>
-                            <td>${deleterCell}</td>
-                            <td>${roleCell}</td>
-                            <td>${chatCell}</td>
-                            <td>${ownerCell}</td>
-                            <td>${scopeCell}</td>
-                            <td>${contentCell}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                tbody.innerHTML = rowsHtml;
-            } catch (error) {
-                console.error('Failed to load deletion history:', error);
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
-            }
-        }
-
-        async function loadDeletionHistory() {
-            const tbody = document.getElementById('deletionHistoryBody');
-            if (!tbody) return;
-
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
-
-            try {
-                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.status === 403) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
-                    return;
-                }
-
-                if (!response.ok) {
-                    throw new Error(`Failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (!Array.isArray(data.history) || data.history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
-                    return;
-                }
-
-                const rowsHtml = data.history.map(entry => {
-                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
-                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
-                        ? deletedAtDate.toLocaleString('ru-RU')
-                        : '—';
-
-                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
-                    const deleterCell = entry.deleted_by_user_name
-                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
-                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
-
-                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
-                    const ownerCell = entry.deleted_message_user_name
-                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
-                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
-
-                    const roleKey = entry.deleted_by_role || 'employee';
-                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
-                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
-
-                    const scopeBadge = entry.deletion_scope === 'self'
-                        ? '<span class="badge badge-scope-self">Своё</span>'
-                        : '<span class="badge badge-scope-moderator">Модерация</span>';
-                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
-
-                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
-                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
-
-                    const contentParts = [];
-                    if (entry.original_content) {
-                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
-                    }
-                    if (entry.file_id) {
-                        const fileLink = buildAttachmentLink(entry.file_id);
-                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
-                    }
-
-                    const contentCell = contentParts.length
-                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
-                        : '<span style="color:#a0aec0;">—</span>';
-
-                    return `
-                        <tr>
-                            <td>${deletedAt}</td>
-                            <td>${deleterCell}</td>
-                            <td>${roleCell}</td>
-                            <td>${chatCell}</td>
-                            <td>${ownerCell}</td>
-                            <td>${scopeCell}</td>
-                            <td>${contentCell}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                tbody.innerHTML = rowsHtml;
-            } catch (error) {
-                console.error('Failed to load deletion history:', error);
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
-            }
-        }
-
-        async function loadDeletionHistory() {
-            const tbody = document.getElementById('deletionHistoryBody');
-            if (!tbody) return;
-
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
-
-            try {
-                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.status === 403) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
-                    return;
-                }
-
-                if (!response.ok) {
-                    throw new Error(`Failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (!Array.isArray(data.history) || data.history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
-                    return;
-                }
-
-                const rowsHtml = data.history.map(entry => {
-                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
-                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
-                        ? deletedAtDate.toLocaleString('ru-RU')
-                        : '—';
-
-                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
-                    const deleterCell = entry.deleted_by_user_name
-                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
-                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
-
-                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
-                    const ownerCell = entry.deleted_message_user_name
-                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
-                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
-
-                    const roleKey = entry.deleted_by_role || 'employee';
-                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
-                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
-
-                    const scopeBadge = entry.deletion_scope === 'self'
-                        ? '<span class="badge badge-scope-self">Своё</span>'
-                        : '<span class="badge badge-scope-moderator">Модерация</span>';
-                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
-
-                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
-                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
-
-                    const contentParts = [];
-                    if (entry.original_content) {
-                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
-                    }
-                    if (entry.file_id) {
-                        const fileLink = buildAttachmentLink(entry.file_id);
-                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
-                    }
-
-                    const contentCell = contentParts.length
-                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
-                        : '<span style="color:#a0aec0;">—</span>';
-
-                    return `
-                        <tr>
-                            <td>${deletedAt}</td>
-                            <td>${deleterCell}</td>
-                            <td>${roleCell}</td>
-                            <td>${chatCell}</td>
-                            <td>${ownerCell}</td>
-                            <td>${scopeCell}</td>
-                            <td>${contentCell}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                tbody.innerHTML = rowsHtml;
-            } catch (error) {
-                console.error('Failed to load deletion history:', error);
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
-            }
-        }
-
-        async function loadDeletionHistory() {
-            const tbody = document.getElementById('deletionHistoryBody');
-            if (!tbody) return;
-
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
-
-            try {
-                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.status === 403) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
-                    return;
-                }
-
-                if (!response.ok) {
-                    throw new Error(`Failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (!Array.isArray(data.history) || data.history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
-                    return;
-                }
-
-                const rowsHtml = data.history.map(entry => {
-                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
-                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
-                        ? deletedAtDate.toLocaleString('ru-RU')
-                        : '—';
-
-                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
-                    const deleterCell = entry.deleted_by_user_name
-                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
-                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
-
-                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
-                    const ownerCell = entry.deleted_message_user_name
-                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
-                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
-
-                    const roleKey = entry.deleted_by_role || 'employee';
-                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
-                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
-
-                    const scopeBadge = entry.deletion_scope === 'self'
-                        ? '<span class="badge badge-scope-self">Своё</span>'
-                        : '<span class="badge badge-scope-moderator">Модерация</span>';
-                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
-
-                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
-                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
-
-                    const contentParts = [];
-                    if (entry.original_content) {
-                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
-                    }
-                    if (entry.file_id) {
-                        const fileLink = buildAttachmentLink(entry.file_id);
-                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
-                    }
-
-                    const contentCell = contentParts.length
-                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
-                        : '<span style="color:#a0aec0;">—</span>';
-
-                    return `
-                        <tr>
-                            <td>${deletedAt}</td>
-                            <td>${deleterCell}</td>
-                            <td>${roleCell}</td>
-                            <td>${chatCell}</td>
-                            <td>${ownerCell}</td>
-                            <td>${scopeCell}</td>
-                            <td>${contentCell}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                tbody.innerHTML = rowsHtml;
-            } catch (error) {
-                console.error('Failed to load deletion history:', error);
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
-            }
-        }
 
         async function loadLogs() {
             try {
@@ -3499,17 +3226,17 @@ async function createNewChat() {
     const department = type === 'department' ? document.getElementById('newChatDepartment').value : null;
     
     if (!name) {
-        alert('Введите название чата');
+        showToast('Введите название чата', 'warning');
         return;
     }
     
     if (selectedParticipants.size === 0) {
-        alert('Выберите хотя бы одного участника');
+        showToast('Выберите хотя бы одного участника', 'warning');
         return;
     }
     
     if (type === 'department' && !department) {
-        alert('Выберите отдел');
+        showToast('Выберите отдел', 'warning');
         return;
     }
     
@@ -3531,15 +3258,15 @@ async function createNewChat() {
         const data = await response.json();
         
         if (response.ok) {
-            alert('Чат успешно создан!');
+            showToast('Чат успешно создан!', 'success');
             closeCreateChatModal();
             loadChats();
         } else {
-            alert('Ошибка: ' + (data.error || 'Не удалось создать чат'));
+            showToast('Ошибка: ' + (data.error || 'Не удалось создать чат'), 'error');
         }
     } catch (error) {
         console.error('Create chat error:', error);
-        alert('Ошибка создания чата');
+        showToast('Ошибка создания чата', 'error');
     }
 }
 
@@ -3584,7 +3311,7 @@ async function createNewDepartment() {
     const headId = document.getElementById('newDeptHead').value;
 
     if (!name) {
-        alert('Введите название отдела');
+        showToast('Введите название отдела', 'warning');
         return;
     }
 
@@ -3605,15 +3332,15 @@ async function createNewDepartment() {
         const data = await response.json();
         
         if (response.ok) {
-            alert(`Отдел "${name}" успешно создан!`);
+            showToast(`Отдел "${name}" успешно создан!`, 'success');
             closeCreateDepartmentModal();
             loadDepartments();
         } else {
-            alert('Ошибка: ' + (data.error || 'Не удалось создать отдел'));
+            showToast('Ошибка: ' + (data.error || 'Не удалось создать отдел'), 'error');
         }
     } catch (error) {
         console.error('Create department error:', error);
-        alert('Ошибка создания отдела');
+        showToast('Ошибка создания отдела', 'error');
     }
 }
 
@@ -4195,14 +3922,6 @@ setupModalAccessibility();
         }
 
         // ========== CREATE DEPARTMENT ==========
-        function showCreateDepartmentModal() {
-            const departmentName = prompt('Введите название нового отдела (например: Отдел 3):');
-            if (!departmentName) return;
-
-            const userId = prompt('Введите ID пользователя для назначения РОПом (необязательно):');
-
-            createDepartment(departmentName, userId ? parseInt(userId) : null);
-        }
 
         async function createDepartment(name, headUserId) {
             try {
