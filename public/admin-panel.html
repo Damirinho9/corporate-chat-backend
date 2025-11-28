@@ -408,6 +408,31 @@
         .badge-inactive { background: #fed7d7; color: #c53030; }
         .badge-scope-self { background: #ebf8ff; color: #2b6cb0; }
         .badge-scope-moderator { background: #fefcbf; color: #744210; }
+
+        /* Chat type badges */
+        .badge-direct { background: #e6fffa; color: #234e52; }
+        .badge-department { background: #e9d8fd; color: #553c9a; }
+        .badge-group { background: #bee3f8; color: #2c5282; }
+
+        /* Chat group headers */
+        .chat-group-header {
+            background: linear-gradient(to right, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 700;
+            font-size: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .chat-group-header td {
+            padding: 12px 16px !important;
+            border-bottom: 3px solid #5a67d8 !important;
+        }
+
+        .chat-group-header:hover {
+            background: linear-gradient(to right, #5a67d8 0%, #6b46c1 100%) !important;
+        }
+
         .table-subtext { font-size: 12px; color: #718096; }
 
         /* ========== FORM ========== */
@@ -2218,14 +2243,57 @@ async function loadChats() {
                 chatsCache = Array.isArray(data.chats) ? data.chats : [];
 
                 const tbody = document.querySelector('#chatsTable tbody');
-                if (chatsCache.length > 0) {
-                    tbody.innerHTML = chatsCache.map(chat => {
-                        const displayName = escapeHtml(chat.name || 'Unnamed Chat');
-                        return `
+
+                if (chatsCache.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#a0aec0;">Чаты не найдены</td></tr>';
+                    return;
+                }
+
+                // Group chats by type
+                const departmentChats = chatsCache.filter(c => c.type === 'department');
+                const groupChats = chatsCache.filter(c => c.type === 'group');
+                const directChats = chatsCache.filter(c => c.type === 'direct');
+
+                // Helper function to generate display name for direct chats
+                function getDirectChatName(chat) {
+                    if (chat.name && chat.name !== 'Direct Chat') {
+                        return escapeHtml(chat.name);
+                    }
+
+                    if (chat.participants && Array.isArray(chat.participants)) {
+                        const names = chat.participants.map(p => p.name).filter(Boolean);
+                        if (names.length > 0) {
+                            return escapeHtml(names.join(' ↔ '));
+                        }
+                    }
+
+                    return 'ЛС (без имени)';
+                }
+
+                // Helper function to render a chat row
+                function renderChatRow(chat) {
+                    let displayName;
+                    let typeLabel;
+
+                    if (chat.type === 'direct') {
+                        displayName = getDirectChatName(chat);
+                        typeLabel = '<span class="badge badge-direct">ЛС</span>';
+                    } else if (chat.type === 'department') {
+                        displayName = escapeHtml(chat.name || 'Чат отдела');
+                        typeLabel = '<span class="badge badge-department">Отдел</span>';
+                    } else if (chat.type === 'group') {
+                        displayName = escapeHtml(chat.name || 'Групповой чат');
+                        typeLabel = '<span class="badge badge-group">Группа</span>';
+                    } else {
+                        displayName = escapeHtml(chat.name || 'Чат');
+                        typeLabel = chat.type || 'N/A';
+                    }
+
+                    return `
                         <tr>
                             <td>${chat.id}</td>
                             <td>${displayName}</td>
-                            <td>${chat.type || 'N/A'}</td>
+                            <td>${typeLabel}</td>
                             <td>${chat.department_name || 'N/A'}</td>
                             <td>${chat.participant_count || 0}</td>
                             <td>
@@ -2233,14 +2301,31 @@ async function loadChats() {
                                 <button class="btn-delete" onclick="deleteChat(${chat.id})">Удалить</button>
                             </td>
                         </tr>
-                        `;
-                    }).join('');
-                } else {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#a0aec0;">No chats found</td></tr>';
+                    `;
                 }
+
+                // Render grouped chats
+                let html = '';
+
+                if (departmentChats.length > 0) {
+                    html += `<tr class="chat-group-header"><td colspan="6">📂 Чаты отделов (${departmentChats.length})</td></tr>`;
+                    html += departmentChats.map(renderChatRow).join('');
+                }
+
+                if (groupChats.length > 0) {
+                    html += `<tr class="chat-group-header"><td colspan="6">👥 Групповые чаты (${groupChats.length})</td></tr>`;
+                    html += groupChats.map(renderChatRow).join('');
+                }
+
+                if (directChats.length > 0) {
+                    html += `<tr class="chat-group-header"><td colspan="6">💬 Личные сообщения (${directChats.length})</td></tr>`;
+                    html += directChats.map(renderChatRow).join('');
+                }
+
+                tbody.innerHTML = html;
             } catch (err) {
                 console.error('Load chats error:', err);
-                showToast('Failed to load chats', 'error');
+                showToast('Ошибка загрузки чатов', 'error');
             }
         }
 
