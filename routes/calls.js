@@ -161,8 +161,8 @@ router.post('/', authenticateToken, async (req, res) => {
         }
 
         const result = await query(`
-            INSERT INTO calls (chat_id, room_name, type, initiated_by, status, created_at)
-            VALUES ($1, $2, $3, $4, 'active', NOW())
+            INSERT INTO calls (chat_id, room_name, call_type, call_mode, initiated_by, status, created_at)
+            VALUES ($1, $2, $3, 'direct', $4, 'ongoing', NOW())
             RETURNING *
         `, [chat_id, room_name, type || 'video', userId]);
 
