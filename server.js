@@ -105,7 +105,12 @@ app.get('/', (req, res) => {
 });
 
 // Фолбэк для SPA-маршрутов фронтенда: отдаём index.html для любых не-API GET запросов
-app.get('*', (req, res, next) => {
+app.use((req, res, next) => {
+  // Только для GET запросов
+  if (req.method !== 'GET') {
+    return next();
+  }
+
   if (
     req.path.startsWith('/api') ||
     req.path.startsWith('/socket.io') ||
