@@ -400,6 +400,19 @@ async function applyIncrementalSchemaUpdates() {
       )
     `, 'Ensured calls table');
 
+    const alterCalls = [
+      `ALTER TABLE calls ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active'`,
+      `ALTER TABLE calls ALTER COLUMN status SET DEFAULT 'active'`,
+      `ALTER TABLE calls ADD COLUMN IF NOT EXISTS started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+      `ALTER TABLE calls ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP`,
+      `ALTER TABLE calls ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`,
+      `ALTER TABLE calls ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP`
+    ];
+
+    for (const sql of alterCalls) {
+      await runOptionalQuery(sql);
+    }
+
     await runOptionalQuery(`
       CREATE TABLE IF NOT EXISTS call_participants (
         id SERIAL PRIMARY KEY,
@@ -412,6 +425,21 @@ async function applyIncrementalSchemaUpdates() {
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `, 'Ensured call_participants table');
+
+    const alterParticipants = [
+      `ALTER TABLE call_participants ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'invited'`,
+      `ALTER TABLE call_participants ALTER COLUMN status SET DEFAULT 'invited'`,
+      `ALTER TABLE call_participants ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP`,
+      `ALTER TABLE call_participants ADD COLUMN IF NOT EXISTS left_at TIMESTAMP`,
+      `ALTER TABLE call_participants ADD COLUMN IF NOT EXISTS duration INTEGER DEFAULT 0`,
+      `ALTER TABLE call_participants ALTER COLUMN duration SET DEFAULT 0`,
+      `ALTER TABLE call_participants ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`,
+      `ALTER TABLE call_participants ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP`
+    ];
+
+    for (const sql of alterParticipants) {
+      await runOptionalQuery(sql);
+    }
 
     await runOptionalQuery(`
       CREATE TABLE IF NOT EXISTS call_events (
