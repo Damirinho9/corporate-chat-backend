@@ -4,6 +4,84 @@ const router = express.Router();
 const { query } = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 
+// Defensive: ensure required call tables and columns exist even if migrations/startup scripts
+// were skipped in the current environment.
+let ensureSchemaPromise = null;
+
+async function ensureCallSchema() {
+    if (!ensureSchemaPromise) {
+        ensureSchemaPromise = (async () => {
+            const statements = [
+                // calls
+                `CREATE TABLE IF NOT EXISTS calls (
+                    id SERIAL PRIMARY KEY,
+                    chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+                    room_name VARCHAR(255) NOT NULL,
+                    type VARCHAR(20) DEFAULT 'video',
+                    initiated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'active',
+                    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    ended_at TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )`,
+                `ALTER TABLE calls ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active'`,
+                `ALTER TABLE calls ALTER COLUMN status SET DEFAULT 'active'`,
+                `ALTER TABLE calls ADD COLUMN IF NOT EXISTS started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+                `ALTER TABLE calls ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP`,
+                `ALTER TABLE calls ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`,
+                `ALTER TABLE calls ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP`,
+                // call_participants
+                `CREATE TABLE IF NOT EXISTS call_participants (
+                    id SERIAL PRIMARY KEY,
+                    call_id INTEGER NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    status VARCHAR(20) NOT NULL DEFAULT 'invited',
+                    joined_at TIMESTAMP,
+                    left_at TIMESTAMP,
+                    duration INTEGER DEFAULT 0,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )`,
+                `ALTER TABLE call_participants ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'invited'`,
+                `ALTER TABLE call_participants ALTER COLUMN status SET DEFAULT 'invited'`,
+                `ALTER TABLE call_participants ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP`,
+                `ALTER TABLE call_participants ADD COLUMN IF NOT EXISTS left_at TIMESTAMP`,
+                `ALTER TABLE call_participants ADD COLUMN IF NOT EXISTS duration INTEGER DEFAULT 0`,
+                `ALTER TABLE call_participants ALTER COLUMN duration SET DEFAULT 0`,
+                `ALTER TABLE call_participants ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`,
+                `ALTER TABLE call_participants ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP`,
+                // call_events
+                `CREATE TABLE IF NOT EXISTS call_events (
+                    id SERIAL PRIMARY KEY,
+                    call_id INTEGER NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+                    event_type VARCHAR(50) NOT NULL,
+                    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    metadata JSONB,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )`,
+                `CREATE INDEX IF NOT EXISTS idx_calls_chat_id ON calls(chat_id)`,
+                `CREATE INDEX IF NOT EXISTS idx_calls_initiated_by ON calls(initiated_by)`,
+                `CREATE INDEX IF NOT EXISTS idx_calls_status ON calls(status)`,
+                `CREATE INDEX IF NOT EXISTS idx_calls_created_at ON calls(created_at DESC)`,
+                `CREATE INDEX IF NOT EXISTS idx_call_participants_call_id ON call_participants(call_id)`,
+                `CREATE INDEX IF NOT EXISTS idx_call_participants_user_id ON call_participants(user_id)`,
+                `CREATE INDEX IF NOT EXISTS idx_call_participants_status ON call_participants(status)`,
+                `CREATE INDEX IF NOT EXISTS idx_call_events_call_id ON call_events(call_id)`,
+                `CREATE INDEX IF NOT EXISTS idx_call_events_event_type ON call_events(event_type)`
+            ];
+
+            for (const sql of statements) {
+                try {
+                    await query(sql);
+                } catch (error) {
+                    console.warn('Call schema ensure skipped:', error.message || error);
+                }
+            }
+        })();
+    }
+
+    return ensureSchemaPromise;
+}
+
 /**
  * GET /api/calls/history/all
  * Get call history for current user
@@ -57,6 +135,8 @@ router.get('/history/all', authenticateToken, async (req, res) => {
  */
 router.post('/', authenticateToken, async (req, res) => {
     try {
+        await ensureCallSchema();
+
         const { chat_id, room_name, type } = req.body;
         const userId = req.user.id;
 
@@ -81,7 +161,7 @@ router.post('/', authenticateToken, async (req, res) => {
         res.json({ call: result.rows[0] });
     } catch (error) {
         console.error('Create call error:', error);
-        res.status(500).json({ error: 'Failed to create call' });
+        res.status(500).json({ error: 'Failed to create call', detail: error.message });
     }
 });
 
