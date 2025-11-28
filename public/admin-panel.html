@@ -1451,42 +1451,6 @@
             window.location.href = '/';
         }
 
-        window.PERMISSIONS_MATRIX = PERMISSIONS_MATRIX;
-        let permissionsMatrixLoaded = false;
-
-        const createUserForm = document.getElementById('createUserForm');
-        const usernameInput = document.getElementById('createUsername');
-        const fullNameInput = document.getElementById('createFullName');
-        const passwordInput = document.getElementById('createPassword');
-        const roleSelect = document.getElementById('createRole');
-        const departmentField = document.getElementById('departmentField');
-        const departmentSelect = document.getElementById('departmentSelect');
-        const editUserModal = document.getElementById('editUserModal');
-        const editUserForm = document.getElementById('editUserForm');
-        const editChatModal = document.getElementById('editChatModal');
-        const editChatForm = document.getElementById('editChatForm');
-        const editChatNameInput = document.getElementById('editChatName');
-        const editChatTypeSelect = document.getElementById('editChatType');
-        const editChatDepartmentGroup = document.getElementById('editChatDepartmentGroup');
-        const editChatDepartmentInput = document.getElementById('editChatDepartment');
-        const editChatIdInput = document.getElementById('editChatId');
-        const currentParticipantsList = document.getElementById('currentParticipantsList');
-        const availableParticipantsList = document.getElementById('availableParticipantsList');
-        const editParticipantsSearchInput = document.getElementById('editParticipantsSearch');
-        const editUserIdInput = document.getElementById('editUserId');
-        const editFullNameInput = document.getElementById('editFullName');
-        const editUsernameInput = document.getElementById('editUsername');
-        const editRoleSelect = document.getElementById('editRole');
-        const editDepartmentField = document.getElementById('editDepartmentField');
-        const editDepartmentSelect = document.getElementById('editDepartmentSelect');
-        const editStatusSelect = document.getElementById('editStatus');
-        const editPasswordInput = document.getElementById('editInitialPassword');
-
-
-        // Check auth
-        if (!token || !currentUser || currentUser.role !== 'admin') {
-            window.location.href = '/';
-        }
 
         // Set admin info
         document.getElementById('adminName').textContent = currentUser.name;
