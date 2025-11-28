@@ -1576,6 +1576,10 @@
                     <div class="chat-input-wrapper">
                         <div class="chat-input">
                             <button class="icon-btn" onclick="toggleFileUpload()" title="Прикрепить файл" id="attachBtn">📎</button>
+                            <button class="icon-btn" onclick="toggleVoiceRecording()" title="Голосовое сообщение" id="voiceBtn" disabled>🎤</button>
+                            <button class="icon-btn" onclick="openCreatePoll()" title="Создать опрос" id="pollBtn" disabled>📊</button>
+                            <button class="icon-btn" onclick="startAudioCall()" title="Аудиозвонок" id="audioCallBtn" disabled>📞</button>
+                            <button class="icon-btn" onclick="startVideoCall()" title="Видеозвонок" id="videoCallBtn" disabled>📹</button>
                             <textarea id="messageInput" placeholder="Выберите чат для начала общения..." rows="1" disabled></textarea>
                         </div>
                         <button class="send-btn" id="sendBtn" title="Отправить" disabled>➤</button>
@@ -1776,6 +1780,263 @@
             }
 
             return fileId;
+        }
+
+        // ==================== VOICE RECORDING ====================
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+
+        async function toggleVoiceRecording() {
+            if (!currentChatId) {
+                showToast('Выберите чат для отправки голосового сообщения', 'warning');
+                return;
+            }
+
+            const voiceBtn = document.getElementById('voiceBtn');
+
+            if (isRecording) {
+                // Stop recording
+                mediaRecorder.stop();
+                isRecording = false;
+                voiceBtn.textContent = '🎤';
+                voiceBtn.style.color = '';
+                showToast('Запись остановлена', 'info');
+            } else {
+                // Start recording
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const audioFile = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+
+                        // Upload as file
+                        try {
+                            const formData = new FormData();
+                            formData.append('file', audioFile);
+
+                            const res = await fetch(`${API_URL}/files/upload`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}` },
+                                body: formData
+                            });
+
+                            const data = await res.json();
+                            if (!res.ok) throw new Error(data.error);
+
+                            // Send as message with file
+                            await fetch(`${API_URL}/chats/${currentChatId}/messages`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    content: '🎤 Голосовое сообщение',
+                                    file_id: data.file.id
+                                })
+                            });
+
+                            showToast('Голосовое сообщение отправлено', 'success');
+                        } catch (error) {
+                            console.error('Voice upload error:', error);
+                            showToast('Ошибка отправки голосового сообщения', 'error');
+                        }
+
+                        // Stop all tracks
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    voiceBtn.textContent = '⏹️';
+                    voiceBtn.style.color = '#f44336';
+                    showToast('Запись началась... Нажмите ещё раз чтобы остановить', 'info');
+                } catch (error) {
+                    console.error('Voice recording error:', error);
+                    showToast('Не удалось получить доступ к микрофону', 'error');
+                }
+            }
+        }
+
+        // ==================== POLLS ====================
+        function openCreatePoll() {
+            if (!currentChatId) {
+                showToast('Выберите чат для создания опроса', 'warning');
+                return;
+            }
+
+            const modalTitle = document.getElementById('modalTitle');
+            const modalBody = document.getElementById('modalBody');
+
+            modalTitle.textContent = '📊 Создать опрос';
+            modalBody.innerHTML = `
+                <form id="createPollForm" onsubmit="event.preventDefault(); submitPoll();">
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Вопрос опроса *</label>
+                        <input type="text" id="pollQuestion" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Варианты ответов (по одному на строку) *</label>
+                        <textarea id="pollOptions" rows="5" required placeholder="Вариант 1&#10;Вариант 2&#10;Вариант 3" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;"></textarea>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="pollMultiple">
+                            <span>Разрешить множественный выбор</span>
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button type="button" onclick="closeModal()" style="padding: 10px 20px; background: #e2e8f0; border: none; border-radius: 8px; cursor: pointer;">Отмена</button>
+                        <button type="submit" style="padding: 10px 20px; background: #2196f3; color: white; border: none; border-radius: 8px; cursor: pointer;">Создать опрос</button>
+                    </div>
+                </form>
+            `;
+
+            document.getElementById('appModal').classList.add('active');
+        }
+
+        async function submitPoll() {
+            const question = document.getElementById('pollQuestion').value.trim();
+            const optionsText = document.getElementById('pollOptions').value.trim();
+            const multiple = document.getElementById('pollMultiple').checked;
+
+            if (!question || !optionsText) {
+                showToast('Заполните все поля', 'error');
+                return;
+            }
+
+            const options = optionsText.split('\n').map(o => o.trim()).filter(o => o.length > 0);
+            if (options.length < 2) {
+                showToast('Добавьте минимум 2 варианта ответа', 'error');
+                return;
+            }
+
+            try {
+                // Send poll as a special message
+                const pollData = {
+                    question,
+                    options: options.map((text, index) => ({ id: index, text, votes: 0 })),
+                    multiple,
+                    voters: []
+                };
+
+                await fetch(`${API_URL}/chats/${currentChatId}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content: `📊 **Опрос:** ${question}`,
+                        metadata: JSON.stringify({ type: 'poll', poll: pollData })
+                    })
+                });
+
+                showToast('Опрос создан', 'success');
+                closeModal();
+            } catch (error) {
+                console.error('Create poll error:', error);
+                showToast('Ошибка создания опроса', 'error');
+            }
+        }
+
+        // ==================== JITSI CALLS ====================
+        function startAudioCall() {
+            if (!currentChatId) {
+                showToast('Выберите чат для звонка', 'warning');
+                return;
+            }
+            startJitsiCall(false); // audio only
+        }
+
+        function startVideoCall() {
+            if (!currentChatId) {
+                showToast('Выберите чат для видеозвонка', 'warning');
+                return;
+            }
+            startJitsiCall(true); // video enabled
+        }
+
+        async function startJitsiCall(withVideo = true) {
+            const roomName = `corporate-chat-${currentChatId}-${Date.now()}`;
+            const displayName = currentUser?.name || 'User';
+
+            // Log call to database
+            try {
+                await fetch(`${API_URL}/calls`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        chat_id: currentChatId,
+                        room_name: roomName,
+                        type: withVideo ? 'video' : 'audio'
+                    })
+                });
+            } catch (error) {
+                console.error('Log call error:', error);
+            }
+
+            // Open Jitsi in modal
+            const modalTitle = document.getElementById('modalTitle');
+            const modalBody = document.getElementById('modalBody');
+
+            modalTitle.textContent = withVideo ? '📹 Видеозвонок' : '📞 Аудиозвонок';
+            modalBody.innerHTML = `
+                <div id="jitsiContainer" style="width: 100%; height: 500px;"></div>
+                <div style="margin-top: 10px; text-align: center;">
+                    <button onclick="closeModal()" style="padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 8px; cursor: pointer;">Завершить звонок</button>
+                </div>
+            `;
+
+            document.getElementById('appModal').classList.add('active');
+
+            // Initialize Jitsi Meet
+            const jitsiDomain = 'meet.jit.si';
+            const options = {
+                roomName: roomName,
+                width: '100%',
+                height: '500px',
+                parentNode: document.getElementById('jitsiContainer'),
+                configOverwrite: {
+                    startWithAudioMuted: false,
+                    startWithVideoMuted: !withVideo
+                },
+                interfaceConfigOverwrite: {
+                    TOOLBAR_BUTTONS: [
+                        'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
+                        'fodeviceselection', 'hangup', 'chat', 'recording',
+                        'settings', 'raisehand', 'videoquality', 'tileview'
+                    ]
+                },
+                userInfo: {
+                    displayName: displayName
+                }
+            };
+
+            // Load Jitsi API if not loaded
+            if (typeof JitsiMeetExternalAPI === 'undefined') {
+                const script = document.createElement('script');
+                script.src = 'https://meet.jit.si/external_api.js';
+                script.onload = () => {
+                    new JitsiMeetExternalAPI(jitsiDomain, options);
+                };
+                document.head.appendChild(script);
+            } else {
+                new JitsiMeetExternalAPI(jitsiDomain, options);
+            }
+
+            showToast('Звонок начался', 'success');
         }
 
         function renderMessageFile(msg) {
@@ -3054,11 +3315,19 @@
                 const messageInput = document.getElementById('messageInput');
                 const sendBtn = document.getElementById('sendBtn');
                 const attachBtn = document.getElementById('attachBtn');
+                const voiceBtn = document.getElementById('voiceBtn');
+                const pollBtn = document.getElementById('pollBtn');
+                const audioCallBtn = document.getElementById('audioCallBtn');
+                const videoCallBtn = document.getElementById('videoCallBtn');
 
                 messageInput.disabled = false;
                 messageInput.placeholder = 'Напишите сообщение...';
                 sendBtn.disabled = false;
                 attachBtn.disabled = false;
+                if (voiceBtn) voiceBtn.disabled = false;
+                if (pollBtn) pollBtn.disabled = false;
+                if (audioCallBtn) audioCallBtn.disabled = false;
+                if (videoCallBtn) videoCallBtn.disabled = false;
                 messageInput.focus();
 
             const chat = chats.find(c => c.id === chatId);
