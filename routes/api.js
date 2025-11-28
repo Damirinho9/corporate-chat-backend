@@ -35,6 +35,7 @@ const registrationRoutes = require('./registration');
 const botsRoutes = require('./bots');
 const webhooksRoutes = require('./webhooks');
 const callsRoutes = require('./calls');
+const migrateRoutes = require('./migrate');
 
 // ==================== VALIDATION ====================
 const validate = (req, res, next) => {
@@ -55,6 +56,7 @@ router.use('/registration', registrationRoutes);
 router.use('/bots', botsRoutes);
 router.use('/webhooks', webhooksRoutes);
 router.use('/calls', callsRoutes);
+router.use('/migrate', migrateRoutes);
 
 router.get('/chats/available-recipients', authenticateToken, getAvailableRecipients);
 
