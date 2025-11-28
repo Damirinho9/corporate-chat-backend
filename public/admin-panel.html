@@ -247,6 +247,83 @@
             background: #f7fafc;
         }
 
+        /* ========== INTERACTIVE PERMISSIONS CHECKBOXES ========== */
+        .perm-cell {
+            position: relative;
+            padding: 8px !important;
+        }
+
+        .perm-checkbox-label {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .perm-checkbox-label:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .perm-checkbox {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .perm-checkbox-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.2s ease;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .perm-checkbox--allowed ~ .perm-checkbox-icon {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .perm-checkbox--denied ~ .perm-checkbox-icon {
+            background: #fed7d7;
+            color: #822727;
+        }
+
+        .perm-checkbox--limited ~ .perm-checkbox-icon {
+            background: #fefcbf;
+            color: #744210;
+        }
+
+        .perm-checkbox:checked ~ .perm-checkbox-icon {
+            box-shadow: 0 0 0 3px rgba(72, 187, 120, 0.3);
+        }
+
+        .perm-checkbox--denied:checked ~ .perm-checkbox-icon {
+            box-shadow: none;
+        }
+
+        .perm-checkbox:hover ~ .perm-checkbox-icon {
+            transform: scale(1.05);
+        }
+
+        .perm-checkbox:active ~ .perm-checkbox-icon {
+            transform: scale(0.95);
+        }
+
         /* ========== STATS ========== */
         .stats-grid {
             display: grid;
@@ -331,6 +408,31 @@
         .badge-inactive { background: #fed7d7; color: #c53030; }
         .badge-scope-self { background: #ebf8ff; color: #2b6cb0; }
         .badge-scope-moderator { background: #fefcbf; color: #744210; }
+
+        /* Chat type badges */
+        .badge-direct { background: #e6fffa; color: #234e52; }
+        .badge-department { background: #e9d8fd; color: #553c9a; }
+        .badge-group { background: #bee3f8; color: #2c5282; }
+
+        /* Chat group headers */
+        .chat-group-header {
+            background: linear-gradient(to right, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 700;
+            font-size: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .chat-group-header td {
+            padding: 12px 16px !important;
+            border-bottom: 3px solid #5a67d8 !important;
+        }
+
+        .chat-group-header:hover {
+            background: linear-gradient(to right, #5a67d8 0%, #6b46c1 100%) !important;
+        }
+
         .table-subtext { font-size: 12px; color: #718096; }
 
         /* ========== FORM ========== */
@@ -902,6 +1004,15 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+                        <button id="resetPermissionsBtn" class="btn btn-secondary" onclick="resetPermissionsMatrix()" style="display: none;">
+                            Сбросить изменения
+                        </button>
+                        <button id="savePermissionsBtn" class="btn btn-primary" onclick="savePermissionsMatrix()" style="display: none;">
+                            💾 Сохранить изменения
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1225,221 +1336,100 @@
         </div>
     </div>
 
-    <!-- Toast -->
-    <div id="toast" class="toast"></div>
 
-    <script>
-        const API_URL = window.location.origin + '/api';
-        let token = localStorage.getItem('token') || '';
-        let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
-        let departmentsCache = [];
-        let manualUsernameOverride = false;
-        let usersCache = [];
-        let chatsCache = [];
-        let currentEditingUser = null;
-        let editChatState = {
-            chatId: null,
-            chat: null,
-            participants: [],
-            availableUsers: [],
-            pendingAdditions: new Set(),
-            filter: ''
-        };
+    <!-- Modal for Assign Department Head -->
+    <div id="assignHeadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>👤 Назначить РОПа</h2>
+                <button class="close-btn" onclick="closeAssignHeadModal()">×</button>
+            </div>
+            <form id="assignHeadForm" onsubmit="event.preventDefault(); submitAssignHead();">
+                <div class="modal-body">
+                    <input type="hidden" id="assignHeadDeptName">
 
-        const ROLE_ORDER = ['admin', 'assistant', 'rop', 'operator', 'employee'];
-        const ROLE_LABELS = {
-            admin: 'Админ',
-            assistant: 'Ассистент',
-            rop: 'РОП',
-            operator: 'Оператор',
-            employee: 'Сотрудник'
-        };
-
-        const PERMISSIONS_MATRIX = [
-            {
-                id: 'editOwnMessages',
-                label: 'Редактировать свои сообщения (до 5 минут после отправки)',
-                roles: {
-                    admin: true,
-                    assistant: true,
-                    rop: true,
-                    operator: true,
-                    employee: true
-                },
-                hint: 'Редактирование доступно всем ролям только в течение пяти минут после отправки собственного сообщения.'
-            },
-            {
-                id: 'deleteOwnMessages',
-                label: 'Удалять свои сообщения (до 5 минут после отправки)',
-                roles: {
-                    admin: true,
-                    assistant: true,
-                    rop: true,
-                    operator: true,
-                    employee: true
-                },
-                hint: 'Удаление доступно всем ролям в течение пяти минут после отправки собственного сообщения.'
-            },
-            {
-                id: 'deleteAnyMessages',
-                label: 'Удалять сообщения других участников',
-                roles: {
-                    admin: true,
-                    assistant: false,
-                    rop: 'department',
-                    operator: false,
-                    employee: false
-                },
-                hint: 'РОП может удалять сообщения только в чатах своего отдела; администратор — в любых чатах.'
-            }
-        ];
-
-        window.PERMISSIONS_MATRIX = PERMISSIONS_MATRIX;
-        let permissionsMatrixLoaded = false;
-
-        const createUserForm = document.getElementById('createUserForm');
-        const usernameInput = document.getElementById('createUsername');
-        const fullNameInput = document.getElementById('createFullName');
-        const passwordInput = document.getElementById('createPassword');
-        const roleSelect = document.getElementById('createRole');
-        const departmentField = document.getElementById('departmentField');
-        const departmentSelect = document.getElementById('departmentSelect');
-        const editUserModal = document.getElementById('editUserModal');
-        const editUserForm = document.getElementById('editUserForm');
-        const editChatModal = document.getElementById('editChatModal');
-        const editChatForm = document.getElementById('editChatForm');
-        const editChatNameInput = document.getElementById('editChatName');
-        const editChatTypeSelect = document.getElementById('editChatType');
-        const editChatDepartmentGroup = document.getElementById('editChatDepartmentGroup');
-        const editChatDepartmentInput = document.getElementById('editChatDepartment');
-        const editChatIdInput = document.getElementById('editChatId');
-        const currentParticipantsList = document.getElementById('currentParticipantsList');
-        const availableParticipantsList = document.getElementById('availableParticipantsList');
-        const editParticipantsSearchInput = document.getElementById('editParticipantsSearch');
-        const editUserIdInput = document.getElementById('editUserId');
-        const editFullNameInput = document.getElementById('editFullName');
-        const editUsernameInput = document.getElementById('editUsername');
-        const editRoleSelect = document.getElementById('editRole');
-        const editDepartmentField = document.getElementById('editDepartmentField');
-        const editDepartmentSelect = document.getElementById('editDepartmentSelect');
-        const editStatusSelect = document.getElementById('editStatus');
-        const editPasswordInput = document.getElementById('editInitialPassword');
-
-        const modalFocusMemory = new WeakMap();
-
-        function rememberModalFocus(modal) {
-            if (!modal) {
-                return;
-            }
-
-            const activeElement = document.activeElement;
-            if (activeElement && activeElement instanceof HTMLElement) {
-                modalFocusMemory.set(modal, activeElement);
-            } else {
-                modalFocusMemory.set(modal, null);
-            }
-        }
-
-        function restoreModalFocus(modal) {
-            if (!modal) {
-                return;
-            }
-
-            const previousElement = modalFocusMemory.get(modal);
-            modalFocusMemory.delete(modal);
-
-            if (previousElement && typeof previousElement.focus === 'function') {
-                try {
-                    previousElement.focus();
-                } catch (error) {
-                    console.warn('[modal] Unable to restore focus', error);
-                }
-            }
-        }
-
-        function openModalElement(modal, { focusTarget = null, focusSelector = null } = {}) {
-            if (!modal) {
-                return;
-            }
-
-            rememberModalFocus(modal);
-
-            modal.classList.add('show');
-            modal.style.display = 'flex';
-
-            let focusElement = null;
-            if (focusTarget && typeof focusTarget.focus === 'function') {
-                focusElement = focusTarget;
-            } else if (focusSelector) {
-                focusElement = modal.querySelector(focusSelector);
-            }
-
-            if (!focusElement) {
-                focusElement = modal.querySelector('[data-autofocus]')
-                    || modal.querySelector('input, select, textarea, button');
-            }
-
-            if (focusElement && typeof focusElement.focus === 'function') {
-                setTimeout(() => focusElement.focus(), 0);
-            }
-        }
-
-        // Check auth
-        if (!token || !currentUser || currentUser.role !== 'admin') {
-            window.location.href = '/';
-        }
-
-                <div class="form-group">
-                    <label>Username *</label>
-                    <input type="text" id="editUsername" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Role *</label>
-                    <select id="editRole" required>
-                        <option value="">Select role</option>
-                        <option value="admin">Админ</option>
-                        <option value="assistant">Assistant</option>
-                        <option value="rop">ROP</option>
-                        <option value="operator">Operator</option>
-                        <option value="employee">Сотрудник</option>
-                    </select>
-                </div>
-
-                <div class="form-group disabled" id="editDepartmentField">
-                    <label>Department *</label>
-                    <select id="editDepartmentSelect" disabled>
-                        <option value="">Выберите отдел</option>
-                    </select>
-                    <small class="form-hint">Отдел обязателен для РОПов, операторов и сотрудников.</small>
-                </div>
-
-                <div class="form-group">
-                    <label>Status *</label>
-                    <select id="editStatus" required>
-                        <option value="true">Active</option>
-                        <option value="false">Inactive</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Initial Password</label>
-                    <div class="password-inline">
-                        <input type="text" id="editInitialPassword" readonly>
-                        <button type="button" class="btn btn-secondary" onclick="copyEditPassword()">Копировать</button>
-                        <button type="button" class="btn btn-secondary" onclick="resetUserPassword()">Сбросить</button>
+                    <div class="form-group">
+                        <label>Отдел</label>
+                        <input type="text" id="assignHeadDeptDisplay" readonly style="background: #f7fafc; cursor: not-allowed;">
                     </div>
-                    <small class="form-hint">Пароль показывается только администраторам. Сброс создаст новый случайный пароль и сохранит его.</small>
-                </div>
 
+                    <div class="form-group">
+                        <label>Выберите РОПа *</label>
+                        <select id="assignHeadUserSelect" required>
+                            <option value="">Выберите пользователя...</option>
+                        </select>
+                        <small class="form-hint">Показываются только пользователи с ролью РОП</small>
+                    </div>
+                </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('editUserModal')">Отмена</button>
-                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAssignHeadModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Назначить РОПа</button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- Modal for Rename Department -->
+    <div id="renameDepartmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ Переименовать отдел</h2>
+                <button class="close-btn" onclick="closeRenameDepartmentModal()">×</button>
+            </div>
+            <form id="renameDepartmentForm" onsubmit="event.preventDefault(); submitRenameDepartment();">
+                <div class="modal-body">
+                    <input type="hidden" id="renameDeptOldName">
+
+                    <div class="form-group">
+                        <label>Текущее название</label>
+                        <input type="text" id="renameDeptOldDisplay" readonly style="background: #f7fafc; cursor: not-allowed;">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Новое название *</label>
+                        <input type="text" id="renameDeptNewName" placeholder="Введите новое название отдела" required minlength="3" maxlength="100">
+                        <small class="form-hint">Минимум 3 символа, максимум 100</small>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeRenameDepartmentModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Переименовать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Add User to Department -->
+    <div id="addUserToDepartmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Добавить пользователя в отдел</h2>
+                <button class="close-btn" onclick="closeAddUserToDepartmentModal()">×</button>
+            </div>
+            <form id="addUserToDepartmentForm" onsubmit="event.preventDefault(); addUserToDepartmentSubmit();">
+                <div class="modal-body">
+                    <input type="hidden" id="addUserDepartmentName">
+
+                    <div class="form-group">
+                        <label>Отдел</label>
+                        <input type="text" id="addUserDepartmentDisplay" readonly style="background: #f7fafc; cursor: not-allowed;">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Выберите пользователя *</label>
+                        <select id="addUserSelectUser" required>
+                            <option value="">Выберите пользователя...</option>
+                        </select>
+                        <small class="form-hint">Только пользователи без отдела или с другими отделами</small>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddUserToDepartmentModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Добавить пользователя</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <!-- Toast -->
     <div id="toast" class="toast"></div>
 
@@ -1471,9 +1461,11 @@
         };
 
         const PERMISSIONS_MATRIX = [
+            // === КАТЕГОРИЯ: Работа с сообщениями ===
             {
                 id: 'editOwnMessages',
                 label: 'Редактировать свои сообщения (до 5 минут после отправки)',
+                category: 'messages',
                 roles: {
                     admin: true,
                     assistant: true,
@@ -1486,6 +1478,7 @@
             {
                 id: 'deleteOwnMessages',
                 label: 'Удалять свои сообщения (до 5 минут после отправки)',
+                category: 'messages',
                 roles: {
                     admin: true,
                     assistant: true,
@@ -1498,6 +1491,7 @@
             {
                 id: 'deleteAnyMessages',
                 label: 'Удалять сообщения других участников',
+                category: 'messages',
                 roles: {
                     admin: true,
                     assistant: false,
@@ -1506,9 +1500,293 @@
                     employee: false
                 },
                 hint: 'РОП может удалять сообщения только в чатах своего отдела; администратор — в любых чатах.'
+            },
+            {
+                id: 'forwardMessages',
+                label: 'Пересылать сообщения в другие чаты',
+                category: 'messages',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: true,
+                    operator: true,
+                    employee: true
+                },
+                hint: 'Доступно всем ролям.'
+            },
+            {
+                id: 'pinMessages',
+                label: 'Закреплять сообщения',
+                category: 'messages',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: true,
+                    operator: false,
+                    employee: false
+                },
+                hint: 'Доступно администраторам, ассистентам и РОПам.'
+            },
+            {
+                id: 'viewDeletionHistory',
+                label: 'Просматривать историю удалений',
+                category: 'messages',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: true,
+                    operator: false,
+                    employee: false
+                },
+                hint: 'Доступно только администраторам и РОПам.'
+            },
+
+            // === КАТЕГОРИЯ: Управление чатами ===
+            {
+                id: 'createGroupChats',
+                label: 'Создавать групповые чаты',
+                category: 'chats',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: true,
+                    operator: true,
+                    employee: false
+                },
+                hint: 'Сотрудники не могут создавать групповые чаты.'
+            },
+            {
+                id: 'createDepartmentChats',
+                label: 'Создавать чаты отделов',
+                category: 'chats',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: true,
+                    operator: false,
+                    employee: false
+                },
+                hint: 'Доступно администраторам и РОПам.'
+            },
+            {
+                id: 'manageChats',
+                label: 'Редактировать чаты (название, участники)',
+                category: 'chats',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: 'department',
+                    operator: false,
+                    employee: false
+                },
+                hint: 'РОП может редактировать только чаты своего отдела.'
+            },
+            {
+                id: 'deleteChats',
+                label: 'Удалять чаты',
+                category: 'chats',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: false,
+                    operator: false,
+                    employee: false
+                },
+                hint: 'Доступно только администраторам.'
+            },
+
+            // === КАТЕГОРИЯ: Управление пользователями ===
+            {
+                id: 'createUsers',
+                label: 'Создавать новых пользователей',
+                category: 'users',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: 'department',
+                    operator: false,
+                    employee: false
+                },
+                hint: 'РОП может создавать пользователей только в своём отделе.'
+            },
+            {
+                id: 'editUsers',
+                label: 'Редактировать данные пользователей',
+                category: 'users',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: 'department',
+                    operator: false,
+                    employee: false
+                },
+                hint: 'РОП может редактировать только пользователей своего отдела.'
+            },
+            {
+                id: 'deleteUsers',
+                label: 'Удалять (деактивировать) пользователей',
+                category: 'users',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: 'department',
+                    operator: false,
+                    employee: false
+                },
+                hint: 'РОП может удалять только пользователей своего отдела.'
+            },
+            {
+                id: 'viewAllUsers',
+                label: 'Просматривать всех пользователей системы',
+                category: 'users',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: 'department',
+                    operator: true,
+                    employee: false
+                },
+                hint: 'РОП видит только пользователей своего отдела.'
+            },
+
+            // === КАТЕГОРИЯ: Управление отделами ===
+            {
+                id: 'createDepartments',
+                label: 'Создавать отделы',
+                category: 'departments',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: false,
+                    operator: false,
+                    employee: false
+                },
+                hint: 'Доступно только администраторам.'
+            },
+            {
+                id: 'editDepartments',
+                label: 'Редактировать отделы',
+                category: 'departments',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: false,
+                    operator: false,
+                    employee: false
+                },
+                hint: 'Доступно только администраторам.'
+            },
+            {
+                id: 'assignDepartmentHeads',
+                label: 'Назначать РОПов отделов',
+                category: 'departments',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: false,
+                    operator: false,
+                    employee: false
+                },
+                hint: 'Доступно только администраторам.'
+            },
+
+            // === КАТЕГОРИЯ: Система поддержки ===
+            {
+                id: 'createSupportTickets',
+                label: 'Создавать тикеты поддержки',
+                category: 'support',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: true,
+                    operator: true,
+                    employee: true
+                },
+                hint: 'Доступно всем ролям.'
+            },
+            {
+                id: 'manageSupportTickets',
+                label: 'Управлять тикетами (назначение, изменение статуса)',
+                category: 'support',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: false,
+                    operator: false,
+                    employee: false
+                },
+                hint: 'Доступно администраторам и ассистентам.'
+            },
+            {
+                id: 'viewSupportAnalytics',
+                label: 'Просматривать аналитику по тикетам',
+                category: 'support',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: false,
+                    operator: false,
+                    employee: false
+                },
+                hint: 'Доступно администраторам и ассистентам.'
+            },
+
+            // === КАТЕГОРИЯ: Файлы ===
+            {
+                id: 'uploadFiles',
+                label: 'Загружать файлы в сообщения',
+                category: 'files',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: true,
+                    operator: true,
+                    employee: true
+                },
+                hint: 'Доступно всем ролям (макс 10MB).'
+            },
+            {
+                id: 'deleteFiles',
+                label: 'Удалять файлы из системы',
+                category: 'files',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: false,
+                    operator: false,
+                    employee: false
+                },
+                hint: 'Доступно только администраторам.'
+            },
+
+            // === КАТЕГОРИЯ: Аналитика и логи ===
+            {
+                id: 'viewAnalytics',
+                label: 'Просматривать общую аналитику',
+                category: 'analytics',
+                roles: {
+                    admin: true,
+                    assistant: true,
+                    rop: 'department',
+                    operator: false,
+                    employee: false
+                },
+                hint: 'РОП видит аналитику только по своему отделу.'
+            },
+            {
+                id: 'viewSystemLogs',
+                label: 'Просматривать системные логи',
+                category: 'analytics',
+                roles: {
+                    admin: true,
+                    assistant: false,
+                    rop: false,
+                    operator: false,
+                    employee: false
+                },
+                hint: 'Доступно только администраторам.'
             }
         ];
-
         window.PERMISSIONS_MATRIX = PERMISSIONS_MATRIX;
         let permissionsMatrixLoaded = false;
 
@@ -1603,6 +1881,7 @@
         if (!token || !currentUser || currentUser.role !== 'admin') {
             window.location.href = '/';
         }
+
 
         // Set admin info
         document.getElementById('adminName').textContent = currentUser.name;
@@ -1656,6 +1935,9 @@
             }
         }
 
+        let originalPermissionsMatrix = null;
+        let hasPermissionsChanges = false;
+
         function renderPermissionsMatrix(matrixData) {
             const tbody = document.getElementById('permissionsMatrixBody');
             if (!tbody) return;
@@ -1671,15 +1953,51 @@
                 return;
             }
 
-            tbody.innerHTML = matrix.map(row => {
+            // Store original matrix for reset
+            if (!originalPermissionsMatrix) {
+                originalPermissionsMatrix = JSON.parse(JSON.stringify(matrix));
+            }
+
+            tbody.innerHTML = matrix.map((row, rowIndex) => {
                 const columns = ROLE_ORDER.map(role => {
                     const value = row.roles[role];
+                    const checkboxId = `perm_${row.id}_${role}`;
 
                     if (value === 'department') {
-                        return `<td><span class="perm-chip perm-chip--limited" title="Только в чатах своего отдела">◐</span></td>`;
+                        return `
+                            <td class="perm-cell">
+                                <label class="perm-checkbox-label" title="Ограниченный доступ (только свой отдел)">
+                                    <input
+                                        type="checkbox"
+                                        id="${checkboxId}"
+                                        class="perm-checkbox perm-checkbox--limited"
+                                        data-permission="${row.id}"
+                                        data-role="${role}"
+                                        data-value="department"
+                                        checked
+                                        onchange="handlePermissionChange(this)"
+                                    >
+                                    <span class="perm-checkbox-icon">◐</span>
+                                </label>
+                            </td>`;
                     }
 
-                    return `<td><span class="perm-chip ${value ? 'perm-chip--allowed' : 'perm-chip--denied'}">${value ? '✔' : '✖'}</span></td>`;
+                    return `
+                        <td class="perm-cell">
+                            <label class="perm-checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    id="${checkboxId}"
+                                    class="perm-checkbox ${value ? 'perm-checkbox--allowed' : 'perm-checkbox--denied'}"
+                                    data-permission="${row.id}"
+                                    data-role="${role}"
+                                    data-value="${value ? 'true' : 'false'}"
+                                    ${value ? 'checked' : ''}
+                                    onchange="handlePermissionChange(this)"
+                                >
+                                <span class="perm-checkbox-icon">${value ? '✔' : '✖'}</span>
+                            </label>
+                        </td>`;
                 }).join('');
 
                 const hintRow = row.hint
@@ -1694,6 +2012,97 @@
                     ${hintRow}
                 `;
             }).join('');
+
+            // Show/hide save buttons
+            updateSaveButtonsVisibility();
+        }
+
+        function handlePermissionChange(checkbox) {
+            const permission = checkbox.dataset.permission;
+            const role = checkbox.dataset.role;
+            const isChecked = checkbox.checked;
+
+            // Update visual feedback
+            checkbox.classList.remove('perm-checkbox--allowed', 'perm-checkbox--denied');
+            checkbox.classList.add(isChecked ? 'perm-checkbox--allowed' : 'perm-checkbox--denied');
+
+            const icon = checkbox.nextElementSibling;
+            icon.textContent = isChecked ? '✔' : '✖';
+
+            // Update data in window.PERMISSIONS_MATRIX
+            const matrix = window.PERMISSIONS_MATRIX || PERMISSIONS_MATRIX;
+            const row = matrix.find(r => r.id === permission);
+            if (row) {
+                row.roles[role] = isChecked;
+            }
+
+            // Mark as changed
+            hasPermissionsChanges = true;
+            updateSaveButtonsVisibility();
+        }
+
+        function updateSaveButtonsVisibility() {
+            const saveBtn = document.getElementById('savePermissionsBtn');
+            const resetBtn = document.getElementById('resetPermissionsBtn');
+
+            if (saveBtn && resetBtn) {
+                if (hasPermissionsChanges) {
+                    saveBtn.style.display = 'block';
+                    resetBtn.style.display = 'block';
+                } else {
+                    saveBtn.style.display = 'none';
+                    resetBtn.style.display = 'none';
+                }
+            }
+        }
+
+        function resetPermissionsMatrix() {
+            if (!originalPermissionsMatrix) return;
+
+            // Restore original matrix
+            window.PERMISSIONS_MATRIX = JSON.parse(JSON.stringify(originalPermissionsMatrix));
+            hasPermissionsChanges = false;
+
+            // Re-render
+            renderPermissionsMatrix(window.PERMISSIONS_MATRIX);
+            showToast('Изменения сброшены', 'info');
+        }
+
+        async function savePermissionsMatrix() {
+            if (!hasPermissionsChanges) {
+                showToast('Нет изменений для сохранения', 'info');
+                return;
+            }
+
+            const matrix = window.PERMISSIONS_MATRIX || PERMISSIONS_MATRIX;
+
+            try {
+                const response = await fetch(`${API_URL}/permissions/matrix`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ matrix })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                showToast('✅ Права успешно сохранены!', 'success');
+                hasPermissionsChanges = false;
+
+                // Update original matrix
+                originalPermissionsMatrix = JSON.parse(JSON.stringify(matrix));
+
+                updateSaveButtonsVisibility();
+            } catch (error) {
+                console.error('Save permissions error:', error);
+                showToast('Ошибка сохранения прав: ' + error.message, 'error');
+            }
         }
 
         async function fetchPermissionsMatrix() {
@@ -1834,12 +2243,57 @@ async function loadChats() {
                 chatsCache = Array.isArray(data.chats) ? data.chats : [];
 
                 const tbody = document.querySelector('#chatsTable tbody');
-                if (chatsCache.length > 0) {
-                    tbody.innerHTML = chatsCache.map(chat => `
+
+                if (chatsCache.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#a0aec0;">Чаты не найдены</td></tr>';
+                    return;
+                }
+
+                // Group chats by type
+                const departmentChats = chatsCache.filter(c => c.type === 'department');
+                const groupChats = chatsCache.filter(c => c.type === 'group');
+                const directChats = chatsCache.filter(c => c.type === 'direct');
+
+                // Helper function to generate display name for direct chats
+                function getDirectChatName(chat) {
+                    if (chat.name && chat.name !== 'Direct Chat') {
+                        return escapeHtml(chat.name);
+                    }
+
+                    if (chat.participants && Array.isArray(chat.participants)) {
+                        const names = chat.participants.map(p => p.name).filter(Boolean);
+                        if (names.length > 0) {
+                            return escapeHtml(names.join(' ↔ '));
+                        }
+                    }
+
+                    return 'ЛС (без имени)';
+                }
+
+                // Helper function to render a chat row
+                function renderChatRow(chat) {
+                    let displayName;
+                    let typeLabel;
+
+                    if (chat.type === 'direct') {
+                        displayName = getDirectChatName(chat);
+                        typeLabel = '<span class="badge badge-direct">ЛС</span>';
+                    } else if (chat.type === 'department') {
+                        displayName = escapeHtml(chat.name || 'Чат отдела');
+                        typeLabel = '<span class="badge badge-department">Отдел</span>';
+                    } else if (chat.type === 'group') {
+                        displayName = escapeHtml(chat.name || 'Групповой чат');
+                        typeLabel = '<span class="badge badge-group">Группа</span>';
+                    } else {
+                        displayName = escapeHtml(chat.name || 'Чат');
+                        typeLabel = chat.type || 'N/A';
+                    }
+
+                    return `
                         <tr>
                             <td>${chat.id}</td>
                             <td>${displayName}</td>
-                            <td>${chat.type || 'N/A'}</td>
+                            <td>${typeLabel}</td>
                             <td>${chat.department_name || 'N/A'}</td>
                             <td>${chat.participant_count || 0}</td>
                             <td>
@@ -1847,14 +2301,31 @@ async function loadChats() {
                                 <button class="btn-delete" onclick="deleteChat(${chat.id})">Удалить</button>
                             </td>
                         </tr>
-                        `;
-                    }).join('');
-                } else {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#a0aec0;">No chats found</td></tr>';
+                    `;
                 }
+
+                // Render grouped chats
+                let html = '';
+
+                if (departmentChats.length > 0) {
+                    html += `<tr class="chat-group-header"><td colspan="6">📂 Чаты отделов (${departmentChats.length})</td></tr>`;
+                    html += departmentChats.map(renderChatRow).join('');
+                }
+
+                if (groupChats.length > 0) {
+                    html += `<tr class="chat-group-header"><td colspan="6">👥 Групповые чаты (${groupChats.length})</td></tr>`;
+                    html += groupChats.map(renderChatRow).join('');
+                }
+
+                if (directChats.length > 0) {
+                    html += `<tr class="chat-group-header"><td colspan="6">💬 Личные сообщения (${directChats.length})</td></tr>`;
+                    html += directChats.map(renderChatRow).join('');
+                }
+
+                tbody.innerHTML = html;
             } catch (err) {
                 console.error('Load chats error:', err);
-                showToast('Failed to load chats', 'error');
+                showToast('Ошибка загрузки чатов', 'error');
             }
         }
 
@@ -2005,10 +2476,41 @@ async function loadChats() {
         }
 
         function showRenameDepartmentModal(departmentName) {
-            const newName = prompt(`Введите новое название отдела "${departmentName}".\n\n⚠️ Внимание: Название отдела будет синхронизировано с названием чата отдела!`, departmentName);
-            if (!newName || newName.trim() === '' || newName === departmentName) return;
+            // Set old department name in hidden and display fields
+            document.getElementById('renameDeptOldName').value = departmentName;
+            document.getElementById('renameDeptOldDisplay').value = departmentName;
+            document.getElementById('renameDeptNewName').value = '';
 
-            renameDepartment(departmentName, newName.trim());
+            // Show modal
+            document.getElementById('renameDepartmentModal').classList.add('show');
+
+            // Focus on new name input
+            setTimeout(() => {
+                document.getElementById('renameDeptNewName').focus();
+            }, 100);
+        }
+
+        function closeRenameDepartmentModal() {
+            document.getElementById('renameDepartmentModal').classList.remove('show');
+            document.getElementById('renameDepartmentForm').reset();
+        }
+
+        function submitRenameDepartment() {
+            const oldName = document.getElementById('renameDeptOldName').value;
+            const newName = document.getElementById('renameDeptNewName').value.trim();
+
+            if (!newName || newName.length < 3) {
+                showToast('Название должно быть не менее 3 символов', 'warning');
+                return;
+            }
+
+            if (newName === oldName) {
+                showToast('Новое название совпадает со старым', 'warning');
+                return;
+            }
+
+            renameDepartment(oldName, newName);
+            closeRenameDepartmentModal();
         }
 
         async function renameDepartment(oldName, newName) {
@@ -2040,12 +2542,55 @@ async function loadChats() {
             }
         }
 
-        function showAssignHeadModal(departmentName) {
-            // Простой prompt для демонстрации - можно заменить на модальное окно
-            const userId = prompt(`Введите ID пользователя для назначения РОПом отдела ${departmentName}:`);
-            if (!userId) return;
+        async function showAssignHeadModal(departmentName) {
+            // Set department name in hidden and display fields
+            document.getElementById('assignHeadDeptName').value = departmentName;
+            document.getElementById('assignHeadDeptDisplay').value = departmentName;
 
-            assignDepartmentHead(departmentName, parseInt(userId));
+            // Load users with role 'rop'
+            try {
+                await ensureUsersCacheLoaded();
+                const ropUsers = usersCache.filter(u => u.role === 'rop');
+
+                const select = document.getElementById('assignHeadUserSelect');
+                select.innerHTML = '<option value="">Выберите пользователя...</option>';
+
+                ropUsers.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = `${user.full_name} (${user.username})${user.department_name ? ' - ' + user.department_name : ''}`;
+                    select.appendChild(option);
+                });
+
+                if (ropUsers.length === 0) {
+                    select.innerHTML = '<option value="">Нет доступных РОПов</option>';
+                    showToast('Нет пользователей с ролью РОП', 'warning');
+                }
+
+                // Show modal
+                document.getElementById('assignHeadModal').classList.add('show');
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showToast('Ошибка загрузки пользователей', 'error');
+            }
+        }
+
+        function closeAssignHeadModal() {
+            document.getElementById('assignHeadModal').classList.remove('show');
+            document.getElementById('assignHeadForm').reset();
+        }
+
+        function submitAssignHead() {
+            const departmentName = document.getElementById('assignHeadDeptName').value;
+            const userId = parseInt(document.getElementById('assignHeadUserSelect').value);
+
+            if (!userId) {
+                showToast('Выберите пользователя', 'warning');
+                return;
+            }
+
+            assignDepartmentHead(departmentName, userId);
+            closeAssignHeadModal();
         }
 
         async function assignDepartmentHead(departmentName, userId) {
@@ -2095,9 +2640,6 @@ async function loadChats() {
                     select.innerHTML += `<option value="${user.id}">${user.name} (${user.username}) • ${displayRole}${departmentInfo}</option>`;
                 });
 
-                // Reset role selection
-                document.getElementById('addUserSelectRole').value = '';
-
                 // Show modal
                 openModalElement(document.getElementById('addUserToDepartmentModal'), { focusSelector: '#addUserSelectUser' });
             } catch (error) {
@@ -2118,7 +2660,6 @@ async function loadChats() {
         async function addUserToDepartmentSubmit() {
             const departmentName = document.getElementById('addUserDepartmentName').value;
             const userId = parseInt(document.getElementById('addUserSelectUser').value);
-            const role = document.getElementById('addUserSelectRole').value || undefined;
 
             if (!userId) {
                 showToast('Выберите пользователя', 'error');
@@ -2127,9 +2668,6 @@ async function loadChats() {
 
             try {
                 const body = { userId };
-                if (role) {
-                    body.role = role;
-                }
 
                 const res = await fetch(`${API_URL}/departments/${encodeURIComponent(departmentName)}/users`, {
                     method: 'POST',
@@ -2241,357 +2779,6 @@ async function loadChats() {
             }
         }
 
-        async function loadDeletionHistory() {
-            const tbody = document.getElementById('deletionHistoryBody');
-            if (!tbody) return;
-
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
-
-            try {
-                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.status === 403) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
-                    return;
-                }
-
-                if (!response.ok) {
-                    throw new Error(`Failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (!Array.isArray(data.history) || data.history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
-                    return;
-                }
-
-                const rowsHtml = data.history.map(entry => {
-                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
-                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
-                        ? deletedAtDate.toLocaleString('ru-RU')
-                        : '—';
-
-                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
-                    const deleterCell = entry.deleted_by_user_name
-                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
-                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
-
-                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
-                    const ownerCell = entry.deleted_message_user_name
-                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
-                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
-
-                    const roleKey = entry.deleted_by_role || 'employee';
-                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
-                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
-
-                    const scopeBadge = entry.deletion_scope === 'self'
-                        ? '<span class="badge badge-scope-self">Своё</span>'
-                        : '<span class="badge badge-scope-moderator">Модерация</span>';
-                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
-
-                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
-                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
-
-                    const contentParts = [];
-                    if (entry.original_content) {
-                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
-                    }
-                    if (entry.file_id) {
-                        const fileLink = buildAttachmentLink(entry.file_id);
-                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
-                    }
-
-                    const contentCell = contentParts.length
-                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
-                        : '<span style="color:#a0aec0;">—</span>';
-
-                    return `
-                        <tr>
-                            <td>${deletedAt}</td>
-                            <td>${deleterCell}</td>
-                            <td>${roleCell}</td>
-                            <td>${chatCell}</td>
-                            <td>${ownerCell}</td>
-                            <td>${scopeCell}</td>
-                            <td>${contentCell}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                tbody.innerHTML = rowsHtml;
-            } catch (error) {
-                console.error('Failed to load deletion history:', error);
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
-            }
-        }
-
-        async function loadDeletionHistory() {
-            const tbody = document.getElementById('deletionHistoryBody');
-            if (!tbody) return;
-
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
-
-            try {
-                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.status === 403) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
-                    return;
-                }
-
-                if (!response.ok) {
-                    throw new Error(`Failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (!Array.isArray(data.history) || data.history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
-                    return;
-                }
-
-                const rowsHtml = data.history.map(entry => {
-                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
-                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
-                        ? deletedAtDate.toLocaleString('ru-RU')
-                        : '—';
-
-                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
-                    const deleterCell = entry.deleted_by_user_name
-                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
-                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
-
-                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
-                    const ownerCell = entry.deleted_message_user_name
-                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
-                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
-
-                    const roleKey = entry.deleted_by_role || 'employee';
-                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
-                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
-
-                    const scopeBadge = entry.deletion_scope === 'self'
-                        ? '<span class="badge badge-scope-self">Своё</span>'
-                        : '<span class="badge badge-scope-moderator">Модерация</span>';
-                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
-
-                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
-                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
-
-                    const contentParts = [];
-                    if (entry.original_content) {
-                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
-                    }
-                    if (entry.file_id) {
-                        const fileLink = buildAttachmentLink(entry.file_id);
-                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
-                    }
-
-                    const contentCell = contentParts.length
-                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
-                        : '<span style="color:#a0aec0;">—</span>';
-
-                    return `
-                        <tr>
-                            <td>${deletedAt}</td>
-                            <td>${deleterCell}</td>
-                            <td>${roleCell}</td>
-                            <td>${chatCell}</td>
-                            <td>${ownerCell}</td>
-                            <td>${scopeCell}</td>
-                            <td>${contentCell}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                tbody.innerHTML = rowsHtml;
-            } catch (error) {
-                console.error('Failed to load deletion history:', error);
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
-            }
-        }
-
-        async function loadDeletionHistory() {
-            const tbody = document.getElementById('deletionHistoryBody');
-            if (!tbody) return;
-
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
-
-            try {
-                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.status === 403) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
-                    return;
-                }
-
-                if (!response.ok) {
-                    throw new Error(`Failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (!Array.isArray(data.history) || data.history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
-                    return;
-                }
-
-                const rowsHtml = data.history.map(entry => {
-                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
-                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
-                        ? deletedAtDate.toLocaleString('ru-RU')
-                        : '—';
-
-                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
-                    const deleterCell = entry.deleted_by_user_name
-                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
-                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
-
-                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
-                    const ownerCell = entry.deleted_message_user_name
-                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
-                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
-
-                    const roleKey = entry.deleted_by_role || 'employee';
-                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
-                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
-
-                    const scopeBadge = entry.deletion_scope === 'self'
-                        ? '<span class="badge badge-scope-self">Своё</span>'
-                        : '<span class="badge badge-scope-moderator">Модерация</span>';
-                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
-
-                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
-                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
-
-                    const contentParts = [];
-                    if (entry.original_content) {
-                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
-                    }
-                    if (entry.file_id) {
-                        const fileLink = buildAttachmentLink(entry.file_id);
-                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
-                    }
-
-                    const contentCell = contentParts.length
-                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
-                        : '<span style="color:#a0aec0;">—</span>';
-
-                    return `
-                        <tr>
-                            <td>${deletedAt}</td>
-                            <td>${deleterCell}</td>
-                            <td>${roleCell}</td>
-                            <td>${chatCell}</td>
-                            <td>${ownerCell}</td>
-                            <td>${scopeCell}</td>
-                            <td>${contentCell}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                tbody.innerHTML = rowsHtml;
-            } catch (error) {
-                console.error('Failed to load deletion history:', error);
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
-            }
-        }
-
-        async function loadDeletionHistory() {
-            const tbody = document.getElementById('deletionHistoryBody');
-            if (!tbody) return;
-
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">Загрузка...</td></tr>';
-
-            try {
-                const response = await fetch(`${API_URL}/messages/deletion-history?limit=100`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.status === 403) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Нет доступа к истории удалений</td></tr>';
-                    return;
-                }
-
-                if (!response.ok) {
-                    throw new Error(`Failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (!Array.isArray(data.history) || data.history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #a0aec0;">История удалений пуста</td></tr>';
-                    return;
-                }
-
-                const rowsHtml = data.history.map(entry => {
-                    const deletedAtDate = entry.deleted_at ? new Date(entry.deleted_at) : null;
-                    const deletedAt = deletedAtDate && !Number.isNaN(deletedAtDate.getTime())
-                        ? deletedAtDate.toLocaleString('ru-RU')
-                        : '—';
-
-                    const deleterId = entry.deleted_by_user_id ? `ID ${entry.deleted_by_user_id}` : '';
-                    const deleterCell = entry.deleted_by_user_name
-                        ? `${escapeHtml(entry.deleted_by_user_name)}${deleterId ? `<div class="table-subtext">${deleterId}</div>` : ''}`
-                        : (deleterId || '<span style="color:#a0aec0;">—</span>');
-
-                    const ownerIdLabel = entry.deleted_message_user_id ? `ID ${entry.deleted_message_user_id}` : '';
-                    const ownerCell = entry.deleted_message_user_name
-                        ? `${escapeHtml(entry.deleted_message_user_name)}${ownerIdLabel ? `<div class="table-subtext">${ownerIdLabel}</div>` : ''}`
-                        : (ownerIdLabel || '<span style="color:#a0aec0;">—</span>');
-
-                    const roleKey = entry.deleted_by_role || 'employee';
-                    const roleLabel = entry.deleted_by_role ? escapeHtml(entry.deleted_by_role) : '—';
-                    const roleCell = `<span class="badge badge-${roleKey}">${roleLabel}</span>`;
-
-                    const scopeBadge = entry.deletion_scope === 'self'
-                        ? '<span class="badge badge-scope-self">Своё</span>'
-                        : '<span class="badge badge-scope-moderator">Модерация</span>';
-                    const scopeCell = `${scopeBadge}${entry.deleted_by_role ? `<div class="table-subtext">${escapeHtml(entry.deleted_by_role)}</div>` : ''}`;
-
-                    const chatName = escapeHtml(entry.chat_name || `Чат #${entry.chat_id}`);
-                    const chatCell = `${chatName}${entry.chat_department ? `<div class="table-subtext">${escapeHtml(entry.chat_department)}</div>` : ''}`;
-
-                    const contentParts = [];
-                    if (entry.original_content) {
-                        contentParts.push(escapeHtml(truncateText(entry.original_content, 160)));
-                    }
-                    if (entry.file_id) {
-                        const fileLink = buildAttachmentLink(entry.file_id);
-                        contentParts.push(`<a href="${fileLink}" target="_blank" rel="noopener">📎 Файл #${entry.file_id}</a>`);
-                    }
-
-                    const contentCell = contentParts.length
-                        ? contentParts.map((line, index) => index === 0 ? line : `<div class="table-subtext">${line}</div>`).join('')
-                        : '<span style="color:#a0aec0;">—</span>';
-
-                    return `
-                        <tr>
-                            <td>${deletedAt}</td>
-                            <td>${deleterCell}</td>
-                            <td>${roleCell}</td>
-                            <td>${chatCell}</td>
-                            <td>${ownerCell}</td>
-                            <td>${scopeCell}</td>
-                            <td>${contentCell}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                tbody.innerHTML = rowsHtml;
-            } catch (error) {
-                console.error('Failed to load deletion history:', error);
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e53e3e;">Не удалось загрузить историю удалений</td></tr>';
-            }
-        }
 
         async function loadLogs() {
             try {
@@ -2986,24 +3173,30 @@ async function loadChats() {
             }
 
             try {
-                const res = await fetch(`${API_URL}/users/${userId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const res = await fetch(`${API_URL}/users`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
                 });
-                
+
                 const data = await res.json();
-                
-                if (data.success) {
-                    showToast('User deleted successfully!', 'success');
+
+                if (res.ok) {
+                    showToast('Пользователь успешно создан!', 'success');
+                    createUserForm.reset();
+                    passwordInput.value = '';
                     loadUsers();
                 } else {
-                    showToast(data.error || 'Failed to delete user', 'error');
+                    showToast(data.error || 'Ошибка создания пользователя', 'error');
                 }
             } catch (err) {
-                console.error('Delete user error:', err);
-                showToast('Ошибка удаления пользователя', 'error');
+                console.error('Create user error:', err);
+                showToast('Ошибка создания пользователя', 'error');
             }
-        }
+        });
 
         // initialisePermissionsMatrix already defined above at line 2765 - duplicate removed
 
@@ -3499,17 +3692,17 @@ async function createNewChat() {
     const department = type === 'department' ? document.getElementById('newChatDepartment').value : null;
     
     if (!name) {
-        alert('Введите название чата');
+        showToast('Введите название чата', 'warning');
         return;
     }
     
     if (selectedParticipants.size === 0) {
-        alert('Выберите хотя бы одного участника');
+        showToast('Выберите хотя бы одного участника', 'warning');
         return;
     }
     
     if (type === 'department' && !department) {
-        alert('Выберите отдел');
+        showToast('Выберите отдел', 'warning');
         return;
     }
     
@@ -3531,15 +3724,15 @@ async function createNewChat() {
         const data = await response.json();
         
         if (response.ok) {
-            alert('Чат успешно создан!');
+            showToast('Чат успешно создан!', 'success');
             closeCreateChatModal();
             loadChats();
         } else {
-            alert('Ошибка: ' + (data.error || 'Не удалось создать чат'));
+            showToast('Ошибка: ' + (data.error || 'Не удалось создать чат'), 'error');
         }
     } catch (error) {
         console.error('Create chat error:', error);
-        alert('Ошибка создания чата');
+        showToast('Ошибка создания чата', 'error');
     }
 }
 
@@ -3584,7 +3777,7 @@ async function createNewDepartment() {
     const headId = document.getElementById('newDeptHead').value;
 
     if (!name) {
-        alert('Введите название отдела');
+        showToast('Введите название отдела', 'warning');
         return;
     }
 
@@ -3605,15 +3798,15 @@ async function createNewDepartment() {
         const data = await response.json();
         
         if (response.ok) {
-            alert(`Отдел "${name}" успешно создан!`);
+            showToast(`Отдел "${name}" успешно создан!`, 'success');
             closeCreateDepartmentModal();
             loadDepartments();
         } else {
-            alert('Ошибка: ' + (data.error || 'Не удалось создать отдел'));
+            showToast('Ошибка: ' + (data.error || 'Не удалось создать отдел'), 'error');
         }
     } catch (error) {
         console.error('Create department error:', error);
-        alert('Ошибка создания отдела');
+        showToast('Ошибка создания отдела', 'error');
     }
 }
 
@@ -4195,14 +4388,6 @@ setupModalAccessibility();
         }
 
         // ========== CREATE DEPARTMENT ==========
-        function showCreateDepartmentModal() {
-            const departmentName = prompt('Введите название нового отдела (например: Отдел 3):');
-            if (!departmentName) return;
-
-            const userId = prompt('Введите ID пользователя для назначения РОПом (необязательно):');
-
-            createDepartment(departmentName, userId ? parseInt(userId) : null);
-        }
 
         async function createDepartment(name, headUserId) {
             try {

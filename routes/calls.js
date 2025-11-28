@@ -52,6 +52,40 @@ router.get('/history/all', authenticateToken, async (req, res) => {
 });
 
 /**
+ * POST /api/calls
+ * Create a new call log
+ */
+router.post('/', authenticateToken, async (req, res) => {
+    try {
+        const { chat_id, room_name, type } = req.body;
+        const userId = req.user.id;
+
+        if (!chat_id || !room_name) {
+            return res.status(400).json({ error: 'chat_id and room_name are required' });
+        }
+
+        const result = await query(`
+            INSERT INTO calls (chat_id, room_name, type, initiated_by, status, created_at)
+            VALUES ($1, $2, $3, $4, 'active', NOW())
+            RETURNING *
+        `, [chat_id, room_name, type || 'video', userId]);
+
+        const callId = result.rows[0].id;
+
+        // Add initiator as participant
+        await query(`
+            INSERT INTO call_participants (call_id, user_id, status, joined_at)
+            VALUES ($1, $2, 'joined', NOW())
+        `, [callId, userId]);
+
+        res.json({ call: result.rows[0] });
+    } catch (error) {
+        console.error('Create call error:', error);
+        res.status(500).json({ error: 'Failed to create call' });
+    }
+});
+
+/**
  * GET /api/calls/:id
  * Get call details
  */
