@@ -66,6 +66,56 @@ router.get('/permissions/matrix',
         res.json({ matrix: PERMISSIONS_MATRIX });
     }
 );
+
+router.put('/permissions/matrix',
+    authenticateToken,
+    requireAdmin,
+    async (req, res) => {
+        try {
+            const { matrix } = req.body;
+
+            if (!Array.isArray(matrix) || matrix.length === 0) {
+                return res.status(400).json({ error: 'Invalid matrix format' });
+            }
+
+            // Validate matrix structure
+            const isValid = matrix.every(perm =>
+                perm.id &&
+                perm.label &&
+                perm.category &&
+                perm.roles &&
+                typeof perm.roles === 'object'
+            );
+
+            if (!isValid) {
+                return res.status(400).json({ error: 'Invalid permission structure' });
+            }
+
+            // Write to file
+            const fs = require('fs').promises;
+            const path = require('path');
+            const configPath = path.join(__dirname, '../config/permissionsMatrix.js');
+
+            const fileContent = `const PERMISSIONS_MATRIX = ${JSON.stringify(matrix, null, 4)};\n\nmodule.exports = {\n    PERMISSIONS_MATRIX\n};\n`;
+
+            await fs.writeFile(configPath, fileContent, 'utf-8');
+
+            // Update in-memory cache
+            delete require.cache[require.resolve('../config/permissionsMatrix')];
+            const reloaded = require('../config/permissionsMatrix');
+            Object.assign(PERMISSIONS_MATRIX, reloaded.PERMISSIONS_MATRIX);
+
+            res.json({
+                success: true,
+                message: 'Permissions matrix updated successfully',
+                matrix: PERMISSIONS_MATRIX
+            });
+        } catch (error) {
+            console.error('Error updating permissions matrix:', error);
+            res.status(500).json({ error: 'Failed to update permissions matrix' });
+        }
+    }
+);
 // ==================== AUTH ROUTES ====================
 router.post('/auth/register',
     authenticateToken,

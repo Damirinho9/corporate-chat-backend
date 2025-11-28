@@ -247,6 +247,83 @@
             background: #f7fafc;
         }
 
+        /* ========== INTERACTIVE PERMISSIONS CHECKBOXES ========== */
+        .perm-cell {
+            position: relative;
+            padding: 8px !important;
+        }
+
+        .perm-checkbox-label {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .perm-checkbox-label:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .perm-checkbox {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .perm-checkbox-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.2s ease;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .perm-checkbox--allowed ~ .perm-checkbox-icon {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .perm-checkbox--denied ~ .perm-checkbox-icon {
+            background: #fed7d7;
+            color: #822727;
+        }
+
+        .perm-checkbox--limited ~ .perm-checkbox-icon {
+            background: #fefcbf;
+            color: #744210;
+        }
+
+        .perm-checkbox:checked ~ .perm-checkbox-icon {
+            box-shadow: 0 0 0 3px rgba(72, 187, 120, 0.3);
+        }
+
+        .perm-checkbox--denied:checked ~ .perm-checkbox-icon {
+            box-shadow: none;
+        }
+
+        .perm-checkbox:hover ~ .perm-checkbox-icon {
+            transform: scale(1.05);
+        }
+
+        .perm-checkbox:active ~ .perm-checkbox-icon {
+            transform: scale(0.95);
+        }
+
         /* ========== STATS ========== */
         .stats-grid {
             display: grid;
@@ -901,6 +978,15 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+                        <button id="resetPermissionsBtn" class="btn btn-secondary" onclick="resetPermissionsMatrix()" style="display: none;">
+                            Сбросить изменения
+                        </button>
+                        <button id="savePermissionsBtn" class="btn btn-primary" onclick="savePermissionsMatrix()" style="display: none;">
+                            💾 Сохранить изменения
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1824,6 +1910,9 @@
             }
         }
 
+        let originalPermissionsMatrix = null;
+        let hasPermissionsChanges = false;
+
         function renderPermissionsMatrix(matrixData) {
             const tbody = document.getElementById('permissionsMatrixBody');
             if (!tbody) return;
@@ -1839,15 +1928,51 @@
                 return;
             }
 
-            tbody.innerHTML = matrix.map(row => {
+            // Store original matrix for reset
+            if (!originalPermissionsMatrix) {
+                originalPermissionsMatrix = JSON.parse(JSON.stringify(matrix));
+            }
+
+            tbody.innerHTML = matrix.map((row, rowIndex) => {
                 const columns = ROLE_ORDER.map(role => {
                     const value = row.roles[role];
+                    const checkboxId = `perm_${row.id}_${role}`;
 
                     if (value === 'department') {
-                        return `<td><span class="perm-chip perm-chip--limited" title="Только в чатах своего отдела">◐</span></td>`;
+                        return `
+                            <td class="perm-cell">
+                                <label class="perm-checkbox-label" title="Ограниченный доступ (только свой отдел)">
+                                    <input
+                                        type="checkbox"
+                                        id="${checkboxId}"
+                                        class="perm-checkbox perm-checkbox--limited"
+                                        data-permission="${row.id}"
+                                        data-role="${role}"
+                                        data-value="department"
+                                        checked
+                                        onchange="handlePermissionChange(this)"
+                                    >
+                                    <span class="perm-checkbox-icon">◐</span>
+                                </label>
+                            </td>`;
                     }
 
-                    return `<td><span class="perm-chip ${value ? 'perm-chip--allowed' : 'perm-chip--denied'}">${value ? '✔' : '✖'}</span></td>`;
+                    return `
+                        <td class="perm-cell">
+                            <label class="perm-checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    id="${checkboxId}"
+                                    class="perm-checkbox ${value ? 'perm-checkbox--allowed' : 'perm-checkbox--denied'}"
+                                    data-permission="${row.id}"
+                                    data-role="${role}"
+                                    data-value="${value ? 'true' : 'false'}"
+                                    ${value ? 'checked' : ''}
+                                    onchange="handlePermissionChange(this)"
+                                >
+                                <span class="perm-checkbox-icon">${value ? '✔' : '✖'}</span>
+                            </label>
+                        </td>`;
                 }).join('');
 
                 const hintRow = row.hint
@@ -1862,6 +1987,97 @@
                     ${hintRow}
                 `;
             }).join('');
+
+            // Show/hide save buttons
+            updateSaveButtonsVisibility();
+        }
+
+        function handlePermissionChange(checkbox) {
+            const permission = checkbox.dataset.permission;
+            const role = checkbox.dataset.role;
+            const isChecked = checkbox.checked;
+
+            // Update visual feedback
+            checkbox.classList.remove('perm-checkbox--allowed', 'perm-checkbox--denied');
+            checkbox.classList.add(isChecked ? 'perm-checkbox--allowed' : 'perm-checkbox--denied');
+
+            const icon = checkbox.nextElementSibling;
+            icon.textContent = isChecked ? '✔' : '✖';
+
+            // Update data in window.PERMISSIONS_MATRIX
+            const matrix = window.PERMISSIONS_MATRIX || PERMISSIONS_MATRIX;
+            const row = matrix.find(r => r.id === permission);
+            if (row) {
+                row.roles[role] = isChecked;
+            }
+
+            // Mark as changed
+            hasPermissionsChanges = true;
+            updateSaveButtonsVisibility();
+        }
+
+        function updateSaveButtonsVisibility() {
+            const saveBtn = document.getElementById('savePermissionsBtn');
+            const resetBtn = document.getElementById('resetPermissionsBtn');
+
+            if (saveBtn && resetBtn) {
+                if (hasPermissionsChanges) {
+                    saveBtn.style.display = 'block';
+                    resetBtn.style.display = 'block';
+                } else {
+                    saveBtn.style.display = 'none';
+                    resetBtn.style.display = 'none';
+                }
+            }
+        }
+
+        function resetPermissionsMatrix() {
+            if (!originalPermissionsMatrix) return;
+
+            // Restore original matrix
+            window.PERMISSIONS_MATRIX = JSON.parse(JSON.stringify(originalPermissionsMatrix));
+            hasPermissionsChanges = false;
+
+            // Re-render
+            renderPermissionsMatrix(window.PERMISSIONS_MATRIX);
+            showToast('Изменения сброшены', 'info');
+        }
+
+        async function savePermissionsMatrix() {
+            if (!hasPermissionsChanges) {
+                showToast('Нет изменений для сохранения', 'info');
+                return;
+            }
+
+            const matrix = window.PERMISSIONS_MATRIX || PERMISSIONS_MATRIX;
+
+            try {
+                const response = await fetch(`${API_URL}/permissions/matrix`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ matrix })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                showToast('✅ Права успешно сохранены!', 'success');
+                hasPermissionsChanges = false;
+
+                // Update original matrix
+                originalPermissionsMatrix = JSON.parse(JSON.stringify(matrix));
+
+                updateSaveButtonsVisibility();
+            } catch (error) {
+                console.error('Save permissions error:', error);
+                showToast('Ошибка сохранения прав: ' + error.message, 'error');
+            }
         }
 
         async function fetchPermissionsMatrix() {
