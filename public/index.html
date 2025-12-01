@@ -3137,312 +3137,271 @@
         }
 
         function renderChats() {
-                const chatsList = document.getElementById('chatsList');
+            const chatsList = document.getElementById('chatsList');
 
-                if (!Array.isArray(chats) || chats.length === 0) {
-                        chatsList.innerHTML = `
-                                <div style="padding:20px;text-align:center;color:var(--text-secondary);">
-                                        Нет доступных чатов
-                                </div>`;
-                        return;
+            if (!Array.isArray(chats) || chats.length === 0) {
+                chatsList.innerHTML = `
+                    <div style="padding:20px;text-align:center;color:var(--text-secondary);">
+                        Нет доступных чатов
+                    </div>`;
+                return;
+            }
+
+            // 1) Убираем дубли по id
+            const uniqueChats = [];
+            const seenIds = new Set();
+            chats.forEach(chat => {
+                const idKey = chat.id != null ? String(chat.id) : null;
+                if (idKey === null || seenIds.has(idKey)) return;
+                seenIds.add(idKey);
+                uniqueChats.push(chat);
+            });
+
+            // 2) Поиск
+            const filteredChats = chatSearchQuery
+                ? uniqueChats.filter(chat => {
+                    const name = (chat.name || '').toLowerCase();
+                    const lastMsg = typeof chat.last_message === 'string'
+                        ? chat.last_message.toLowerCase()
+                        : (chat.last_message?.content || '').toLowerCase();
+                    return name.includes(chatSearchQuery) || lastMsg.includes(chatSearchQuery);
+                })
+                : uniqueChats;
+
+            if (filteredChats.length === 0) {
+                chatsList.innerHTML = `
+                    <div style="padding:20px;text-align:center;color:var(--text-secondary);">
+                        Чаты не найдены
+                    </div>`;
+                return;
+            }
+
+            const renderChatItem = (chat, options = {}) => {
+                const { withArrow = false, deptKey = '', expanded = false, extraClass = '' } = options;
+                let lastMessageText = '';
+                let timestamp = '';
+
+                if (chat.last_message) {
+                    if (typeof chat.last_message === 'object' && chat.last_message.content) {
+                        lastMessageText = escapeHtml(chat.last_message.content);
+                        timestamp = formatTimestamp(chat.last_message.created_at);
+                    } else if (typeof chat.last_message === 'string') {
+                        lastMessageText = escapeHtml(chat.last_message);
+                    }
                 }
 
-                // 1️⃣ Убираем дубли по name+type
-                const unique = [];
-                const seen = new Set();
-                for (const chat of chats) {
-                        const key = `${chat.name || ''}_${chat.type || ''}`;
-                        if (!seen.has(key)) {
-                                seen.add(key);
-                                unique.push(chat);
-                        }
+                if (!lastMessageText) lastMessageText = 'Пока тишина';
+
+                const chatName = escapeHtml(chat.name || 'Чат');
+                const unreadBadge = chat.unread_count > 0
+                    ? `<span class="unread-badge">${chat.unread_count}</span>`
+                    : '';
+
+                const isActive = Number(chat.id) === Number(currentChatId);
+
+                const content = `
+                    <div class="chat-item-header">
+                        <span class="chat-name">${chatName}</span>
+                        ${unreadBadge}
+                    </div>
+                    <div class="chat-last-message">
+                        <span class="chat-last-message-text">${lastMessageText}</span>
+                        ${timestamp ? `<span class="chat-timestamp">${timestamp}</span>` : ''}
+                    </div>
+                `;
+
+                if (withArrow) {
+                    const arrowClass = expanded ? 'department-toggle expanded' : 'department-toggle';
+                    return `
+                        <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
+                            data-chat-id="${chat.id}"
+                            onclick="openChat(${chat.id})">
+                            <button class="${arrowClass}" onclick="toggleDepartment(event, '${deptKey}')">&#9656;</button>
+                            <div class="department-info">
+                                ${content}
+                            </div>
+                        </li>
+                    `;
                 }
 
-                // 2️⃣ Обновляем отображение
-                const filteredChats = chatSearchQuery
-                        ? unique.filter(chat => {
-                                const name = (chat.name || '').toLowerCase();
-                                const lastMsg = typeof chat.last_message === 'string'
-                                        ? chat.last_message.toLowerCase()
-                                        : (chat.last_message?.content || '').toLowerCase();
-                                return name.includes(chatSearchQuery) || lastMsg.includes(chatSearchQuery);
-                        })
-                        : unique;
+                return `
+                    <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
+                        data-chat-id="${chat.id}"
+                        onclick="openChat(${chat.id})">
+                        ${content}
+                    </li>
+                `;
+            };
 
-                if (filteredChats.length === 0) {
-                        chatsList.innerHTML = `
-                                <div style="padding:20px;text-align:center;color:var(--text-secondary);">
-                                        Чаты не найдены
-                                </div>`;
-                        return;
+            // 3) Группировка
+            const directChats = filteredChats.filter(chat => chat.type === 'direct');
+            const groupChats = filteredChats.filter(chat => chat.type !== 'direct');
+            const usedChatIds = new Set();
+
+            const departmentContacts = Array.isArray(contacts.departments) ? contacts.departments : [];
+            const departmentSections = departmentContacts.map(dept => {
+                const deptName = dept.department || '';
+                const deptKey = getDepartmentKey(deptName || `department-${dept.id || ''}`);
+
+                let mainChat = null;
+                const identifier = getDepartmentIdentifier(deptName);
+
+                if (identifier) {
+                    mainChat = groupChats.find(chat => !usedChatIds.has(chat.id) && getDepartmentIdentifier(chat.name || '') === identifier);
                 }
 
-                const renderChatItem = (chat, options = {}) => {
-                        const { withArrow = false, deptKey = '', expanded = false, extraClass = '' } = options;
-                        let lastMessageText = '';
-                        let timestamp = '';
+                if (!mainChat) {
+                    mainChat = groupChats.find(chat => !usedChatIds.has(chat.id) && (chat.name || '').trim().toLowerCase() === (deptName || '').trim().toLowerCase());
+                }
 
-                        if (chat.last_message) {
-                                if (typeof chat.last_message === 'object' && chat.last_message.content) {
-                                        lastMessageText = escapeHtml(chat.last_message.content);
-                                        timestamp = formatTimestamp(chat.last_message.created_at);
-                                } else if (typeof chat.last_message === 'string') {
-                                        lastMessageText = escapeHtml(chat.last_message);
-                                }
-                        }
+                if (mainChat) {
+                    usedChatIds.add(mainChat.id);
+                }
 
-                        if (!lastMessageText) lastMessageText = 'Пока тишина';
+                return {
+                    dept,
+                    deptKey,
+                    mainChat,
+                    isExpanded: expandedDepartments.has(deptKey)
+                };
+            });
 
-                        const chatName = escapeHtml(chat.name || 'Чат');
-                        const unreadBadge = chat.unread_count > 0
-                                ? `<span class="unread-badge">${chat.unread_count}</span>`
-                                : '';
+            // Отдельного списка ассистентов больше нет — их чаты идут как отделы
+            const remainingGroupChats = groupChats.filter(chat => !usedChatIds.has(chat.id));
 
-                        const isActive = Number(chat.id) === Number(currentChatId);
+            // Функция отрисовки контакта (пользователя для создания чата)
+            const renderContactItem = (user, options = {}) => {
+                const { nested = false } = options;
+                const roleEmoji = {
+                    'rop': '👔',
+                    'operator': '👤',
+                    'assistant': '🤝',
+                    'employee': '👨‍💼',
+                    'admin': '⚙️'
+                };
+                const emoji = roleEmoji[user.role] || '👤';
+                const role = getRoleDisplayName(user.role) || user.role || '';
 
-                        const content = `
-                                <div class="chat-item-header">
-                                        <span class="chat-name">${chatName}</span>
-                                        ${unreadBadge}
-                                </div>
-                                <div class="chat-last-message">
-                                        <span class="chat-last-message-text">${lastMessageText}</span>
-                                        ${timestamp
-                                                ? `<span class="chat-timestamp">${timestamp}</span>`
-                                                : ''}
-                                </div>
-                        `;
+                const contactNestingClass = nested ? ' nested-contact' : '';
+                const directChatId = directChatByUser.get(user.id);
+                const isActive =
+                    Number(directChatId) === Number(currentChatId) ||
+                    (!directChatId && currentDirectContactId && Number(user.id) === Number(currentDirectContactId));
+                const chatAttr = directChatId ? ` data-chat-id="${directChatId}"` : '';
 
-                        if (withArrow) {
-                                const arrowClass = expanded ? 'department-toggle expanded' : 'department-toggle';
-                                return `
-                                        <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
-                                            data-chat-id="${chat.id}"
-                                            onclick="openChat(${chat.id})">
-                                                <button class="${arrowClass}" onclick="toggleDepartment(event, '${deptKey}')">&#9656;</button>
-                                                <div class="department-info">
-                                                        ${content}
+                return `
+                    <li class="chat-item contact-item${contactNestingClass}${isActive ? ' active' : ''}"
+                        data-contact-id="${user.id}"${chatAttr}
+                        onclick="openDirectChatWithUser(${user.id}, '${escapeHtml(user.name)}')">
+                        <div class="chat-item-header">
+                            <span class="chat-name">${emoji} ${escapeHtml(user.name)}</span>
+                        </div>
+                        <div class="chat-last-message">
+                            <span class="chat-last-message-text">${role}</span>
+                        </div>
+                    </li>
+                `;
+            };
+
+            // 4) Отрисовка секций
+            let html = '';
+
+            if (activeSectionFilter === 'all' || activeSectionFilter === 'Отделы' || activeSectionFilter === 'Ассистенты') {
+                const deptToRender = activeSectionFilter === 'Ассистенты'
+                    ? departmentSections.filter(section => /ассист/i.test(section.dept?.department || section.mainChat?.name || ''))
+                    : departmentSections;
+
+                if (deptToRender.length > 0) {
+                    html += `<div class="chat-section department-wrapper">
+                                <h4>Отделы</h4>
+                                <div class="department-list">`;
+
+                    deptToRender.forEach(section => {
+                        const deptName = escapeHtml(section.dept?.department || section.mainChat?.name || 'Отдел');
+                        const contactsList = Array.isArray(section.dept?.users) ? section.dept.users : [];
+                        const hasContacts = contactsList.length > 0;
+
+                        if (section.mainChat) {
+                            html += `<div class="department-section" data-department="${section.deptKey}">
+                                        <ul class="department-main-list">
+                                            ${renderChatItem(section.mainChat, {
+                                                withArrow: hasContacts,
+                                                deptKey: section.deptKey,
+                                                expanded: section.isExpanded,
+                                                extraClass: 'department-main'
+                                            })}
+                                        </ul>`;
+                        } else if (hasContacts) {
+                            html += `<div class="department-section" data-department="${section.deptKey}">
+                                        <div class="chat-item department-main disabled">
+                                            <button class="department-toggle ${section.isExpanded ? 'expanded' : ''}" onclick="toggleDepartment(event, '${section.deptKey}')">&#9656;</button>
+                                            <div class="department-info">
+                                                <div class="chat-item-header">
+                                                    <span class="chat-name">${deptName}</span>
                                                 </div>
-                                        </li>
-                                `;
-                        }
-
-                        return `
-                                <li class="chat-item ${extraClass} ${isActive ? 'active' : ''}"
-                                    data-chat-id="${chat.id}"
-                                    onclick="openChat(${chat.id})">
-                                        ${content}
-                                </li>
-                        `;
-                };
-
-                // 3️⃣ Группировка по отделам и ролям
-                const assistants = [];
-                const directChats = [];
-                const usedChatIds = new Set();
-
-                filteredChats.forEach(chat => {
-                        if (chat.type === 'direct') {
-                                directChats.push(chat);
-                                return;
-                        }
-
-                        if (/ассист/i.test(chat.name || '')) {
-                                assistants.push(chat);
-                                usedChatIds.add(chat.id);
-                        }
-                });
-
-                const groupChats = filteredChats.filter(chat => chat.type !== 'direct');
-                const departmentSections = [];
-                const departmentContacts = Array.isArray(contacts.departments) ? contacts.departments : [];
-
-                departmentContacts.forEach(dept => {
-                        const deptName = dept.department || '';
-                        const deptKey = getDepartmentKey(deptName || `department-${dept.id || ''}`);
-                        let mainChat = null;
-
-                        const identifier = getDepartmentIdentifier(deptName);
-                        if (identifier) {
-                                mainChat = groupChats.find(chat => !usedChatIds.has(chat.id) && getDepartmentIdentifier(chat.name || '') === identifier);
-                        }
-
-                        if (!mainChat) {
-                                mainChat = groupChats.find(chat => !usedChatIds.has(chat.id) && (chat.name || '').toLowerCase() === (deptName || '').toLowerCase());
-                        }
-
-                        if (mainChat) {
-                                usedChatIds.add(mainChat.id);
-                        }
-
-                        departmentSections.push({
-                                dept,
-                                deptKey,
-                                mainChat,
-                                isExpanded: expandedDepartments.has(deptKey)
-                        });
-                });
-
-                groupChats
-                        .filter(chat => !usedChatIds.has(chat.id) && /отдел/i.test(chat.name || ''))
-                        .forEach(chat => {
-                                const deptName = chat.name || 'Отдел';
-                                const deptKey = getDepartmentKey(deptName);
-
-                                if (!departmentSections.some(section => section.deptKey === deptKey)) {
-                                        departmentSections.push({
-                                                dept: { department: deptName, users: [] },
-                                                deptKey,
-                                                mainChat: chat,
-                                                isExpanded: expandedDepartments.has(deptKey)
-                                        });
-                                }
-
-                                usedChatIds.add(chat.id);
-                        });
-
-                const otherGroupChats = groupChats.filter(chat => !usedChatIds.has(chat.id));
-
-                // Функция отрисовки контакта (пользователя для создания чата)
-                const renderContactItem = (user, options = {}) => {
-                        const { nested = false } = options;
-                        const roleEmoji = {
-                                'rop': '👔',
-                                'operator': '👤',
-                                'assistant': '🤝',
-                                'employee': '👨‍💼',
-                                'admin': '⚙️'
-                        };
-                        const emoji = roleEmoji[user.role] || '👤';
-                        const role = getRoleDisplayName(user.role) || user.role || '';
-
-                        const contactNestingClass = nested ? ' nested-contact' : '';
-                        const directChatId = directChatByUser.get(user.id);
-                        const isActive =
-                                Number(directChatId) === Number(currentChatId) ||
-                                (!directChatId && currentDirectContactId && Number(user.id) === Number(currentDirectContactId));
-                        const chatAttr = directChatId ? ` data-chat-id="${directChatId}"` : '';
-
-                        return `
-                                <li class="chat-item contact-item${contactNestingClass}${isActive ? ' active' : ''}"
-                                    data-contact-id="${user.id}"${chatAttr}
-                                    onclick="openDirectChatWithUser(${user.id}, '${escapeHtml(user.name)}')">
-                                        <div class="chat-item-header">
-                                                <span class="chat-name">${emoji} ${escapeHtml(user.name)}</span>
-                                        </div>
-                                        <div class="chat-last-message">
-                                                <span class="chat-last-message-text">${role}</span>
-                                        </div>
-                                </li>
-                        `;
-                };
-
-                // Apply section filter
-                let html = '';
-
-                if (activeSectionFilter === 'all' || activeSectionFilter === 'Отделы') {
-                        if (departmentSections.length > 0) {
-                                html += `<div class="chat-section department-wrapper">
-                                                <h4>Отделы</h4>
-                                                <div class="department-list">`;
-
-                                departmentSections.forEach(section => {
-                                        const deptName = escapeHtml(section.dept?.department || section.mainChat?.name || 'Отдел');
-                                        const contactsList = Array.isArray(section.dept?.users) ? section.dept.users : [];
-                                        const hasContacts = contactsList.length > 0;
-
-                                        if (section.mainChat) {
-                                                html += `<div class="department-section" data-department="${section.deptKey}">
-                                                                <ul class="department-main-list">
-                                                                        ${renderChatItem(section.mainChat, {
-                                                                                withArrow: hasContacts,
-                                                                                deptKey: section.deptKey,
-                                                                                expanded: section.isExpanded,
-                                                                                extraClass: 'department-main'
-                                                                        })}
-                                                                </ul>`;
-                                        } else if (hasContacts) {
-                                                html += `<div class="department-section" data-department="${section.deptKey}">
-                                                                <div class="chat-item department-main disabled">
-                                                                        <button class="department-toggle ${section.isExpanded ? 'expanded' : ''}" onclick="toggleDepartment(event, '${section.deptKey}')">&#9656;</button>
-                                                                        <div class="department-info">
-                                                                                <div class="chat-item-header">
-                                                                                        <span class="chat-name">${deptName}</span>
-                                                                                </div>
-                                                                                <div class="chat-last-message">
-                                                                                        <span class="chat-last-message-text">Нет группового чата</span>
-                                                                                </div>
-                                                                        </div>
-                                                                </div>`;
-                                        } else {
-                                                html += `<div class="department-section" data-department="${section.deptKey}">
-                                                                <div class="chat-item department-main disabled">
-                                                                        <div class="department-info">
-                                                                                <div class="chat-item-header">
-                                                                                        <span class="chat-name">${deptName}</span>
-                                                                                </div>
-                                                                                <div class="chat-last-message">
-                                                                                        <span class="chat-last-message-text">Нет доступных чатов</span>
-                                                                                </div>
-                                                                        </div>
-                                                                </div>`;
-                                        }
-
-                                        if (hasContacts) {
-                                                html += `<ul class="department-contacts ${section.isExpanded ? 'expanded' : ''}">
-                                                                ${contactsList.map(user => renderContactItem(user, { nested: true })).join('')}
-                                                        </ul>`;
-                                        }
-
-                                        html += `</div>`;
-                                });
-
-                                html += `</div></div>`;
-                        }
-
-                        if (otherGroupChats.length > 0) {
-                                html += `<div class="chat-section">
-                                                <h4>Групповые чаты</h4>
-                                                <ul>${otherGroupChats.map(chat => renderChatItem(chat)).join('')}</ul>
+                                                <div class="chat-last-message">
+                                                    <span class="chat-last-message-text">Нет группового чата</span>
+                                                </div>
+                                            </div>
+                                        </div>`;
+                        } else {
+                            html += `<div class="department-section" data-department="${section.deptKey}">
+                                        <div class="chat-item department-main disabled">
+                                            <div class="department-info">
+                                                <div class="chat-item-header">
+                                                    <span class="chat-name">${deptName}</span>
+                                                </div>
+                                                <div class="chat-last-message">
+                                                    <span class="chat-last-message-text">Нет доступных чатов</span>
+                                                </div>
+                                            </div>
                                         </div>`;
                         }
-                }
 
-                if (activeSectionFilter === 'all' || activeSectionFilter === 'Ассистенты') {
-                        // Убрали отдельную секцию "Ассистенты" с контактами, т.к. они уже показываются в отделе "Ассистенты"
-                        // Оставляем только групповые чаты ассистентов, которые не являются department-type
-                        if (assistants.length > 0) {
-                                html += `<div class="chat-section">
-                                        <h4>Ассистенты (Групповой чат)</h4>
-                                        <ul>${assistants.map(renderChatItem).join('')}</ul>
-                                </div>`;
+                        if (hasContacts) {
+                            html += `<ul class="department-contacts ${section.isExpanded ? 'expanded' : ''}">
+                                        ${contactsList.map(user => renderContactItem(user, { nested: true })).join('')}
+                                    </ul>`;
                         }
+
+                        html += `</div>`;
+                    });
+
+                    html += `</div></div>`;
                 }
 
-                // Admins section (only visible to admins)
-                if (activeSectionFilter === 'all' || activeSectionFilter === 'Администраторы') {
-                        const adminContacts = contacts.admins?.users || [];
-                        if (adminContacts.length > 0 && currentUser.role === 'admin') {
-                                html += `<div class="chat-section">
-                                        <h4>Администраторы</h4>
-                                        <ul>${adminContacts.map(user => renderContactItem(user, { nested: false })).join('')}</ul>
-                                </div>`;
-                        }
+                if ((activeSectionFilter === 'all' || activeSectionFilter === 'Отделы') && remainingGroupChats.length > 0) {
+                    html += `<div class="chat-section">
+                                <h4>Групповые чаты</h4>
+                                <ul>${remainingGroupChats.map(chat => renderChatItem(chat)).join('')}</ul>
+                            </div>`;
                 }
+            }
 
-                if (activeSectionFilter === 'all' && directChats.length > 0) {
-                        html += `<div class="chat-section">
-                                        <h4>Личные чаты</h4>
-                                        <ul>${directChats.map(chat => renderChatItem(chat)).join('')}</ul>
-                                </div>`;
+            // Admins section (only visible to admins)
+            if (activeSectionFilter === 'all' || activeSectionFilter === 'Администраторы') {
+                const adminContacts = contacts.admins?.users || [];
+                if (adminContacts.length > 0 && currentUser.role === 'admin') {
+                    html += `<div class="chat-section">
+                                <h4>Администраторы</h4>
+                                <ul>${adminContacts.map(user => renderContactItem(user, { nested: false })).join('')}</ul>
+                            </div>`;
                 }
+            }
 
-                chatsList.innerHTML = html || `
-                        <div style="padding:20px;text-align:center;color:var(--text-secondary);">
-                                Нет доступных чатов
+            if (activeSectionFilter === 'all' && directChats.length > 0) {
+                html += `<div class="chat-section">
+                            <h4>Личные чаты</h4>
+                            <ul>${directChats.map(chat => renderChatItem(chat)).join('')}</ul>
                         </div>`;
+            }
 
-                syncContactHighlights();
+            chatsList.innerHTML = html || `
+                <div style="padding:20px;text-align:center;color:var(--text-secondary);">
+                    Нет доступных чатов
+                </div>`;
+
+            syncContactHighlights();
         }
 
         function updateChatLastMessage(chatId, message) {
