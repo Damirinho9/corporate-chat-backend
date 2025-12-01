@@ -3440,6 +3440,8 @@
                     const deptKey = getDepartmentKey(deptName || `department-${dept.id || ''}`);
                     const identifier = getDepartmentIdentifier(deptName);
 
+                    const contactsList = Array.isArray(dept?.users) ? dept.users : [];
+
                     let mainChat = null;
 
                     if (identifier) {
@@ -3458,6 +3460,7 @@
                         dept,
                         deptKey,
                         mainChat,
+                        hasContacts: contactsList.length > 0,
                         isExpanded: expandedDepartments.has(deptKey)
                     };
                 });
@@ -3536,6 +3539,10 @@
                         const deptName = escapeHtml(section.dept?.department || section.mainChat?.name || 'Отдел');
                         const contactsList = Array.isArray(section.dept?.users) ? section.dept.users : [];
                         const hasContacts = contactsList.length > 0;
+
+                        if (!section.mainChat && !section.hasContacts) {
+                            return;
+                        }
 
                         if (section.mainChat) {
                             html += `<div class="department-section" data-department="${section.deptKey}">
