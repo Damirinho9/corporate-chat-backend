@@ -1731,6 +1731,7 @@
         let currentChatId = null;
         let currentDirectContactId = null;
         let chats = [];
+        const unreadByChat = new Map();
         const directChatByUser = new Map();
         const notificationUI = window.notificationUI || {};
         const {
@@ -1766,6 +1767,58 @@
                 });
             };
         })();
+
+        function syncUnreadMapFromChats() {
+            unreadByChat.clear();
+            chats.forEach(chat => {
+                const id = Number(chat.id);
+                if (!id) return;
+                const count = Number(chat.unread_count) || 0;
+                unreadByChat.set(id, Math.max(0, count));
+            });
+        }
+
+        function setUnreadCount(chatId, count) {
+            const numericId = Number(chatId);
+            if (!numericId) return;
+            const normalized = Math.max(0, Number.isFinite(count) ? count : 0);
+            unreadByChat.set(numericId, normalized);
+
+            const chat = chats.find(c => Number(c.id) === numericId);
+            if (chat) {
+                chat.unread_count = normalized;
+            }
+        }
+
+        function incrementUnreadCount(chatId) {
+            const numericId = Number(chatId);
+            if (!numericId) return;
+            const next = (unreadByChat.get(numericId) || 0) + 1;
+            setUnreadCount(numericId, next);
+            renderChats();
+        }
+
+        function resetUnreadCount(chatId) {
+            const numericId = Number(chatId);
+            if (!numericId) return;
+            setUnreadCount(numericId, 0);
+            renderChats();
+        }
+
+        async function markChatAsRead(chatId) {
+            const numericId = Number(chatId);
+            if (!numericId) return;
+            resetUnreadCount(numericId);
+
+            try {
+                await fetch(`${API_URL}/chats/${numericId}/read`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (err) {
+                console.warn('[markChatAsRead] Failed to update read status', err);
+            }
+        }
 
         function createThrottle(fn, delay = 100) {
             let lastCall = 0;
@@ -3004,7 +3057,11 @@
                 if (inActiveChat) {
                     appendMessage(data.message);
                     scrollToBottom();
+                    if (!isOwn) {
+                        markChatAsRead(incomingChatId);
+                    }
                 } else if (incomingChatId && !isOwn) {
+                    incrementUnreadCount(incomingChatId);
                     const sender = data.message?.user_name || 'Новое сообщение';
                     const rawPreview = data.message?.content;
                     const preview = (typeof rawPreview === 'string' ? rawPreview : '') || 'Новое сообщение';
@@ -3116,6 +3173,7 @@
                 });
 
                 chats = chatsData.chats || [];
+                syncUnreadMapFromChats();
                 rebuildDirectChatLookup();
                 contacts = contactsData || { departments: [], assistants: { users: [] }, admins: { users: [] } };
 
@@ -3185,19 +3243,20 @@
                         if (chatResponse.ok) {
                             const chatPayload = await chatResponse.json();
                             const chatData = chatPayload?.chat;
-                            if (chatData) {
-                                chats.push({
-                                    id: chatData.id,
-                                    name: chatData.name || userName,
-                                    type: chatData.type || 'direct',
-                                    department: chatData.department || null,
-                                    participants: chatData.participants || [],
-                                    unread_count: 0
-                                });
-                                rebuildDirectChatLookup();
-                                renderChats();
-                                chatInCache = chats.find(chat => Number(chat.id) === chatId);
-                                console.log('[openDirectChat] Чат добавлен из дополнительной загрузки');
+                                if (chatData) {
+                                    chats.push({
+                                        id: chatData.id,
+                                        name: chatData.name || userName,
+                                        type: chatData.type || 'direct',
+                                        department: chatData.department || null,
+                                        participants: chatData.participants || [],
+                                        unread_count: 0
+                                    });
+                                    setUnreadCount(chatData.id, 0);
+                                    rebuildDirectChatLookup();
+                                    renderChats();
+                                    chatInCache = chats.find(chat => Number(chat.id) === chatId);
+                                    console.log('[openDirectChat] Чат добавлен из дополнительной загрузки');
                             }
                         } else {
                             console.warn('[openDirectChat] Не удалось напрямую загрузить чат, выполняем полную перезагрузку списка');
@@ -3303,6 +3362,13 @@
                     </div>`;
                 return;
             }
+
+            chats.forEach(chat => {
+                const count = unreadByChat.get(Number(chat.id));
+                if (typeof count === 'number') {
+                    chat.unread_count = count;
+                }
+            });
 
             // 1) Убираем дубли по id
             const uniqueChats = [];
@@ -3772,7 +3838,14 @@
         function updateChatLastMessage(chatId, message) {
             const chat = chats.find(c => Number(c.id) === Number(chatId));
             if (chat) {
-                chat.last_message = message.content;
+                chat.last_message = message;
+                if (message?.created_at) {
+                    chat.updated_at = message.created_at;
+                }
+                const count = unreadByChat.get(Number(chatId));
+                if (typeof count === 'number') {
+                    chat.unread_count = count;
+                }
                 renderChats();
             }
         }
@@ -3821,6 +3894,8 @@
             }
 
             currentChatId = Number(chatId);
+
+            resetUnreadCount(currentChatId);
 
                 // Save last active chat to localStorage
                 localStorage.setItem('lastActiveChatId', chatId);
@@ -3885,6 +3960,8 @@
             syncContactHighlights();
 
             await loadMessages(chatId);
+
+            markChatAsRead(chatId);
 
             console.log('[openChat] Чат успешно открыт:', chatId);
 
