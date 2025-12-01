@@ -1929,7 +1929,7 @@
                                 },
                                 body: JSON.stringify({
                                     content: '🎤 Голосовое сообщение',
-                                    file_id: data.file.id
+                                    fileId: data.file.id
                                 })
                             });
 
@@ -2157,6 +2157,17 @@
             if (message.content && typeof message.content === 'object' && message.content.type === 'audio') {
                 return message.content;
             }
+            if (message.file) {
+                const file = message.file;
+                const mime = file.mimeType || file.type;
+                const category = file.fileType;
+                if ((category === 'audio') || (typeof mime === 'string' && mime.startsWith('audio'))) {
+                    return {
+                        url: file.url,
+                        duration: file.duration
+                    };
+                }
+            }
             return null;
         }
 
@@ -2186,11 +2197,18 @@
             if (!msg.file) return '';
             const f = msg.file;
 
+            const mime = f.mimeType || f.type;
+            const category = f.fileType;
+            if ((category === 'audio') || (typeof mime === 'string' && mime.startsWith('audio'))) {
+                return '';
+            }
+
             const fileUrl = resolveMediaUrl(f.url || `/files/${f.id}`);
             const thumbnailUrl = resolveMediaUrl(f.thumbnailUrl);
             const previewUrl = thumbnailUrl || fileUrl;
+            const isImage = (category === 'image') || (typeof mime === 'string' && mime.startsWith('image'));
 
-            if (f.type === 'image') {
+            if (isImage) {
                 return `<div class="message-file-attachment">
                     <img src="${previewUrl}" class="message-file-image" onclick="window.open('${fileUrl}','_blank')">
                 </div>`;
