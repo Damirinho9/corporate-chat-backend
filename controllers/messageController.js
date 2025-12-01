@@ -1,5 +1,6 @@
 const { query } = require('../config/database');
 const { pool } = require('../config/database');
+const { emitToChat } = require('../socket/socketHandler');
 
 // Get messages for chat
 const getMessages = async (req, res) => {
@@ -309,13 +310,20 @@ const sendMessage = async (req, res) => {
             [result.id]
         );
 
+        const payload = completeMessage.rows[0];
+
+        emitToChat(chatId, 'new_message', {
+            chatId: Number(chatId),
+            message: payload
+        });
+
         res.status(201).json({
             message: 'Message sent successfully',
-            message: completeMessage.rows[0]
+            message: payload
         });
     } catch (error) {
         console.error('Send message error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to send message',
             code: 'SEND_MESSAGE_ERROR'
         });

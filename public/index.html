@@ -2946,11 +2946,14 @@
             });
 
             socket.on('new_message', (data) => {
-                if (data.chatId === currentChatId) {
+                const incomingChatId = Number(data.chatId ?? data.chat_id ?? data.message?.chat_id);
+                if (incomingChatId && Number(currentChatId) === incomingChatId) {
                     appendMessage(data.message);
                     scrollToBottom();
                 }
-                updateChatLastMessage(data.chatId, data.message);
+                if (incomingChatId) {
+                    updateChatLastMessage(incomingChatId, data.message);
+                }
             });
 
             socket.on('user_typing', (data) => {
@@ -3714,7 +3717,7 @@
         }
 
         function updateChatLastMessage(chatId, message) {
-            const chat = chats.find(c => c.id === chatId);
+            const chat = chats.find(c => Number(c.id) === Number(chatId));
             if (chat) {
                 chat.last_message = message.content;
                 renderChats();
