@@ -1719,20 +1719,52 @@
             document.documentElement.style.setProperty('--chat-input-offset', `${offset}px`);
         }
 
+        const scheduleLayoutRefresh = (() => {
+            let rafId = null;
+            return () => {
+                if (rafId) return;
+                rafId = requestAnimationFrame(() => {
+                    rafId = null;
+                    refreshLayoutMetrics();
+                });
+            };
+        })();
+
+        function createThrottle(fn, delay = 100) {
+            let lastCall = 0;
+            let timeoutId = null;
+
+            return (...args) => {
+                const now = Date.now();
+                const remaining = delay - (now - lastCall);
+
+                if (remaining <= 0) {
+                    lastCall = now;
+                    fn(...args);
+                    return;
+                }
+
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => {
+                    lastCall = Date.now();
+                    fn(...args);
+                }, remaining);
+            };
+        }
+
         function setAppHeight() {
             const viewport = window.visualViewport;
             const height = viewport ? viewport.height : window.innerHeight;
             if (height) {
                 document.documentElement.style.setProperty('--app-height', `${height}px`);
             }
-            refreshLayoutMetrics();
+            scheduleLayoutRefresh();
         }
+        const throttledSetAppHeight = createThrottle(setAppHeight, 100);
 
         setAppHeight();
-        window.addEventListener('resize', () => requestAnimationFrame(setAppHeight));
-        window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 100));
-        window.visualViewport?.addEventListener('resize', setAppHeight);
-        window.visualViewport?.addEventListener('scroll', setAppHeight);
+        window.addEventListener('resize', () => requestAnimationFrame(throttledSetAppHeight), { passive: true });
+        window.addEventListener('orientationchange', () => setTimeout(throttledSetAppHeight, 100), { passive: true });
         const expandedDepartments = new Set();
         let selectedFiles = [];
         let replyToMessage = null;
@@ -1766,13 +1798,13 @@
 
             preview.classList.add('show');
             document.getElementById('messageInput').focus();
-            requestAnimationFrame(refreshLayoutMetrics);
+            scheduleLayoutRefresh();
         }
 
         function cancelReply() {
             replyToMessage = null;
             document.getElementById('replyPreview').classList.remove('show');
-            requestAnimationFrame(refreshLayoutMetrics);
+            scheduleLayoutRefresh();
         }
 
         // ==================== FILE UPLOAD ====================
@@ -1783,7 +1815,7 @@
 
         function toggleFileUpload() {
             uploadContainer.classList.toggle('active');
-            requestAnimationFrame(refreshLayoutMetrics);
+            scheduleLayoutRefresh();
         }
 
         fileInput.addEventListener('change', (e) => {
@@ -1833,7 +1865,7 @@
                     <button class="file-preview-remove" onclick="removeFile(${f.id})">×</button>
                 </div>
             `).join('');
-            requestAnimationFrame(refreshLayoutMetrics);
+            scheduleLayoutRefresh();
         }
 
         function removeFile(id) {
@@ -4112,7 +4144,7 @@
 
                 input.value = '';
                 input.style.height = 'auto';
-                requestAnimationFrame(refreshLayoutMetrics);
+                scheduleLayoutRefresh();
                 cancelReply();
             } catch (err) {
                 // Remove temp message on error
@@ -4128,7 +4160,7 @@
                 sendBtn.textContent = '➤';
                 input.disabled = false;
                 input.focus();
-                requestAnimationFrame(refreshLayoutMetrics);
+                scheduleLayoutRefresh();
             }
         }
 
@@ -4195,11 +4227,17 @@
                 }
             });
 
-            messageInput?.addEventListener('input', function() {
-                this.style.height = 'auto';
-                this.style.height = (this.scrollHeight) + 'px';
+            let resizeInputRaf = null;
+            messageInput?.addEventListener('input', () => {
                 handleTypingInput();
-                requestAnimationFrame(refreshLayoutMetrics);
+
+                if (resizeInputRaf) cancelAnimationFrame(resizeInputRaf);
+                resizeInputRaf = requestAnimationFrame(() => {
+                    resizeInputRaf = null;
+                    if (!messageInput) return;
+                    messageInput.style.height = 'auto';
+                    messageInput.style.height = `${messageInput.scrollHeight}px`;
+                });
             });
 
             // Восстановление пользователя из localStorage
@@ -4210,7 +4248,7 @@
                 showChatApp();
             }
 
-            requestAnimationFrame(setAppHeight);
+            requestAnimationFrame(throttledSetAppHeight);
         });
     </script>
 </body>
