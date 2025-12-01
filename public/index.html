@@ -3233,7 +3233,7 @@
                 `;
             };
 
-            // 3) Группировка
+            // 3) Группировка (строгая, без пересечений)
             const classifyChat = (chat) => {
                 if (chat.type === 'department') return 'department';
                 if ((chat.department || '').trim().toLowerCase() === 'ассистенты') return 'department';
@@ -3244,6 +3244,7 @@
 
             const buildChatSections = (chatList) => {
                 const sections = {
+                    all: [],
                     departments: [],
                     groups: [],
                     directs: []
@@ -3264,6 +3265,7 @@
                         sections.directs.push(chat);
                     }
 
+                    sections.all.push(chat);
                     added.add(idKey);
                 });
 
