@@ -3234,40 +3234,92 @@
             };
 
             // 3) Группировка
-            const directChats = filteredChats.filter(chat => chat.type === 'direct');
-            const groupChats = filteredChats.filter(chat => chat.type !== 'direct');
-            const usedChatIds = new Set();
+            const classifyChat = (chat) => {
+                if (chat.type === 'department') return 'department';
+                if ((chat.department || '').trim().toLowerCase() === 'ассистенты') return 'department';
+                if (chat.type === 'group') return 'group';
+                if (chat.type === 'direct') return 'direct';
+                return 'direct';
+            };
 
-            const departmentContacts = Array.isArray(contacts.departments) ? contacts.departments : [];
-            const departmentSections = departmentContacts.map(dept => {
-                const deptName = dept.department || '';
-                const deptKey = getDepartmentKey(deptName || `department-${dept.id || ''}`);
-
-                let mainChat = null;
-                const identifier = getDepartmentIdentifier(deptName);
-
-                if (identifier) {
-                    mainChat = groupChats.find(chat => !usedChatIds.has(chat.id) && getDepartmentIdentifier(chat.name || '') === identifier);
-                }
-
-                if (!mainChat) {
-                    mainChat = groupChats.find(chat => !usedChatIds.has(chat.id) && (chat.name || '').trim().toLowerCase() === (deptName || '').trim().toLowerCase());
-                }
-
-                if (mainChat) {
-                    usedChatIds.add(mainChat.id);
-                }
-
-                return {
-                    dept,
-                    deptKey,
-                    mainChat,
-                    isExpanded: expandedDepartments.has(deptKey)
+            const buildChatSections = (chatList) => {
+                const sections = {
+                    departments: [],
+                    groups: [],
+                    directs: []
                 };
-            });
 
-            // Отдельного списка ассистентов больше нет — их чаты идут как отделы
-            const remainingGroupChats = groupChats.filter(chat => !usedChatIds.has(chat.id));
+                const added = new Set();
+
+                chatList.forEach(chat => {
+                    const idKey = chat.id != null ? String(chat.id) : null;
+                    if (!idKey || added.has(idKey)) return;
+
+                    const category = classifyChat(chat);
+                    if (category === 'department') {
+                        sections.departments.push(chat);
+                    } else if (category === 'group') {
+                        sections.groups.push(chat);
+                    } else {
+                        sections.directs.push(chat);
+                    }
+
+                    added.add(idKey);
+                });
+
+                return sections;
+            };
+
+            const buildDepartmentSections = (departmentChats) => {
+                const departmentContacts = Array.isArray(contacts.departments) ? contacts.departments : [];
+                const assistantsContacts = Array.isArray(contacts.assistants?.users) ? contacts.assistants.users : [];
+                const departmentsWithAssistants = assistantsContacts.length > 0
+                    ? [...departmentContacts, { department: 'Ассистенты', users: assistantsContacts }]
+                    : departmentContacts;
+
+                const usedIds = new Set();
+
+                const sections = departmentsWithAssistants.map(dept => {
+                    const deptName = dept.department || '';
+                    const deptKey = getDepartmentKey(deptName || `department-${dept.id || ''}`);
+                    const identifier = getDepartmentIdentifier(deptName);
+
+                    let mainChat = null;
+
+                    if (identifier) {
+                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && getDepartmentIdentifier(chat.name || '') === identifier);
+                    }
+
+                    if (!mainChat) {
+                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && (chat.name || '').trim().toLowerCase() === (deptName || '').trim().toLowerCase());
+                    }
+
+                    if (!mainChat && deptName.toLowerCase() === 'ассистенты') {
+                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && (chat.department || '').trim().toLowerCase() === 'ассистенты');
+                    }
+
+                    if (mainChat) {
+                        usedIds.add(mainChat.id);
+                    }
+
+                    return {
+                        dept,
+                        deptKey,
+                        mainChat,
+                        isExpanded: expandedDepartments.has(deptKey)
+                    };
+                });
+
+                return { sections, usedIds };
+            };
+
+            const categorizedChats = buildChatSections(filteredChats);
+            const { sections: departmentSections, usedIds: usedDepartmentChatIds } = buildDepartmentSections(categorizedChats.departments);
+            const remainingGroupChats = [
+                ...categorizedChats.groups,
+                ...categorizedChats.departments.filter(chat => !usedDepartmentChatIds.has(chat.id))
+            ];
+            const directChats = categorizedChats.directs;
 
             // Функция отрисовки контакта (пользователя для создания чата)
             const renderContactItem = (user, options = {}) => {
