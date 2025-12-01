@@ -3192,7 +3192,21 @@
 
                 if (!lastMessageText) lastMessageText = 'Пока тишина';
 
-                const chatName = escapeHtml(chat.name || 'Чат');
+                // Обновленная логика имени чата: для direct без имени используем имена участников (кроме текущего)
+                let rawName = chat.name;
+
+                if (chat.type === 'direct' && (!rawName || !rawName.trim())) {
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+                    const others = participants.filter(p => Number(p.id) !== Number(currentUser.id));
+
+                    if (others.length === 1) {
+                        rawName = others[0].name;
+                    } else if (others.length > 1) {
+                        rawName = others.map(p => p.name).join(', ');
+                    }
+                }
+
+                const chatName = escapeHtml(rawName || 'Чат');
                 const unreadBadge = chat.unread_count > 0
                     ? `<span class="unread-badge">${chat.unread_count}</span>`
                     : '';
