@@ -3458,6 +3458,12 @@
 
                 const isUserAssistant = assistantsList.some(u => Number(u.id) === Number(currentUser?.id));
 
+                // всегда добавляем отдел текущего пользователя, если он есть
+                const userDeptNorm = normalizeDeptName(currentUser?.department);
+                if (userDeptNorm) {
+                    allowed.add(userDeptNorm);
+                }
+
                 if (isAdmin) {
                     departmentsList.forEach(d => {
                         const norm = normalizeDeptName(d.department);
@@ -3511,13 +3517,11 @@
                 }
 
                 if (chat.type === 'department') {
-                    if (!hasAllowedDepartments) return true;
                     return deptIsAllowed(chat);
                 }
 
                 if (chat.type === 'group') {
                     const inParticipants = chatHasCurrentUser(chat);
-                    if (!hasAllowedDepartments) return inParticipants;
                     const deptMatch = normalizeDeptName(chat.department) && allowedDepartments.has(normalizeDeptName(chat.department));
                     return inParticipants || deptMatch;
                 }
