@@ -5,9 +5,6 @@ const { pool } = require('../config/database');
 const getUserChats = async (req, res) => {
   try {
     const userId = req.user.id;
-    const me = await query('SELECT role FROM users WHERE id=$1', [userId]);
-    const isAdmin = me.rows[0]?.role === 'admin';
-
     const { limit = 50, offset = 0 } = req.query;
     const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100);
     const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
@@ -39,12 +36,13 @@ const getUserChats = async (req, res) => {
            WHERE cp2.chat_id = c.id AND u.id <> $1
         ) AS participants
       FROM chats c
-      LEFT JOIN chat_participants cp ON c.id = cp.chat_id AND cp.user_id = $1
+      JOIN chat_participants cp ON c.id = cp.chat_id AND cp.user_id = $1
+      WHERE c.type <> 'direct' OR (
+        SELECT COUNT(*) FROM chat_participants cp_count WHERE cp_count.chat_id = c.id
+      ) = 2
     `;
 
-    const sql = isAdmin
-      ? baseSelect + ` ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`
-      : baseSelect + ` WHERE cp.user_id = $1 ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`;
+    const sql = baseSelect + ` ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`;
 
     const result = await query(sql, [userId, parsedLimit, parsedOffset]);
 
@@ -123,9 +121,16 @@ const createDirectChat = async (req, res) => {
         const senderId = req.user.id;
 
         if (!receiverId) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 error: 'Receiver ID is required',
                 code: 'MISSING_RECEIVER'
+            });
+        }
+
+        if (receiverId === senderId) {
+            return res.status(400).json({
+                error: 'Cannot create direct chat with yourself',
+                code: 'INVALID_RECEIVER'
             });
         }
 
@@ -144,13 +149,20 @@ const createDirectChat = async (req, res) => {
 
         // Check if chat already exists
         const existingChat = await query(
-            `SELECT c.id 
+            `SELECT c.id
              FROM chats c
-             JOIN chat_participants cp1 ON c.id = cp1.chat_id
-             JOIN chat_participants cp2 ON c.id = cp2.chat_id
              WHERE c.type = 'direct'
-             AND cp1.user_id = $1 
-             AND cp2.user_id = $2`,
+               AND EXISTS (
+                 SELECT 1 FROM chat_participants cp WHERE cp.chat_id = c.id AND cp.user_id = $1
+               )
+               AND EXISTS (
+                 SELECT 1 FROM chat_participants cp WHERE cp.chat_id = c.id AND cp.user_id = $2
+               )
+               AND (
+                 SELECT COUNT(*) FROM chat_participants cp WHERE cp.chat_id = c.id
+               ) = 2
+             ORDER BY c.updated_at DESC, c.id ASC
+             LIMIT 1`,
             [senderId, receiverId]
         );
 
