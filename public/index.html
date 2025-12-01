@@ -3181,11 +3181,17 @@
 
                 const sanitizeDirectChat = (chat) => {
                     if (chat.type !== 'direct') return true;
+
                     const participants = Array.isArray(chat.participants) ? chat.participants : [];
-                    if (participants.length < 2) return false;
-                    const hasCurrent = participants.some(p => Number(p?.id) === Number(currentUser?.id));
-                    const hasOther = participants.some(p => Number(p?.id) !== Number(currentUser?.id));
-                    return hasCurrent && hasOther;
+
+                    if (participants.length < 2) return false; // битый direct без второго участника
+
+                    const otherParticipants = participants.filter(p => Number(p?.id) !== Number(currentUser?.id));
+
+                    // self-chat: нет никого кроме текущего пользователя
+                    if (otherParticipants.length === 0) return false;
+
+                    return true;
                 };
 
                 chats = (chatsData.chats || []).filter(sanitizeDirectChat);
@@ -3434,11 +3440,18 @@
             // убираем direct-чаты, в которых нет ни одного собеседника, кроме текущего пользователя, или отсутствует сам пользователь
             const filteredChatsNoSelfDirects = filteredChats.filter(chat => {
                 if (chat.type !== 'direct') return true;
+
                 const participants = Array.isArray(chat.participants) ? chat.participants : [];
+
+                // удаляем битые директ-чаты без второго участника
                 if (participants.length < 2) return false;
-                const hasCurrent = participants.some(p => Number(p?.id) === Number(currentUser?.id));
-                const hasOther = participants.some(p => Number(p?.id) !== Number(currentUser?.id));
-                return hasCurrent && hasOther;
+
+                const otherParticipants = participants.filter(p => Number(p?.id) !== Number(currentUser?.id));
+
+                // self-chat: все участники — текущий пользователь
+                if (otherParticipants.length === 0) return false;
+
+                return true;
             });
 
             const normalizeDeptName = (name) => String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
