@@ -3415,10 +3415,21 @@
                 uniqueChats.push(chat);
             });
 
+            // первичная очистка: убираем битые direct-чаты и self-chat до поиска
+            const cleanedChats = uniqueChats.filter(chat => {
+                if (chat.type !== 'direct') return true;
+
+                if (!chat.participants || !Array.isArray(chat.participants)) return false;
+                if (chat.participants.length < 2) return false;
+
+                const others = chat.participants.filter(p => Number(p?.id) !== Number(currentUser?.id));
+                return others.length > 0;
+            });
+
             const isAdmin = currentUser?.role === 'admin';
 
             const filteredChats = chatSearchQuery
-                ? uniqueChats.filter(chat => {
+                ? cleanedChats.filter(chat => {
                     const name = (chat.name || '').toLowerCase();
                     const last = chat.last_message;
                     let lastMsg = '';
@@ -3435,24 +3446,7 @@
 
                     return name.includes(chatSearchQuery) || lastMsg.includes(chatSearchQuery);
                 })
-                : uniqueChats;
-
-            // убираем direct-чаты, в которых нет ни одного собеседника, кроме текущего пользователя, или отсутствует сам пользователь
-            const filteredChatsNoSelfDirects = filteredChats.filter(chat => {
-                if (chat.type !== 'direct') return true;
-
-                const participants = Array.isArray(chat.participants) ? chat.participants : [];
-
-                // удаляем битые директ-чаты без второго участника
-                if (participants.length < 2) return false;
-
-                const otherParticipants = participants.filter(p => Number(p?.id) !== Number(currentUser?.id));
-
-                // self-chat: все участники — текущий пользователь
-                if (otherParticipants.length === 0) return false;
-
-                return true;
-            });
+                : cleanedChats;
 
             const normalizeDeptName = (name) => String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -3508,7 +3502,7 @@
                 return normalized && allowedDepartments.has(normalized);
             };
 
-            const accessibleChats = filteredChatsNoSelfDirects.filter(chat => {
+            const accessibleChats = filteredChats.filter(chat => {
                 if (isAdmin) return true;
 
                 if (chat.type === 'direct') {
