@@ -3490,6 +3490,7 @@
             };
 
             const allowedDepartments = collectAllowedDepartments();
+            const hasAllowedDepartments = allowedDepartments.size > 0;
 
             const chatHasCurrentUser = (chat) => {
                 if (isAdmin) return true;
@@ -3510,23 +3511,19 @@
                 }
 
                 if (chat.type === 'department') {
+                    if (!hasAllowedDepartments) return true;
                     return deptIsAllowed(chat);
                 }
 
                 if (chat.type === 'group') {
-                    return chatHasCurrentUser(chat);
+                    const inParticipants = chatHasCurrentUser(chat);
+                    if (!hasAllowedDepartments) return inParticipants;
+                    const deptMatch = normalizeDeptName(chat.department) && allowedDepartments.has(normalizeDeptName(chat.department));
+                    return inParticipants || deptMatch;
                 }
 
                 return chatHasCurrentUser(chat);
             });
-
-            if (accessibleChats.length === 0) {
-                chatsList.innerHTML = `
-                    <div style="padding:20px;text-align:center;color:var(--text-secondary);">
-                        Чаты не найдены
-                    </div>`;
-                return;
-            }
 
             const renderChatItem = (chat, options = {}) => {
                 const { withArrow = false, deptKey = '', expanded = false, extraClass = '' } = options;
@@ -3660,7 +3657,7 @@
                 departmentContacts.forEach((dept, index) => {
                     const normName = normalizeName(dept.department);
 
-                    if (!isAdmin && normName && !allowedDepartments.has(normName)) {
+                    if (!isAdmin && hasAllowedDepartments && normName && !allowedDepartments.has(normName)) {
                         return;
                     }
 
@@ -3672,7 +3669,7 @@
 
                 if (assistantsContacts.length > 0) {
                     const assistantNorm = normalizeName('Ассистенты');
-                    if (isAdmin || allowedDepartments.has(assistantNorm)) {
+                    if (isAdmin || !hasAllowedDepartments || allowedDepartments.has(assistantNorm)) {
                         const assistantKey = `name:${assistantNorm}`;
                         const existing = deptByName.get(assistantKey);
                         const assistantDept = existing ? { ...existing, department: existing.department || 'Ассистенты', users: assistantsContacts } : { department: 'Ассистенты', users: assistantsContacts };
@@ -3693,7 +3690,7 @@
 
                     const contactsList = Array.isArray(dept?.users) ? dept.users : [];
 
-                    if (!isAdmin) {
+                    if (!isAdmin && hasAllowedDepartments) {
                         const normDeptName = normalizeName(deptName);
                         if (normDeptName && !allowedDepartments.has(normDeptName)) {
                             return;
@@ -3730,6 +3727,7 @@
 
             const filteredDepartmentChats = categorizedChats.departments.filter(chat => {
                 if (isAdmin) return true;
+                if (!hasAllowedDepartments) return true;
                 const deptName = normalizeDeptName(chat.department || chat.name);
                 return deptName && allowedDepartments.has(deptName);
             });
