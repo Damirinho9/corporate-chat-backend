@@ -82,10 +82,17 @@ const getUserChats = async (req, res) => {
            LIMIT 1
         ) AS last_message,
         (
-          SELECT json_agg(json_build_object('id', u.id, 'name', u.name, 'role', u.role))
+          SELECT json_agg(json_build_object(
+            'id', u.id,
+            'username', u.username,
+            'name', u.name,
+            'role', u.role,
+            'department', u.department,
+            'last_seen', u.last_seen
+          ))
             FROM chat_participants cp2
-            JOIN users u ON cp2.user_id=u.id
-           WHERE cp2.chat_id = c.id AND u.id <> $1
+            JOIN users u ON cp2.user_id = u.id
+           WHERE cp2.chat_id = c.id
         ) AS participants
       FROM chats c
       JOIN chat_participants cp ON c.id = cp.chat_id AND cp.user_id = $1
