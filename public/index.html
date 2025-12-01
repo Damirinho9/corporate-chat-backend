@@ -3275,9 +3275,26 @@
             const buildDepartmentSections = (departmentChats) => {
                 const departmentContacts = Array.isArray(contacts.departments) ? contacts.departments : [];
                 const assistantsContacts = Array.isArray(contacts.assistants?.users) ? contacts.assistants.users : [];
-                const departmentsWithAssistants = assistantsContacts.length > 0
-                    ? [...departmentContacts, { department: 'Ассистенты', users: assistantsContacts }]
-                    : departmentContacts;
+
+                const normalizeName = (name) => (name || '').trim().toLowerCase();
+                const deptByName = new Map();
+
+                departmentContacts.forEach((dept, index) => {
+                    const normName = normalizeName(dept.department);
+                    const key = normName ? `name:${normName}` : `idx:${index}`;
+                    if (!deptByName.has(key)) {
+                        deptByName.set(key, dept);
+                    }
+                });
+
+                if (assistantsContacts.length > 0) {
+                    const assistantKey = `name:${normalizeName('Ассистенты')}`;
+                    const existing = deptByName.get(assistantKey);
+                    const assistantDept = existing ? { ...existing, department: existing.department || 'Ассистенты', users: assistantsContacts } : { department: 'Ассистенты', users: assistantsContacts };
+                    deptByName.set(assistantKey, assistantDept);
+                }
+
+                const departmentsWithAssistants = Array.from(deptByName.values());
 
                 const usedIds = new Set();
 
