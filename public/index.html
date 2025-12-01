@@ -3380,28 +3380,35 @@
                 uniqueChats.push(chat);
             });
 
-            // 2) Поиск
-                const filteredChats = chatSearchQuery
-                    ? uniqueChats.filter(chat => {
-                        const name = (chat.name || '').toLowerCase();
-                        const last = chat.last_message;
-                        let lastMsg = '';
-
-                        if (typeof last === 'string') {
-                            lastMsg = last.toLowerCase();
-                        } else if (last && typeof last === 'object') {
-                            if (typeof last.content === 'string') {
-                                lastMsg = last.content.toLowerCase();
-                            } else if (last.content && typeof last.content === 'object' && typeof last.content.text === 'string') {
-                                lastMsg = last.content.text.toLowerCase();
-                            }
-                        }
-
-                        return name.includes(chatSearchQuery) || lastMsg.includes(chatSearchQuery);
-                    })
-                    : uniqueChats;
-
             const isAdmin = currentUser?.role === 'admin';
+
+            const filteredChats = chatSearchQuery
+                ? uniqueChats.filter(chat => {
+                    const name = (chat.name || '').toLowerCase();
+                    const last = chat.last_message;
+                    let lastMsg = '';
+
+                    if (typeof last === 'string') {
+                        lastMsg = last.toLowerCase();
+                    } else if (last && typeof last === 'object') {
+                        if (typeof last.content === 'string') {
+                            lastMsg = last.content.toLowerCase();
+                        } else if (last.content && typeof last.content === 'object' && typeof last.content.text === 'string') {
+                            lastMsg = last.content.text.toLowerCase();
+                        }
+                    }
+
+                    return name.includes(chatSearchQuery) || lastMsg.includes(chatSearchQuery);
+                })
+                : uniqueChats;
+
+            // убираем direct-чаты, в которых нет ни одного собеседника, кроме текущего пользователя
+            const filteredChatsNoSelfDirects = filteredChats.filter(chat => {
+                if (chat.type !== 'direct') return true;
+                const participants = Array.isArray(chat.participants) ? chat.participants : [];
+                const others = participants.filter(p => Number(p.id) !== Number(currentUser?.id));
+                return others.length > 0;
+            });
 
             const normalizeDeptName = (name) => String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -3457,7 +3464,7 @@
                 return normalized && allowedDepartments.has(normalized);
             };
 
-            const accessibleChats = filteredChats.filter(chat => {
+            const accessibleChats = filteredChatsNoSelfDirects.filter(chat => {
                 if (isAdmin) return true;
 
                 if (chat.type === 'direct') {
