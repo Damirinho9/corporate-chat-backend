@@ -3283,17 +3283,46 @@
 
             const normalizeDeptName = (name) => String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-            const allowedDepartments = new Set(
-                Array.isArray(contacts.departments)
-                    ? contacts.departments
-                        .map(d => normalizeDeptName(d.department))
-                        .filter(Boolean)
-                    : []
-            );
+            const collectAllowedDepartments = () => {
+                const allowed = new Set();
 
-            if (Array.isArray(contacts.assistants?.users) && contacts.assistants.users.length > 0) {
-                allowedDepartments.add(normalizeDeptName('Ассистенты'));
-            }
+                const departmentsList = Array.isArray(contacts.departments) ? contacts.departments : [];
+                const assistantsList = Array.isArray(contacts.assistants?.users) ? contacts.assistants.users : [];
+
+                const isUserAssistant = assistantsList.some(u => Number(u.id) === Number(currentUser?.id));
+
+                if (isAdmin) {
+                    departmentsList.forEach(d => {
+                        const norm = normalizeDeptName(d.department);
+                        if (norm) allowed.add(norm);
+                    });
+
+                    if (assistantsList.length > 0) {
+                        allowed.add(normalizeDeptName('Ассистенты'));
+                    }
+
+                    return allowed;
+                }
+
+                departmentsList.forEach(d => {
+                    const norm = normalizeDeptName(d.department);
+                    const deptUsers = Array.isArray(d.users) ? d.users : [];
+
+                    const userInDept = deptUsers.some(u => Number(u.id) === Number(currentUser?.id));
+
+                    if (userInDept && norm) {
+                        allowed.add(norm);
+                    }
+                });
+
+                if (isUserAssistant) {
+                    allowed.add(normalizeDeptName('Ассистенты'));
+                }
+
+                return allowed;
+            };
+
+            const allowedDepartments = collectAllowedDepartments();
 
             const chatHasCurrentUser = (chat) => {
                 if (isAdmin) return true;
@@ -3463,6 +3492,11 @@
 
                 departmentContacts.forEach((dept, index) => {
                     const normName = normalizeName(dept.department);
+
+                    if (!isAdmin && normName && !allowedDepartments.has(normName)) {
+                        return;
+                    }
+
                     const key = normName ? `name:${normName}` : `idx:${index}`;
                     if (!deptByName.has(key)) {
                         deptByName.set(key, dept);
@@ -3470,10 +3504,13 @@
                 });
 
                 if (assistantsContacts.length > 0) {
-                    const assistantKey = `name:${normalizeName('Ассистенты')}`;
-                    const existing = deptByName.get(assistantKey);
-                    const assistantDept = existing ? { ...existing, department: existing.department || 'Ассистенты', users: assistantsContacts } : { department: 'Ассистенты', users: assistantsContacts };
-                    deptByName.set(assistantKey, assistantDept);
+                    const assistantNorm = normalizeName('Ассистенты');
+                    if (isAdmin || allowedDepartments.has(assistantNorm)) {
+                        const assistantKey = `name:${assistantNorm}`;
+                        const existing = deptByName.get(assistantKey);
+                        const assistantDept = existing ? { ...existing, department: existing.department || 'Ассистенты', users: assistantsContacts } : { department: 'Ассистенты', users: assistantsContacts };
+                        deptByName.set(assistantKey, assistantDept);
+                    }
                 }
 
                 const departmentsWithAssistants = Array.from(deptByName.values());
@@ -3524,9 +3561,15 @@
 
             const categorizedChats = buildChatSections(accessibleChats);
 
+            const filteredDepartmentChats = categorizedChats.departments.filter(chat => {
+                if (isAdmin) return true;
+                const deptName = normalizeDeptName(chat.department || chat.name);
+                return deptName && allowedDepartments.has(deptName);
+            });
+
             // track assistant department chats to avoid duplication in fallbacks
             const assistantDepIds = new Set(
-                categorizedChats.departments
+                filteredDepartmentChats
                     .filter(c => {
                         const depName = (c.department || '').trim().toLowerCase();
                         const chatName = (c.name || '').trim().toLowerCase();
@@ -3535,7 +3578,7 @@
                     .map(c => c.id)
             );
 
-            const { sections: departmentSections, usedIds: usedDepartmentChatIds } = buildDepartmentSections(categorizedChats.departments);
+            const { sections: departmentSections, usedIds: usedDepartmentChatIds } = buildDepartmentSections(filteredDepartmentChats);
             const remainingGroupChats = [
                 ...categorizedChats.groups,
                 ...categorizedChats.departments.filter(chat => !usedDepartmentChatIds.has(chat.id) && !assistantDepIds.has(chat.id))
