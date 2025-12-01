@@ -3317,10 +3317,6 @@
                         usedIds.add(mainChat.id);
                     }
 
-                    if ((deptName || '').trim().toLowerCase() === 'ассистенты') {
-                        mainChat = null;
-                    }
-
                     return {
                         dept,
                         deptKey,
@@ -3334,7 +3330,7 @@
 
             const categorizedChats = buildChatSections(filteredChats);
 
-            // remove assistant-department chat duplicates
+            // track assistant department chats to avoid duplication in fallbacks
             const assistantDepIds = new Set(
                 categorizedChats.departments
                     .filter(c => {
@@ -3343,10 +3339,6 @@
                         return depName === 'ассистенты' || chatName === 'ассистенты';
                     })
                     .map(c => c.id)
-            );
-
-            categorizedChats.departments = categorizedChats.departments.filter(
-                c => !assistantDepIds.has(c.id)
             );
 
             const { sections: departmentSections, usedIds: usedDepartmentChatIds } = buildDepartmentSections(categorizedChats.departments);
