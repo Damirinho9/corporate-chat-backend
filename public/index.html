@@ -2308,7 +2308,7 @@
             const audioHtml = renderAudioMessage(message);
             if (audioHtml) return audioHtml;
 
-            if (message && typeof message.content === 'object' && typeof message.content.text === 'string') {
+            if (message && message.content && typeof message.content === 'object' && typeof message.content.text === 'string') {
                 return escapeHtml(message.content.text);
             }
 
@@ -3106,7 +3106,14 @@
             directChatByUser.clear();
 
             chats
-                .filter(chat => chat && chat.type === 'direct')
+                .filter(chat => {
+                    if (!chat || chat.type !== 'direct') return false;
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+                    if (participants.length < 2) return false;
+                    const hasCurrent = participants.some(p => Number(p?.id) === Number(currentUser?.id));
+                    const hasOther = participants.some(p => Number(p?.id) !== Number(currentUser?.id));
+                    return hasCurrent && hasOther;
+                })
                 .forEach(chat => {
                     const chatId = Number(chat.id);
                     if (!chatId) {
@@ -3172,10 +3179,28 @@
                     admins: contactsData.admins?.users?.length || 0
                 });
 
-                chats = chatsData.chats || [];
+                const sanitizeDirectChat = (chat) => {
+                    if (chat.type !== 'direct') return true;
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+                    if (participants.length < 2) return false;
+                    const hasCurrent = participants.some(p => Number(p?.id) === Number(currentUser?.id));
+                    const hasOther = participants.some(p => Number(p?.id) !== Number(currentUser?.id));
+                    return hasCurrent && hasOther;
+                };
+
+                chats = (chatsData.chats || []).filter(sanitizeDirectChat);
                 syncUnreadMapFromChats();
                 rebuildDirectChatLookup();
+                const filterContacts = (list = []) => (Array.isArray(list) ? list : []).filter(u => Number(u?.id) !== Number(currentUser?.id));
                 contacts = contactsData || { departments: [], assistants: { users: [] }, admins: { users: [] } };
+                contacts.departments = (contacts.departments || []).map(dept => ({
+                    ...dept,
+                    users: filterContacts(dept?.users)
+                }));
+                contacts.assistants = contacts.assistants || { users: [] };
+                contacts.assistants.users = filterContacts(contacts.assistants.users);
+                contacts.admins = contacts.admins || { users: [] };
+                contacts.admins.users = filterContacts(contacts.admins.users);
 
                 renderChats();
                 restoreLastActiveChat();
@@ -3187,6 +3212,10 @@
 
         // Создать или открыть прямой чат с пользователем
         async function openDirectChatWithUser(userId, userName) {
+            if (Number(userId) === Number(currentUser?.id)) {
+                console.warn('[openDirectChat] Отмена: попытка открыть чат с самим собой');
+                return;
+            }
             try {
                 console.log('[openDirectChat] Создание чата с пользователем:', { userId, userName });
 
@@ -3402,12 +3431,14 @@
                 })
                 : uniqueChats;
 
-            // убираем direct-чаты, в которых нет ни одного собеседника, кроме текущего пользователя
+            // убираем direct-чаты, в которых нет ни одного собеседника, кроме текущего пользователя, или отсутствует сам пользователь
             const filteredChatsNoSelfDirects = filteredChats.filter(chat => {
                 if (chat.type !== 'direct') return true;
                 const participants = Array.isArray(chat.participants) ? chat.participants : [];
-                const others = participants.filter(p => Number(p.id) !== Number(currentUser?.id));
-                return others.length > 0;
+                if (participants.length < 2) return false;
+                const hasCurrent = participants.some(p => Number(p?.id) === Number(currentUser?.id));
+                const hasOther = participants.some(p => Number(p?.id) !== Number(currentUser?.id));
+                return hasCurrent && hasOther;
             });
 
             const normalizeDeptName = (name) => String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
