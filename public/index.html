@@ -3279,7 +3279,41 @@
                     })
                     : uniqueChats;
 
-            if (filteredChats.length === 0) {
+            const isAdmin = currentUser?.role === 'admin';
+
+            const allowedDepartments = new Set(
+                Array.isArray(contacts.departments)
+                    ? contacts.departments
+                        .map(d => (d.department || '').trim().toLowerCase())
+                        .filter(Boolean)
+                    : []
+            );
+
+            if (Array.isArray(contacts.assistants?.users) && contacts.assistants.users.length > 0) {
+                allowedDepartments.add('ассистенты');
+            }
+
+            const chatHasCurrentUser = (chat) => {
+                if (isAdmin) return true;
+                const participants = Array.isArray(chat.participants) ? chat.participants : [];
+                return participants.some(p => Number(p.id) === Number(currentUser?.id));
+            };
+
+            const accessibleChats = filteredChats.filter(chat => {
+                if (isAdmin) return true;
+
+                if (chat.type === 'direct') {
+                    return chatHasCurrentUser(chat);
+                }
+
+                if (chat.type === 'department' || chat.type === 'group') {
+                    return chatHasCurrentUser(chat);
+                }
+
+                return chatHasCurrentUser(chat);
+            });
+
+            if (accessibleChats.length === 0) {
                 chatsList.innerHTML = `
                     <div style="padding:20px;text-align:center;color:var(--text-secondary);">
                         Чаты не найдены
@@ -3435,40 +3469,55 @@
 
                 const usedIds = new Set();
 
-                const sections = departmentsWithAssistants.map(dept => {
+                const sections = [];
+
+                const chatBelongsToUser = (chat) => {
+                    if (isAdmin) return true;
+                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+                    return participants.some(p => Number(p.id) === Number(currentUser?.id));
+                };
+
+                departmentsWithAssistants.forEach(dept => {
                     const deptName = dept.department || '';
                     const deptKey = getDepartmentKey(deptName || `department-${dept.id || ''}`);
                     const identifier = getDepartmentIdentifier(deptName);
 
                     const contactsList = Array.isArray(dept?.users) ? dept.users : [];
 
+                    if (!isAdmin) {
+                        const normDeptName = normalizeName(deptName);
+                        if (normDeptName && !allowedDepartments.has(normDeptName)) {
+                            return;
+                        }
+                    }
+
                     let mainChat = null;
 
                     if (identifier) {
-                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && getDepartmentIdentifier(chat.name || '') === identifier);
+                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && getDepartmentIdentifier(chat.name || '') === identifier && chatBelongsToUser(chat));
                     }
 
                     if (!mainChat) {
-                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && (chat.name || '').trim().toLowerCase() === (deptName || '').trim().toLowerCase());
+                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && (chat.name || '').trim().toLowerCase() === (deptName || '').trim().toLowerCase() && chatBelongsToUser(chat));
                     }
 
                     if (mainChat) {
                         usedIds.add(mainChat.id);
                     }
 
-                    return {
+                    sections.push({
                         dept,
                         deptKey,
                         mainChat,
                         hasContacts: contactsList.length > 0,
                         isExpanded: expandedDepartments.has(deptKey)
-                    };
+                    });
                 });
 
                 return { sections, usedIds };
             };
 
-            const categorizedChats = buildChatSections(filteredChats);
+            const categorizedChats = buildChatSections(accessibleChats);
 
             // track assistant department chats to avoid duplication in fallbacks
             const assistantDepIds = new Set(
