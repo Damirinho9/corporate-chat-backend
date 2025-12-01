@@ -1157,6 +1157,21 @@
             color: #666;
         }
 
+        .audio-message {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .audio-message audio {
+            max-width: 260px;
+        }
+
+        .audio-duration {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
         /* ==================== CHAT INPUT ==================== */
         .chat-input-container {
             background: var(--bg-primary);
@@ -2113,30 +2128,66 @@
             showToast('Звонок начался', 'success');
         }
 
+        function resolveMediaUrl(url) {
+            if (!url) return null;
+            let absoluteUrl = url;
+            if (!/^https?:\/\//i.test(url)) {
+                if (url.startsWith('/')) {
+                    absoluteUrl = `${window.location.origin}${url}`;
+                } else {
+                    absoluteUrl = `${API_URL.replace(/\/$/, '')}/${url}`;
+                }
+            }
+            if (!token) return absoluteUrl;
+            const separator = absoluteUrl.includes('?') ? '&' : '?';
+            return `${absoluteUrl}${separator}token=${encodeURIComponent(token)}`;
+        }
+
+        function formatAudioDuration(seconds) {
+            if (!Number.isFinite(seconds)) return '';
+            const totalSeconds = Math.max(0, Math.floor(seconds));
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = totalSeconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function getAudioPayload(message) {
+            if (!message) return null;
+            if (message.type === 'audio' && message.url) return message;
+            if (message.content && typeof message.content === 'object' && message.content.type === 'audio') {
+                return message.content;
+            }
+            return null;
+        }
+
+        function renderAudioMessage(message) {
+            const audioData = getAudioPayload(message);
+            if (!audioData || !audioData.url) return '';
+            const audioUrl = resolveMediaUrl(audioData.url);
+            const duration = formatAudioDuration(audioData.duration);
+            return `<div class="audio-message">
+                <audio controls preload="none" src="${audioUrl}"></audio>
+                ${duration ? `<div class="audio-duration">${duration}</div>` : ''}
+            </div>`;
+        }
+
+        function renderMessageContent(message) {
+            const audioHtml = renderAudioMessage(message);
+            if (audioHtml) return audioHtml;
+
+            if (message && typeof message.content === 'object' && typeof message.content.text === 'string') {
+                return escapeHtml(message.content.text);
+            }
+
+            return escapeHtml(message?.content || '');
+        }
+
         function renderMessageFile(msg) {
             if (!msg.file) return '';
             const f = msg.file;
 
-            const toAbsoluteUrl = (url) => {
-                if (!url) return null;
-                if (/^https?:\/\//i.test(url)) {
-                    return url;
-                }
-                if (url.startsWith('/')) {
-                    return `${window.location.origin}${url}`;
-                }
-                return `${API_URL.replace(/\/$/, '')}/${url}`;
-            };
-
-            const appendToken = (url) => {
-                if (!url) return null;
-                if (!token) return url;
-                const separator = url.includes('?') ? '&' : '?';
-                return `${url}${separator}token=${encodeURIComponent(token)}`;
-            };
-
-            const fileUrl = appendToken(toAbsoluteUrl(f.url || `/files/${f.id}`));
-            const thumbnailUrl = appendToken(toAbsoluteUrl(f.thumbnailUrl));
+            const fileUrl = resolveMediaUrl(f.url || `/files/${f.id}`);
+            const thumbnailUrl = resolveMediaUrl(f.thumbnailUrl);
             const previewUrl = thumbnailUrl || fileUrl;
 
             if (f.type === 'image') {
@@ -3158,15 +3209,25 @@
             });
 
             // 2) Поиск
-            const filteredChats = chatSearchQuery
-                ? uniqueChats.filter(chat => {
-                    const name = (chat.name || '').toLowerCase();
-                    const lastMsg = typeof chat.last_message === 'string'
-                        ? chat.last_message.toLowerCase()
-                        : (chat.last_message?.content || '').toLowerCase();
-                    return name.includes(chatSearchQuery) || lastMsg.includes(chatSearchQuery);
-                })
-                : uniqueChats;
+                const filteredChats = chatSearchQuery
+                    ? uniqueChats.filter(chat => {
+                        const name = (chat.name || '').toLowerCase();
+                        const last = chat.last_message;
+                        let lastMsg = '';
+
+                        if (typeof last === 'string') {
+                            lastMsg = last.toLowerCase();
+                        } else if (last && typeof last === 'object') {
+                            if (typeof last.content === 'string') {
+                                lastMsg = last.content.toLowerCase();
+                            } else if (last.content && typeof last.content === 'object' && typeof last.content.text === 'string') {
+                                lastMsg = last.content.text.toLowerCase();
+                            }
+                        }
+
+                        return name.includes(chatSearchQuery) || lastMsg.includes(chatSearchQuery);
+                    })
+                    : uniqueChats;
 
             if (filteredChats.length === 0) {
                 chatsList.innerHTML = `
@@ -3182,11 +3243,23 @@
                 let timestamp = '';
 
                 if (chat.last_message) {
-                    if (typeof chat.last_message === 'object' && chat.last_message.content) {
-                        lastMessageText = escapeHtml(chat.last_message.content);
-                        timestamp = formatTimestamp(chat.last_message.created_at);
-                    } else if (typeof chat.last_message === 'string') {
-                        lastMessageText = escapeHtml(chat.last_message);
+                    const last = chat.last_message;
+                    const isAudio = !!getAudioPayload(last);
+
+                    if (isAudio) {
+                        lastMessageText = '🎤 Голосовое сообщение';
+                        if (last.created_at) {
+                            timestamp = formatTimestamp(last.created_at);
+                        }
+                    } else if (typeof last === 'object' && last.content) {
+                        if (typeof last.content === 'object' && typeof last.content.text === 'string') {
+                            lastMessageText = escapeHtml(last.content.text);
+                        } else {
+                            lastMessageText = escapeHtml(last.content);
+                        }
+                        timestamp = formatTimestamp(last.created_at);
+                    } else if (typeof last === 'string') {
+                        lastMessageText = escapeHtml(last);
                     }
                 }
 
@@ -3782,7 +3855,7 @@
                     ${forwardHtml}
                     ${replyHtml}
                     <div class="message-bubble">
-                        ${escapeHtml(message.content || '')}
+                        ${renderMessageContent(message)}
                         ${renderMessageFile(message)}
                     </div>
                     ${reactionsHtml}
