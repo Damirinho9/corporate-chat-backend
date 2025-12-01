@@ -3281,22 +3281,29 @@
 
             const isAdmin = currentUser?.role === 'admin';
 
+            const normalizeDeptName = (name) => String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
             const allowedDepartments = new Set(
                 Array.isArray(contacts.departments)
                     ? contacts.departments
-                        .map(d => (d.department || '').trim().toLowerCase())
+                        .map(d => normalizeDeptName(d.department))
                         .filter(Boolean)
                     : []
             );
 
             if (Array.isArray(contacts.assistants?.users) && contacts.assistants.users.length > 0) {
-                allowedDepartments.add('ассистенты');
+                allowedDepartments.add(normalizeDeptName('Ассистенты'));
             }
 
             const chatHasCurrentUser = (chat) => {
                 if (isAdmin) return true;
                 const participants = Array.isArray(chat.participants) ? chat.participants : [];
                 return participants.some(p => Number(p.id) === Number(currentUser?.id));
+            };
+
+            const deptIsAllowed = (chat) => {
+                const normalized = normalizeDeptName(chat.department || chat.name);
+                return normalized && allowedDepartments.has(normalized);
             };
 
             const accessibleChats = filteredChats.filter(chat => {
@@ -3306,7 +3313,11 @@
                     return chatHasCurrentUser(chat);
                 }
 
-                if (chat.type === 'department' || chat.type === 'group') {
+                if (chat.type === 'department') {
+                    return deptIsAllowed(chat);
+                }
+
+                if (chat.type === 'group') {
                     return chatHasCurrentUser(chat);
                 }
 
@@ -3447,7 +3458,7 @@
                 const departmentContacts = Array.isArray(contacts.departments) ? contacts.departments : [];
                 const assistantsContacts = Array.isArray(contacts.assistants?.users) ? contacts.assistants.users : [];
 
-                const normalizeName = (name) => (name || '').trim().toLowerCase();
+                const normalizeName = (name) => normalizeDeptName(name);
                 const deptByName = new Map();
 
                 departmentContacts.forEach((dept, index) => {
@@ -3471,12 +3482,6 @@
 
                 const sections = [];
 
-                const chatBelongsToUser = (chat) => {
-                    if (isAdmin) return true;
-                    const participants = Array.isArray(chat.participants) ? chat.participants : [];
-                    return participants.some(p => Number(p.id) === Number(currentUser?.id));
-                };
-
                 departmentsWithAssistants.forEach(dept => {
                     const deptName = dept.department || '';
                     const deptKey = getDepartmentKey(deptName || `department-${dept.id || ''}`);
@@ -3494,11 +3499,11 @@
                     let mainChat = null;
 
                     if (identifier) {
-                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && getDepartmentIdentifier(chat.name || '') === identifier && chatBelongsToUser(chat));
+                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && getDepartmentIdentifier(chat.name || '') === identifier);
                     }
 
                     if (!mainChat) {
-                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && (chat.name || '').trim().toLowerCase() === (deptName || '').trim().toLowerCase() && chatBelongsToUser(chat));
+                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && normalizeName(chat.name || '') === normalizeName(deptName || ''));
                     }
 
                     if (mainChat) {
@@ -3589,10 +3594,6 @@
                         const contactsList = Array.isArray(section.dept?.users) ? section.dept.users : [];
                         const hasContacts = contactsList.length > 0;
 
-                        if (!section.mainChat && !section.hasContacts) {
-                            return;
-                        }
-
                         if (section.mainChat) {
                             html += `<div class="department-section" data-department="${section.deptKey}">
                                         <ul class="department-main-list">
@@ -3624,7 +3625,7 @@
                                                     <span class="chat-name">${deptName}</span>
                                                 </div>
                                                 <div class="chat-last-message">
-                                                    <span class="chat-last-message-text">Нет доступных чатов</span>
+                                                    <span class="chat-last-message-text">Нет группового чата</span>
                                                 </div>
                                             </div>
                                         </div>`;
