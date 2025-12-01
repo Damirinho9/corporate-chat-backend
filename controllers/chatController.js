@@ -10,22 +10,30 @@ const getUserChats = async (req, res) => {
     const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
 
     const baseSelect = `
-      WITH canonical_directs AS (
+      WITH direct_candidates AS (
+        SELECT
+          c.id,
+          c.updated_at,
+          MIN(cp.user_id) AS user_a,
+          MAX(cp.user_id) AS user_b,
+          COUNT(DISTINCT cp.user_id) AS participant_count,
+          MAX(CASE WHEN cp.user_id = $1 THEN 1 ELSE 0 END) AS has_requester
+        FROM chats c
+        JOIN chat_participants cp ON c.id = cp.chat_id
+        WHERE c.type = 'direct'
+        GROUP BY c.id, c.updated_at
+      ),
+      canonical_directs AS (
         SELECT id
         FROM (
           SELECT
-            c.id,
-            MIN(cp.user_id) AS user_a,
-            MAX(cp.user_id) AS user_b,
+            dc.id,
             ROW_NUMBER() OVER (
-              PARTITION BY MIN(cp.user_id), MAX(cp.user_id)
-              ORDER BY c.updated_at DESC, c.id ASC
+              PARTITION BY dc.user_a, dc.user_b
+              ORDER BY dc.updated_at DESC, dc.id ASC
             ) AS rn
-          FROM chats c
-          JOIN chat_participants cp ON c.id = cp.chat_id
-          WHERE c.type = 'direct'
-          GROUP BY c.id, c.updated_at
-          HAVING COUNT(*) = 2
+          FROM direct_candidates dc
+          WHERE dc.participant_count = 2 AND dc.has_requester = 1
         ) ranked
         WHERE rn = 1
       )
@@ -186,7 +194,7 @@ const createDirectChat = async (req, res) => {
                       SELECT 1 FROM chat_participants cp WHERE cp.chat_id = c.id AND cp.user_id = $2
                     )
                     AND (
-                      SELECT COUNT(*) FROM chat_participants cp WHERE cp.chat_id = c.id
+                      SELECT COUNT(DISTINCT cp.user_id) FROM chat_participants cp WHERE cp.chat_id = c.id
                     ) = 2
                   ORDER BY c.updated_at DESC, c.id ASC
                   LIMIT 1
