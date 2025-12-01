@@ -3296,12 +3296,12 @@
                         mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && (chat.name || '').trim().toLowerCase() === (deptName || '').trim().toLowerCase());
                     }
 
-                    if (!mainChat && deptName.toLowerCase() === 'ассистенты') {
-                        mainChat = departmentChats.find(chat => !usedIds.has(chat.id) && (chat.department || '').trim().toLowerCase() === 'ассистенты');
-                    }
-
                     if (mainChat) {
                         usedIds.add(mainChat.id);
+                    }
+
+                    if ((deptName || '').trim().toLowerCase() === 'ассистенты') {
+                        mainChat = null;
                     }
 
                     return {
@@ -3316,10 +3316,26 @@
             };
 
             const categorizedChats = buildChatSections(filteredChats);
+
+            // remove assistant-department chat duplicates
+            const assistantDepIds = new Set(
+                categorizedChats.departments
+                    .filter(c => {
+                        const depName = (c.department || '').trim().toLowerCase();
+                        const chatName = (c.name || '').trim().toLowerCase();
+                        return depName === 'ассистенты' || chatName === 'ассистенты';
+                    })
+                    .map(c => c.id)
+            );
+
+            categorizedChats.departments = categorizedChats.departments.filter(
+                c => !assistantDepIds.has(c.id)
+            );
+
             const { sections: departmentSections, usedIds: usedDepartmentChatIds } = buildDepartmentSections(categorizedChats.departments);
             const remainingGroupChats = [
                 ...categorizedChats.groups,
-                ...categorizedChats.departments.filter(chat => !usedDepartmentChatIds.has(chat.id))
+                ...categorizedChats.departments.filter(chat => !usedDepartmentChatIds.has(chat.id) && !assistantDepIds.has(chat.id))
             ];
             const directChats = categorizedChats.directs;
 
