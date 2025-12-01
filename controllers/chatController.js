@@ -9,6 +9,31 @@ const getUserChats = async (req, res) => {
     const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100);
     const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
 
+    // Backfill last_read_at so historical messages are not counted as unread
+    await query(
+      `WITH last_msg AS (
+         SELECT chat_id, MAX(created_at) AS last_created
+         FROM messages
+         GROUP BY chat_id
+       )
+       UPDATE chat_participants cp
+          SET last_read_at = COALESCE(lm.last_created, NOW())
+         FROM last_msg lm
+        WHERE cp.user_id = $1
+          AND cp.last_read_at IS NULL
+          AND cp.chat_id = lm.chat_id`,
+      [userId]
+    );
+
+    // For chats without any messages, still set a baseline read timestamp
+    await query(
+      `UPDATE chat_participants
+          SET last_read_at = NOW()
+        WHERE user_id = $1
+          AND last_read_at IS NULL`,
+      [userId]
+    );
+
     const baseSelect = `
       WITH direct_candidates AS (
         SELECT
