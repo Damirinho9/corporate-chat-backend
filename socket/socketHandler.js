@@ -261,14 +261,14 @@ const initializeSocket = (server) => {
                 const { chatId } = data;
 
                 await query(
-                    `UPDATE chat_participants 
+                    `UPDATE chat_participants
                      SET last_read_at = CURRENT_TIMESTAMP
                      WHERE chat_id = $1 AND user_id = $2`,
                     [chatId, userId]
                 );
 
-                // Notify sender about read status
-                socket.to(`chat_${chatId}`).emit('message_read', {
+                // 🔥 FIX: Notify ALL devices in chat room (including sender) for cross-device sync
+                io.to(`chat_${chatId}`).emit('message_read', {
                     chatId,
                     userId,
                     timestamp: new Date().toISOString()
