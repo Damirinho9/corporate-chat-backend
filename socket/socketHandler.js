@@ -17,8 +17,25 @@ const initializeSocket = (server) => {
             origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
             credentials: true
         },
-        pingTimeout: 60000,
-        pingInterval: 25000
+        // 🔥 VPN/RUSSIA FIX: Aggressive settings for VPN, DPI, Russian restrictions
+        pingTimeout: 45000,        // ⚡ Match client pingTimeout
+        pingInterval: 15000,       // ⚡ More frequent pings to detect dead connections
+
+        // ⚡ Support both transports for DPI bypass
+        transports: ['polling', 'websocket'],
+        allowUpgrades: true,
+
+        // ⚡ Increase limits for slow VPN connections
+        maxHttpBufferSize: 1e7,    // 10MB buffer for slow connections
+        httpCompression: true,      // Compress to save bandwidth on VPN
+
+        // ⚡ Connection timeout
+        connectTimeout: 30000,      // 30s to establish connection
+
+        // ⚡ Allow more connections per client for reconnects
+        perMessageDeflate: {
+            threshold: 1024
+        }
     });
 
     ioInstance = io;

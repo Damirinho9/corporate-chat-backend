@@ -1745,6 +1745,52 @@
 
         ensureToastContainer();
 
+        // 🔥 VPN/RUSSIA FIX: Retry logic for HTTP requests on slow/unstable VPN connections
+        async function fetchWithRetry(url, options = {}, maxRetries = 3) {
+            const retryDelay = (attempt) => Math.min(1000 * Math.pow(2, attempt), 5000); // 1s, 2s, 4s, max 5s
+
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                try {
+                    console.log(`[fetchWithRetry] Attempt ${attempt + 1}/${maxRetries + 1}: ${url}`);
+
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), options.timeout || 30000);
+
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: controller.signal
+                    });
+
+                    clearTimeout(timeoutId);
+
+                    // If server returns 5xx or network error, retry
+                    if (response.status >= 500 && attempt < maxRetries) {
+                        console.warn(`[fetchWithRetry] Server error ${response.status}, retrying...`);
+                        await new Promise(resolve => setTimeout(resolve, retryDelay(attempt)));
+                        continue;
+                    }
+
+                    return response;
+                } catch (error) {
+                    console.error(`[fetchWithRetry] Attempt ${attempt + 1} failed:`, error.message);
+
+                    // Retry on network errors (VPN drops, timeouts, etc.)
+                    if (attempt < maxRetries && (
+                        error.name === 'AbortError' ||
+                        error.name === 'TypeError' ||
+                        error.message.includes('network') ||
+                        error.message.includes('Failed to fetch')
+                    )) {
+                        console.log(`[fetchWithRetry] Retrying in ${retryDelay(attempt)}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, retryDelay(attempt)));
+                        continue;
+                    }
+
+                    throw error;
+                }
+            }
+        }
+
         function refreshLayoutMetrics() {
             const inputContainer = document.getElementById('chatInputContainer');
             if (!inputContainer) {
@@ -3108,13 +3154,29 @@
 
             socket = io(window.location.origin, {
                 auth: { token },
-                // 🔥 FIX: Add reconnection settings for stability across networks
+                // 🔥 VPN/RUSSIA FIX: Aggressive settings for VPN, DPI, and Russian internet restrictions
                 reconnection: true,
                 reconnectionAttempts: Infinity,
-                reconnectionDelay: 1000,
-                reconnectionDelayMax: 5000,
-                timeout: 20000,
-                transports: ['websocket', 'polling']
+                reconnectionDelay: 500,           // ⚡ Faster reconnect for VPN switches
+                reconnectionDelayMax: 3000,       // ⚡ Max 3s instead of 5s
+                timeout: 30000,                    // ⚡ 30s timeout for slow VPN connections
+                transports: ['polling', 'websocket'], // ⚡ Polling first to bypass DPI/WebSocket blocks
+                upgrade: true,                     // ⚡ Try to upgrade to WebSocket if possible
+                rememberUpgrade: false,            // ⚡ Don't remember upgrade to handle VPN IP changes
+
+                // ⚡ Aggressive ping/pong to detect dead connections fast
+                pingTimeout: 45000,                // Wait 45s for pong
+                pingInterval: 15000,               // Send ping every 15s
+
+                // ⚡ For unstable connections
+                forceNew: false,
+                multiplex: true,
+                autoConnect: true,
+
+                // ⚡ Query params to bypass some proxies
+                query: {
+                    t: Date.now()  // Timestamp to prevent caching
+                }
             });
 
             socket.on('connect', () => {
@@ -3254,12 +3316,12 @@
         async function loadChats() {
             try {
                 console.log('[loadChats] Начало загрузки...');
-                // Загружаем чаты и контакты параллельно
+                // 🔥 VPN/RUSSIA FIX: Use retry logic for unstable connections
                 const [chatsResponse, contactsResponse] = await Promise.all([
-                    fetch(`${API_URL}/chats`, {
+                    fetchWithRetry(`${API_URL}/chats`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
-                    fetch(`${API_URL}/contacts/structured`, {
+                    fetchWithRetry(`${API_URL}/contacts/structured`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     })
                 ]);
