@@ -3126,9 +3126,11 @@
             userAvatar.style.background = getAvatarColor(userName);
 
             const adminBtn = document.getElementById('adminBtn');
-            if (user.role === 'admin') {
+            // Show admin panel button for admins and ROPs
+            if (user.role === 'admin' || user.role === 'rop') {
                 adminBtn.style.display = 'grid';
                 adminBtn.onclick = () => window.location.href = '/admin-panel.html';
+                adminBtn.title = user.role === 'admin' ? 'Админ-панель' : 'Панель управления отделом';
             } else {
                 adminBtn.style.display = 'none';
             }
