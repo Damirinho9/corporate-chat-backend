@@ -3355,6 +3355,15 @@
                     admins: contactsData.admins?.users?.length || 0
                 });
 
+                // 🔍 DEBUG: Показать всех ассистентов с их ролями
+                if (contactsData.assistants?.users?.length > 0) {
+                    console.log('[loadChats] 👥 Список ассистентов:', contactsData.assistants.users.map(u => ({
+                        id: u.id,
+                        name: u.name,
+                        role: u.role
+                    })));
+                }
+
                 const sanitizeDirectChat = (chat) => {
                     if (chat.type !== 'direct') return true;
 
@@ -3855,6 +3864,13 @@
                         const existing = deptByName.get(assistantKey);
                         const assistantDept = existing ? { ...existing, department: existing.department || 'Ассистенты', users: assistantsContacts } : { department: 'Ассистенты', users: assistantsContacts };
                         deptByName.set(assistantKey, assistantDept);
+
+                        // 🔍 DEBUG: Показать кого будем рендерить в секции Ассистенты
+                        console.log('[renderChats] 🎨 Рендерим ассистентов:', assistantsContacts.map(u => ({
+                            id: u.id,
+                            name: u.name,
+                            role: u.role
+                        })));
                     }
                 }
 
