@@ -9,6 +9,8 @@ const userSockets = new Map(); // socketId -> userId
 const typingUsers = new Map(); // chatId -> Set of userIds
 
 // Initialize Socket.IO
+let ioInstance = null;
+
 const initializeSocket = (server) => {
     const io = new Server(server, {
         cors: {
@@ -18,6 +20,8 @@ const initializeSocket = (server) => {
         pingTimeout: 60000,
         pingInterval: 25000
     });
+
+    ioInstance = io;
 
     // Authentication middleware
     io.use(async (socket, next) => {
@@ -496,6 +500,11 @@ const initializeSocket = (server) => {
     return io;
 };
 
+const emitToChat = (chatId, event, payload) => {
+    if (!ioInstance) return;
+    ioInstance.to(`chat_${chatId}`).emit(event, payload);
+};
+
 // Get online users count
 const getOnlineUsersCount = () => {
     return connectedUsers.size;
@@ -513,6 +522,7 @@ const isUserOnline = (userId) => {
 
 module.exports = {
     initializeSocket,
+    emitToChat,
     getOnlineUsersCount,
     getOnlineUsers,
     isUserOnline
