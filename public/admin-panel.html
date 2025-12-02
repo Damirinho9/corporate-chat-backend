@@ -725,7 +725,7 @@
         }
 
 
-        .btn-edit, .btn-delete {
+        .btn-edit, .btn-delete, .btn-add {
             padding: 8px 15px;
             border: none;
             border-radius: 4px;
@@ -740,6 +740,13 @@
         }
         .btn-edit:hover {
             background: #2563eb;
+        }
+        .btn-add {
+            background: #22c55e;
+            color: white;
+        }
+        .btn-add:hover {
+            background: #16a34a;
         }
         .btn-delete {
             background: #ef4444;
@@ -2297,6 +2304,7 @@ async function loadChats() {
                             <td>${chat.department_name || 'N/A'}</td>
                             <td>${chat.participant_count || 0}</td>
                             <td>
+                                <button class="btn-add" onclick="openEditChatModal(${chat.id}, { focusParticipants: true })">Добавить пользователя</button>
                                 <button class="btn-edit" onclick="openEditChatModal(${chat.id})">Редактировать</button>
                                 <button class="btn-delete" onclick="deleteChat(${chat.id})">Удалить</button>
                             </td>
@@ -4087,7 +4095,7 @@ setupModalAccessibility();
             }
         }
 
-        async function openEditChatModal(chatId) {
+        async function openEditChatModal(chatId, options = {}) {
             const numericId = Number(chatId);
             if (!numericId || !editChatModal) {
                 showToast('Некорректный чат', 'error');
@@ -4135,6 +4143,16 @@ setupModalAccessibility();
             editChatState.pendingAdditions.clear();
             renderCurrentParticipants();
             renderAvailableParticipants();
+
+            if (options.focusParticipants) {
+                editChatState.filter = '';
+                if (editParticipantsSearchInput) {
+                    editParticipantsSearchInput.value = '';
+                    editParticipantsSearchInput.focus();
+                    editParticipantsSearchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                renderAvailableParticipants();
+            }
         }
 
         function filterEditParticipants() {

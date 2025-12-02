@@ -1732,6 +1732,7 @@
         let currentDirectContactId = null;
         let chats = [];
         const unreadByChat = new Map();
+        const READ_STATE_KEY = 'chatReadState';
         const directChatByUser = new Map();
         const notificationUI = window.notificationUI || {};
         const {
@@ -1767,6 +1768,36 @@
                 });
             };
         })();
+
+        function loadStoredReadState() {
+            try {
+                return JSON.parse(localStorage.getItem(READ_STATE_KEY) || '{}');
+            } catch (err) {
+                console.warn('[readState] Failed to parse read state map', err);
+                return {};
+            }
+        }
+
+        function persistReadState(state) {
+            try {
+                localStorage.setItem(READ_STATE_KEY, JSON.stringify(state));
+            } catch (err) {
+                console.warn('[readState] Failed to persist read state map', err);
+            }
+        }
+
+        function rememberChatRead(chatId, timestamp = new Date().toISOString()) {
+            const numericId = Number(chatId);
+            if (!numericId) return;
+
+            const state = loadStoredReadState();
+            state[numericId] = timestamp;
+            persistReadState(state);
+        }
+
+        function clearStoredReadState() {
+            localStorage.removeItem(READ_STATE_KEY);
+        }
 
         function syncUnreadMapFromChats() {
             unreadByChat.clear();
@@ -1809,6 +1840,7 @@
             const numericId = Number(chatId);
             if (!numericId) return;
             resetUnreadCount(numericId);
+            rememberChatRead(numericId);
 
             try {
                 await fetch(`${API_URL}/chats/${numericId}/read`, {
@@ -1817,6 +1849,40 @@
                 });
             } catch (err) {
                 console.warn('[markChatAsRead] Failed to update read status', err);
+            }
+        }
+
+        function restorePersistedReadState() {
+            const stored = loadStoredReadState();
+            const pendingSync = [];
+
+            Object.entries(stored).forEach(([id, timestamp]) => {
+                const chatId = Number(id);
+                if (!chatId) return;
+
+                const chat = chats.find(c => Number(c.id) === chatId);
+                if (!chat) return;
+
+                const lastRead = Date.parse(timestamp);
+                const lastUpdate = Date.parse(chat.updated_at);
+
+                if (Number.isNaN(lastRead)) return;
+
+                const chatIsUnchanged = Number.isNaN(lastUpdate) || lastUpdate <= lastRead;
+                if (chatIsUnchanged) {
+                    const previousUnread = unreadByChat.get(chatId) || 0;
+                    setUnreadCount(chatId, 0);
+
+                    if (previousUnread > 0) {
+                        pendingSync.push(chatId);
+                    }
+                }
+            });
+
+            if (pendingSync.length > 0) {
+                pendingSync.forEach(id => markChatAsRead(id));
+            } else {
+                renderChats();
             }
         }
 
@@ -2828,6 +2894,7 @@
         function logout() {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+            clearStoredReadState();
             token = null;
             currentUser = null;
             if (socket) {
@@ -3196,6 +3263,7 @@
 
                 chats = (chatsData.chats || []).filter(sanitizeDirectChat);
                 syncUnreadMapFromChats();
+                restorePersistedReadState();
                 rebuildDirectChatLookup();
                 const filterContacts = (list = []) => (Array.isArray(list) ? list : []).filter(u => Number(u?.id) !== Number(currentUser?.id));
                 contacts = contactsData || { departments: [], assistants: { users: [] }, admins: { users: [] } };
