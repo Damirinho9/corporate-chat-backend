@@ -3161,6 +3161,13 @@
                 }
             });
 
+            // 🔥 FIX: Sync read status across devices/tabs
+            socket.on('message_read', (data) => {
+                if (data.userId === currentUser.id && data.chatId) {
+                    resetUnreadCount(data.chatId);
+                }
+            });
+
             socket.on('error', (err) => {
                 showToast(err.message || 'Ошибка сокета', 'error');
             });
@@ -4597,6 +4604,13 @@
             if (token && currentUser) {
                 showChatApp();
             }
+
+            // 🔥 FIX: Reset unread counter when user returns to tab
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && currentChatId) {
+                    markChatAsRead(currentChatId);
+                }
+            });
 
             requestAnimationFrame(throttledSetAppHeight);
         });
