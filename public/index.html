@@ -3380,6 +3380,20 @@
                 };
 
                 chats = (chatsData.chats || []).filter(sanitizeDirectChat);
+
+                // 🔍 DEBUG: Показать типы всех чатов
+                const chatTypes = chats.reduce((acc, chat) => {
+                    acc[chat.type || 'no-type'] = (acc[chat.type || 'no-type'] || 0) + 1;
+                    return acc;
+                }, {});
+                console.log('[loadChats] 📊 Типы чатов:', chatTypes);
+                console.log('[loadChats] 📋 Все чаты:', chats.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    type: c.type,
+                    department: c.department
+                })));
+
                 syncUnreadMapFromChats();
                 restorePersistedReadState();
                 rebuildDirectChatLookup();
