@@ -5,6 +5,8 @@ const { pool } = require('../config/database');
 const getUserChats = async (req, res) => {
   try {
     const userId = req.user.id;
+    const userRole = req.user.role; // 🔥 FIX: Get user role for admin check
+    const isAdmin = userRole === 'admin'; // Admins see all chats
     const { limit = 50, offset = 0 } = req.query;
     const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100);
     const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
@@ -34,70 +36,142 @@ const getUserChats = async (req, res) => {
       [userId]
     );
 
-    const baseSelect = `
-      WITH direct_candidates AS (
-        SELECT
-          c.id,
-          c.updated_at,
-          MIN(cp.user_id) AS user_a,
-          MAX(cp.user_id) AS user_b,
-          COUNT(DISTINCT cp.user_id) AS participant_count,
-          MAX(CASE WHEN cp.user_id = $1 THEN 1 ELSE 0 END) AS has_requester
-        FROM chats c
-        JOIN chat_participants cp ON c.id = cp.chat_id
-        WHERE c.type = 'direct'
-        GROUP BY c.id, c.updated_at
-      ),
-      canonical_directs AS (
-        SELECT id
-        FROM (
+    // 🔥 FIX: Admins see all chats, regular users see only their chats
+    let baseSelect;
+
+    if (isAdmin) {
+      // Admin query: LEFT JOIN to show all chats even if not a participant
+      baseSelect = `
+        WITH direct_candidates AS (
           SELECT
-            dc.id,
-            ROW_NUMBER() OVER (
-              PARTITION BY dc.user_a, dc.user_b
-              ORDER BY dc.updated_at DESC, dc.id ASC
-            ) AS rn
-          FROM direct_candidates dc
-          WHERE dc.participant_count = 2 AND dc.has_requester = 1
-        ) ranked
-        WHERE rn = 1
-      )
-      SELECT
-        c.id, c.name, c.type, c.department, cp.last_read_at, c.updated_at,
-        (
-          SELECT COUNT(*) FROM messages m
-           WHERE m.chat_id = c.id
-             AND m.created_at > COALESCE(cp.last_read_at, '1970-01-01')
-             AND m.user_id != $1
-        ) AS unread_count,
-        (
-          SELECT json_build_object(
-            'id', m.id, 'content', m.content, 'created_at', m.created_at,
-            'user_id', m.user_id, 'username', u.name
-          )
-            FROM messages m
-            JOIN users u ON m.user_id=u.id
-           WHERE m.chat_id = c.id
-           ORDER BY m.created_at DESC
-           LIMIT 1
-        ) AS last_message,
-        (
-          SELECT json_agg(json_build_object(
-            'id', u.id,
-            'username', u.username,
-            'name', u.name,
-            'role', u.role,
-            'department', u.department,
-            'last_seen', u.last_seen
-          ))
-            FROM chat_participants cp2
-            JOIN users u ON cp2.user_id = u.id
-           WHERE cp2.chat_id = c.id
-        ) AS participants
-      FROM chats c
-      JOIN chat_participants cp ON c.id = cp.chat_id AND cp.user_id = $1
-      WHERE c.type <> 'direct' OR c.id IN (SELECT id FROM canonical_directs)
-    `;
+            c.id,
+            c.updated_at,
+            MIN(cp.user_id) AS user_a,
+            MAX(cp.user_id) AS user_b,
+            COUNT(DISTINCT cp.user_id) AS participant_count,
+            MAX(CASE WHEN cp.user_id = $1 THEN 1 ELSE 0 END) AS has_requester
+          FROM chats c
+          JOIN chat_participants cp ON c.id = cp.chat_id
+          WHERE c.type = 'direct'
+          GROUP BY c.id, c.updated_at
+        ),
+        canonical_directs AS (
+          SELECT id
+          FROM (
+            SELECT
+              dc.id,
+              ROW_NUMBER() OVER (
+                PARTITION BY dc.user_a, dc.user_b
+                ORDER BY dc.updated_at DESC, dc.id ASC
+              ) AS rn
+            FROM direct_candidates dc
+            WHERE dc.participant_count = 2
+          ) ranked
+          WHERE rn = 1
+        )
+        SELECT
+          c.id, c.name, c.type, c.department, cp.last_read_at, c.updated_at,
+          (
+            SELECT COUNT(*) FROM messages m
+             WHERE m.chat_id = c.id
+               AND m.created_at > COALESCE(cp.last_read_at, '1970-01-01')
+               AND m.user_id != $1
+          ) AS unread_count,
+          (
+            SELECT json_build_object(
+              'id', m.id, 'content', m.content, 'created_at', m.created_at,
+              'user_id', m.user_id, 'username', u.name
+            )
+              FROM messages m
+              JOIN users u ON m.user_id=u.id
+             WHERE m.chat_id = c.id
+             ORDER BY m.created_at DESC
+             LIMIT 1
+          ) AS last_message,
+          (
+            SELECT json_agg(json_build_object(
+              'id', u.id,
+              'username', u.username,
+              'name', u.name,
+              'role', u.role,
+              'department', u.department,
+              'last_seen', u.last_seen
+            ))
+              FROM chat_participants cp2
+              JOIN users u ON cp2.user_id = u.id
+             WHERE cp2.chat_id = c.id
+          ) AS participants
+        FROM chats c
+        LEFT JOIN chat_participants cp ON c.id = cp.chat_id AND cp.user_id = $1
+        WHERE c.type <> 'direct' OR c.id IN (SELECT id FROM canonical_directs)
+      `;
+    } else {
+      // Regular user query: only show chats where user is a participant
+      baseSelect = `
+        WITH direct_candidates AS (
+          SELECT
+            c.id,
+            c.updated_at,
+            MIN(cp.user_id) AS user_a,
+            MAX(cp.user_id) AS user_b,
+            COUNT(DISTINCT cp.user_id) AS participant_count,
+            MAX(CASE WHEN cp.user_id = $1 THEN 1 ELSE 0 END) AS has_requester
+          FROM chats c
+          JOIN chat_participants cp ON c.id = cp.chat_id
+          WHERE c.type = 'direct'
+          GROUP BY c.id, c.updated_at
+        ),
+        canonical_directs AS (
+          SELECT id
+          FROM (
+            SELECT
+              dc.id,
+              ROW_NUMBER() OVER (
+                PARTITION BY dc.user_a, dc.user_b
+                ORDER BY dc.updated_at DESC, dc.id ASC
+              ) AS rn
+            FROM direct_candidates dc
+            WHERE dc.participant_count = 2 AND dc.has_requester = 1
+          ) ranked
+          WHERE rn = 1
+        )
+        SELECT
+          c.id, c.name, c.type, c.department, cp.last_read_at, c.updated_at,
+          (
+            SELECT COUNT(*) FROM messages m
+             WHERE m.chat_id = c.id
+               AND m.created_at > COALESCE(cp.last_read_at, '1970-01-01')
+               AND m.user_id != $1
+          ) AS unread_count,
+          (
+            SELECT json_build_object(
+              'id', m.id, 'content', m.content, 'created_at', m.created_at,
+              'user_id', m.user_id, 'username', u.name
+            )
+              FROM messages m
+              JOIN users u ON m.user_id=u.id
+             WHERE m.chat_id = c.id
+             ORDER BY m.created_at DESC
+             LIMIT 1
+          ) AS last_message,
+          (
+            SELECT json_agg(json_build_object(
+              'id', u.id,
+              'username', u.username,
+              'name', u.name,
+              'role', u.role,
+              'department', u.department,
+              'last_seen', u.last_seen
+            ))
+              FROM chat_participants cp2
+              JOIN users u ON cp2.user_id = u.id
+             WHERE cp2.chat_id = c.id
+          ) AS participants
+        FROM chats c
+        JOIN chat_participants cp ON c.id = cp.chat_id AND cp.user_id = $1
+        WHERE c.type <> 'direct' OR c.id IN (SELECT id FROM canonical_directs)
+      `;
+    }
 
     const sql = baseSelect + ` ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`;
 
