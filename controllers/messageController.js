@@ -1,5 +1,6 @@
 const { query } = require('../config/database');
 const { pool } = require('../config/database');
+const { emitToChat } = require('../socket/socketHandler');
 
 // Get messages for chat
 const getMessages = async (req, res) => {
@@ -40,6 +41,7 @@ const getMessages = async (req, res) => {
                         'size', f.size_bytes,
                         'mimeType', f.mime_type,
                         'type', f.mime_type,
+                        'fileType', f.file_type,
                         'url', '/api/files/' || f.id,
                         'thumbnailUrl', CASE WHEN f.thumbnail_path IS NOT NULL 
                             THEN '/api/files/' || f.id || '/thumbnail' 
@@ -134,15 +136,17 @@ const getMessages = async (req, res) => {
 const sendMessage = async (req, res) => {
     try {
         const { chatId } = req.params;
-        const { content, fileId, replyToId, forwardedFromId, mentions } = req.body;
+        const { content, fileId, file_id, replyToId, forwardedFromId, mentions } = req.body;
         const userId = req.user.id;
 
         const trimmedContent = typeof content === 'string' ? content.trim() : '';
         const normalizedContent = trimmedContent.length > 0 ? trimmedContent : null;
         let normalizedFileId = null;
 
-        if (fileId !== undefined && fileId !== null && fileId !== '') {
-            const parsedFileId = Number(fileId);
+        const incomingFileId = fileId ?? file_id;
+
+        if (incomingFileId !== undefined && incomingFileId !== null && incomingFileId !== '') {
+            const parsedFileId = Number(incomingFileId);
             if (Number.isNaN(parsedFileId)) {
                 return res.status(400).json({
                     error: 'Invalid file identifier',
@@ -271,6 +275,7 @@ const sendMessage = async (req, res) => {
                         'size', f.size_bytes,
                         'mimeType', f.mime_type,
                         'type', f.mime_type,
+                        'fileType', f.file_type,
                         'url', '/api/files/' || f.id,
                         'thumbnailUrl', CASE WHEN f.thumbnail_path IS NOT NULL 
                             THEN '/api/files/' || f.id || '/thumbnail' 
@@ -305,13 +310,20 @@ const sendMessage = async (req, res) => {
             [result.id]
         );
 
+        const payload = completeMessage.rows[0];
+
+        emitToChat(chatId, 'new_message', {
+            chatId: Number(chatId),
+            message: payload
+        });
+
         res.status(201).json({
             message: 'Message sent successfully',
-            message: completeMessage.rows[0]
+            message: payload
         });
     } catch (error) {
         console.error('Send message error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to send message',
             code: 'SEND_MESSAGE_ERROR'
         });

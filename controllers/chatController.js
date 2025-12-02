@@ -5,19 +5,68 @@ const { pool } = require('../config/database');
 const getUserChats = async (req, res) => {
   try {
     const userId = req.user.id;
-    const me = await query('SELECT role FROM users WHERE id=$1', [userId]);
-    const isAdmin = me.rows[0]?.role === 'admin';
-
     const { limit = 50, offset = 0 } = req.query;
     const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100);
     const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
 
+    // Backfill last_read_at so historical messages are not counted as unread
+    await query(
+      `WITH last_msg AS (
+         SELECT chat_id, MAX(created_at) AS last_created
+         FROM messages
+         GROUP BY chat_id
+       )
+       UPDATE chat_participants cp
+          SET last_read_at = COALESCE(lm.last_created, NOW())
+         FROM last_msg lm
+        WHERE cp.user_id = $1
+          AND cp.last_read_at IS NULL
+          AND cp.chat_id = lm.chat_id`,
+      [userId]
+    );
+
+    // For chats without any messages, still set a baseline read timestamp
+    await query(
+      `UPDATE chat_participants
+          SET last_read_at = NOW()
+        WHERE user_id = $1
+          AND last_read_at IS NULL`,
+      [userId]
+    );
+
     const baseSelect = `
+      WITH direct_candidates AS (
+        SELECT
+          c.id,
+          c.updated_at,
+          MIN(cp.user_id) AS user_a,
+          MAX(cp.user_id) AS user_b,
+          COUNT(DISTINCT cp.user_id) AS participant_count,
+          MAX(CASE WHEN cp.user_id = $1 THEN 1 ELSE 0 END) AS has_requester
+        FROM chats c
+        JOIN chat_participants cp ON c.id = cp.chat_id
+        WHERE c.type = 'direct'
+        GROUP BY c.id, c.updated_at
+      ),
+      canonical_directs AS (
+        SELECT id
+        FROM (
+          SELECT
+            dc.id,
+            ROW_NUMBER() OVER (
+              PARTITION BY dc.user_a, dc.user_b
+              ORDER BY dc.updated_at DESC, dc.id ASC
+            ) AS rn
+          FROM direct_candidates dc
+          WHERE dc.participant_count = 2 AND dc.has_requester = 1
+        ) ranked
+        WHERE rn = 1
+      )
       SELECT
         c.id, c.name, c.type, c.department, cp.last_read_at, c.updated_at,
         (
           SELECT COUNT(*) FROM messages m
-           WHERE m.chat_id = c.id 
+           WHERE m.chat_id = c.id
              AND m.created_at > COALESCE(cp.last_read_at, '1970-01-01')
              AND m.user_id != $1
         ) AS unread_count,
@@ -33,18 +82,24 @@ const getUserChats = async (req, res) => {
            LIMIT 1
         ) AS last_message,
         (
-          SELECT json_agg(json_build_object('id', u.id, 'name', u.name, 'role', u.role))
+          SELECT json_agg(json_build_object(
+            'id', u.id,
+            'username', u.username,
+            'name', u.name,
+            'role', u.role,
+            'department', u.department,
+            'last_seen', u.last_seen
+          ))
             FROM chat_participants cp2
-            JOIN users u ON cp2.user_id=u.id
-           WHERE cp2.chat_id = c.id AND u.id <> $1
+            JOIN users u ON cp2.user_id = u.id
+           WHERE cp2.chat_id = c.id
         ) AS participants
       FROM chats c
-      LEFT JOIN chat_participants cp ON c.id = cp.chat_id AND cp.user_id = $1
+      JOIN chat_participants cp ON c.id = cp.chat_id AND cp.user_id = $1
+      WHERE c.type <> 'direct' OR c.id IN (SELECT id FROM canonical_directs)
     `;
 
-    const sql = isAdmin
-      ? baseSelect + ` ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`
-      : baseSelect + ` WHERE cp.user_id = $1 ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`;
+    const sql = baseSelect + ` ORDER BY c.updated_at DESC LIMIT $2 OFFSET $3`;
 
     const result = await query(sql, [userId, parsedLimit, parsedOffset]);
 
@@ -119,13 +174,21 @@ const getChatById = async (req, res) => {
 // Create direct message chat
 const createDirectChat = async (req, res) => {
     try {
-        const { receiverId } = req.body;
-        const senderId = req.user.id;
+        const { receiverId: receiverIdRaw } = req.body;
+        const senderId = Number(req.user.id);
+        const receiverId = Number(receiverIdRaw);
 
-        if (!receiverId) {
-            return res.status(400).json({ 
+        if (!receiverIdRaw || Number.isNaN(receiverId)) {
+            return res.status(400).json({
                 error: 'Receiver ID is required',
                 code: 'MISSING_RECEIVER'
+            });
+        }
+
+        if (receiverId === senderId) {
+            return res.status(400).json({
+                error: 'Cannot create direct chat with yourself',
+                code: 'INVALID_RECEIVER'
             });
         }
 
@@ -142,66 +205,74 @@ const createDirectChat = async (req, res) => {
             });
         }
 
-        // Check if chat already exists
-        const existingChat = await query(
-            `SELECT c.id 
-             FROM chats c
-             JOIN chat_participants cp1 ON c.id = cp1.chat_id
-             JOIN chat_participants cp2 ON c.id = cp2.chat_id
-             WHERE c.type = 'direct'
-             AND cp1.user_id = $1 
-             AND cp2.user_id = $2`,
-            [senderId, receiverId]
-        );
+        const pairKey = `${Math.min(senderId, receiverId)}:${Math.max(senderId, receiverId)}`;
 
-        if (existingChat.rows.length > 0) {
-            return res.json({ 
-                message: 'Chat already exists',
-                chatId: existingChat.rows[0].id,
-                isNew: false
-            });
-        }
-
-        // Create new chat
+        // Create or reuse chat under advisory lock to avoid duplicates for the same pair
         const client = await pool.connect();
         let result;
+        let usedExisting = false;
         try {
             await client.query('BEGIN');
-            
+            await client.query('SELECT pg_advisory_lock(hashtext($1))', [pairKey]);
 
-            const chatResult = await client.query(
-                `INSERT INTO chats (type, created_by)
-                 VALUES ('direct', $1)
-                 RETURNING id`,
-                [senderId]
+            const existingChat = await client.query(
+                `SELECT c.id
+                   FROM chats c
+                  WHERE c.type = 'direct'
+                    AND EXISTS (
+                      SELECT 1 FROM chat_participants cp WHERE cp.chat_id = c.id AND cp.user_id = $1
+                    )
+                    AND EXISTS (
+                      SELECT 1 FROM chat_participants cp WHERE cp.chat_id = c.id AND cp.user_id = $2
+                    )
+                    AND (
+                      SELECT COUNT(DISTINCT cp.user_id) FROM chat_participants cp WHERE cp.chat_id = c.id
+                    ) = 2
+                  ORDER BY c.updated_at DESC, c.id ASC
+                  LIMIT 1
+                  FOR UPDATE`,
+                [senderId, receiverId]
             );
 
-            const chatId = chatResult.rows[0].id;
+            if (existingChat.rows.length > 0) {
+                result = existingChat.rows[0].id;
+                usedExisting = true;
+            } else {
+                const chatResult = await client.query(
+                    `INSERT INTO chats (type, created_by)
+                     VALUES ('direct', $1)
+                     RETURNING id`,
+                    [senderId]
+                );
 
-            // Add both participants
-            await client.query(
-                `INSERT INTO chat_participants (chat_id, user_id)
-                 VALUES ($1, $2), ($1, $3)`,
-                [chatId, senderId, receiverId]
-            );
+                const chatId = chatResult.rows[0].id;
+
+                await client.query(
+                    `INSERT INTO chat_participants (chat_id, user_id)
+                     VALUES ($1, $2), ($1, $3)`,
+                    [chatId, senderId, receiverId]
+                );
+
+                result = chatId;
+            }
 
             await client.query('COMMIT');
-            result = chatId;
         } catch (error) {
             await client.query('ROLLBACK');
             throw error;
         } finally {
+            await client.query('SELECT pg_advisory_unlock(hashtext($1))', [pairKey]).catch(() => {});
             client.release();
         }
 
         res.status(201).json({
-            message: 'Direct chat created successfully',
+            message: usedExisting ? 'Chat already exists' : 'Direct chat created successfully',
             chatId: result,
-            isNew: true
+            isNew: !usedExisting
         });
     } catch (error) {
         console.error('Create direct chat error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to create direct chat',
             code: 'CREATE_CHAT_ERROR'
         });
