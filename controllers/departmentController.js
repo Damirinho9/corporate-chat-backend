@@ -171,7 +171,9 @@ const getContactsStructured = async (req, res) => {
                 });
             }
 
-            if (row.role === 'assistant' && row.is_active) {
+            // 🔥 FIX: Include ALL active users from "Ассистенты" department, not just role='assistant'
+            const normalizedDept = normalizeDepartmentName(row.department);
+            if (normalizedDept === 'Ассистенты' && row.is_active && row.id !== req.user.id) {
                 assistants.push({
                     id: row.id,
                     username: row.username,
