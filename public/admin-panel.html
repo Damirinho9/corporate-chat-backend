@@ -1884,15 +1884,59 @@
             }
         }
 
-        // Check auth
-        if (!token || !currentUser || currentUser.role !== 'admin') {
+        // Check auth - allow both admins and ROPs
+        const isAdmin = currentUser?.role === 'admin';
+        const isRop = currentUser?.role === 'rop';
+
+        if (!token || !currentUser || (!isAdmin && !isRop)) {
             window.location.href = '/';
         }
 
-
         // Set admin info
         document.getElementById('adminName').textContent = currentUser.name;
-        document.getElementById('adminRole').textContent = currentUser.role;
+        document.getElementById('adminRole').textContent = currentUser.role === 'admin' ? 'Администратор' : 'Руководитель отдела';
+
+        // Get ROP's department if applicable
+        const ropDepartment = isRop ? currentUser.department : null;
+
+        // Hide admin-only sections for ROPs
+        if (isRop) {
+            const adminOnlySections = ['permissions', 'deletions', 'logs'];
+            adminOnlySections.forEach(section => {
+                const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
+                if (navItem) {
+                    navItem.style.display = 'none';
+                }
+                const contentSection = document.getElementById(section);
+                if (contentSection) {
+                    contentSection.style.display = 'none';
+                }
+            });
+
+            // Hide admin and rop roles from role selects
+            const roleSelects = document.querySelectorAll('select[name="role"], #createRole, #editRole');
+            roleSelects.forEach(select => {
+                const restrictedRoles = ['admin', 'rop'];
+                Array.from(select.options).forEach(option => {
+                    if (restrictedRoles.includes(option.value)) {
+                        option.style.display = 'none';
+                        option.disabled = true;
+                    }
+                });
+            });
+
+            // Auto-select department for ROPs (make it readonly)
+            const departmentSelects = document.querySelectorAll('#createDepartment, #editDepartment');
+            departmentSelects.forEach(select => {
+                select.value = ropDepartment;
+                select.setAttribute('readonly', 'readonly');
+                select.style.backgroundColor = '#e2e8f0';
+                select.style.cursor = 'not-allowed';
+            });
+
+            console.log('[ROP Mode] Ограниченный доступ для РОПа:', currentUser.name);
+            console.log('[ROP Mode] Отдел:', ropDepartment);
+        }
 
         // ========== NAVIGATION ==========
         document.querySelectorAll('.nav-item').forEach(item => {
@@ -2205,7 +2249,18 @@
                 }
 
                 const data = await res.json();
-                usersCache = Array.isArray(data.users) ? data.users : [];
+                let allUsers = Array.isArray(data.users) ? data.users : [];
+
+                // Filter users by department for ROPs
+                if (isRop && ropDepartment) {
+                    allUsers = allUsers.filter(user =>
+                        user.department === ropDepartment ||
+                        user.id === currentUser.id // Always show self
+                    );
+                    console.log(`[ROP Mode] Filtered ${allUsers.length} users from department:`, ropDepartment);
+                }
+
+                usersCache = allUsers;
 
                 if (usersCache.length > 0) {
                     tbody.innerHTML = usersCache.map(user => {
@@ -2247,7 +2302,25 @@ async function loadChats() {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
-                chatsCache = Array.isArray(data.chats) ? data.chats : [];
+                let allChats = Array.isArray(data.chats) ? data.chats : [];
+
+                // Filter chats by department for ROPs
+                if (isRop && ropDepartment) {
+                    allChats = allChats.filter(chat => {
+                        // Department chats: show only ROP's department
+                        if (chat.type === 'department') {
+                            return chat.department === ropDepartment || chat.name === ropDepartment;
+                        }
+                        // Group and direct chats: show if ROP is participant
+                        if (chat.participants && Array.isArray(chat.participants)) {
+                            return chat.participants.some(p => p.id === currentUser.id);
+                        }
+                        return false;
+                    });
+                    console.log(`[ROP Mode] Filtered ${allChats.length} chats for department:`, ropDepartment);
+                }
+
+                chatsCache = allChats;
 
                 const tbody = document.querySelector('#chatsTable tbody');
 
@@ -2356,10 +2429,19 @@ async function loadChats() {
                 }
 
                 const data = await res.json();
-                const sanitizedDepartments = Array.isArray(data.departments)
+                let allDepartments = Array.isArray(data.departments)
                     ? data.departments.filter((dept) => dept && typeof dept.department === 'string' && dept.department.trim().length)
                     : [];
 
+                // Filter departments for ROPs - show only their department
+                if (isRop && ropDepartment) {
+                    allDepartments = allDepartments.filter(dept =>
+                        dept.department.trim() === ropDepartment
+                    );
+                    console.log(`[ROP Mode] Filtered to department:`, ropDepartment);
+                }
+
+                const sanitizedDepartments = allDepartments;
                 departmentsCache = sanitizedDepartments.map((dept) => dept.department.trim());
                 populateDepartmentSelectOptions(departmentSelect, departmentSelect ? departmentSelect.value : null);
                 const editPreferredDepartment = (currentEditingUser && currentEditingUser.department)
@@ -3163,6 +3245,18 @@ async function loadChats() {
                 department: departmentSelect.value || null
             };
 
+            // 🔥 ROP RESTRICTION: ROPs can only create users in their department
+            if (isRop && ropDepartment) {
+                payload.department = ropDepartment;
+                console.log('[ROP Mode] Auto-assigning department:', ropDepartment);
+
+                // ROPs cannot create admins or other ROPs
+                if (payload.role === 'admin' || payload.role === 'rop') {
+                    showToast('РОПы не могут создавать администраторов или других РОПов', 'error');
+                    return;
+                }
+            }
+
             if (!payload.username || !payload.name || !payload.role) {
                 showToast('Заполните обязательные поля', 'error');
                 return;
@@ -3250,6 +3344,18 @@ async function loadChats() {
                 role: roleSelect.value,
                 department: departmentSelect.value || null
             };
+
+            // 🔥 ROP RESTRICTION: ROPs can only create users in their department
+            if (isRop && ropDepartment) {
+                payload.department = ropDepartment;
+                console.log('[ROP Mode] Auto-assigning department:', ropDepartment);
+
+                // ROPs cannot create admins or other ROPs
+                if (payload.role === 'admin' || payload.role === 'rop') {
+                    showToast('РОПы не могут создавать администраторов или других РОПов', 'error');
+                    return;
+                }
+            }
 
             if (!payload.username || !payload.name || !payload.role) {
                 showToast('Заполните обязательные поля', 'error');
