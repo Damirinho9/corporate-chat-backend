@@ -1006,11 +1006,21 @@
         .emoji-picker-inline {
             display: flex;
             gap: 5px;
-            padding: 8px;
+            padding: 12px 8px; /* 🔥 FIX: Increased padding for easier hover */
             background: var(--bg-tertiary);
             border-radius: 6px;
-            margin: 4px 0;
+            margin: 2px 0; /* 🔥 FIX: Reduced margin to stay closer to button */
             flex-wrap: wrap;
+            /* 🔥 FIX: Make picker easier to hover */
+            pointer-events: auto;
+            cursor: default;
+            transition: opacity 0.2s ease;
+            max-width: 240px; /* Limit width for better layout */
+        }
+
+        /* 🔥 FIX: Ensure picker stays visible when hovering */
+        .emoji-picker-inline[data-keep-open="true"] {
+            opacity: 1;
         }
 
         .reply-preview {
@@ -2557,11 +2567,26 @@
             });
         }
 
-        function showEmojiPickerInMenu(messageId) {
+        function showEmojiPickerInMenu(messageId, event) {
+            // 🔥 FIX: Prevent menu from closing when clicking reaction button
+            if (event) {
+                event.stopPropagation();
+            }
+
             const picker = document.getElementById(`emoji-picker-${messageId}`);
             if (picker) {
                 const isVisible = picker.style.display === 'flex';
                 picker.style.display = isVisible ? 'none' : 'flex';
+
+                // 🔥 FIX: Prevent picker from closing when mouse moves over it
+                if (!isVisible) {
+                    picker.addEventListener('mouseenter', () => {
+                        picker.setAttribute('data-keep-open', 'true');
+                    });
+                    picker.addEventListener('mouseleave', () => {
+                        picker.removeAttribute('data-keep-open');
+                    });
+                }
             }
         }
 
@@ -2722,11 +2747,20 @@
             }
         }
 
-        // Update click outside handler to close menus
+        // 🔥 FIX: Update click outside handler to close menus (but keep emoji picker open when hovering)
         document.addEventListener('click', (e) => {
-            if (!e.target.closest('.message-actions') && !e.target.closest('.message-dropdown')) {
-                closeAllMenus();
+            // Don't close if clicking inside message actions or dropdown
+            if (e.target.closest('.message-actions') || e.target.closest('.message-dropdown')) {
+                return;
             }
+
+            // Don't close if clicking on emoji picker that should stay open
+            const emojiPicker = e.target.closest('.emoji-picker-inline');
+            if (emojiPicker && emojiPicker.hasAttribute('data-keep-open')) {
+                return;
+            }
+
+            closeAllMenus();
         });
 
         // ==================== MODAL ====================
@@ -4468,7 +4502,7 @@
                             <span>↩️</span>
                             <span>Ответить</span>
                         </div>
-                        <div class="dropdown-item" onclick="showEmojiPickerInMenu(${message.id})">
+                        <div class="dropdown-item" onclick="showEmojiPickerInMenu(${message.id}, event)">
                             <span>😊</span>
                             <span>Реакция</span>
                         </div>
