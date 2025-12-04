@@ -3005,30 +3005,51 @@
                 btn.textContent = '🔕';
                 btn.title = 'Уведомления заблокированы';
                 btn.disabled = true;
+                btn.classList.remove('active');
             } else if (pushSubscription) {
                 btn.textContent = '🔔';
-                btn.title = 'Уведомления включены';
+                btn.title = 'Уведомления включены (нажмите чтобы отключить)';
                 btn.classList.add('active');
+                btn.disabled = false;
             } else {
                 btn.textContent = '🔕';
                 btn.title = 'Включить уведомления';
                 btn.classList.remove('active');
+                btn.disabled = false;
             }
         }
 
+        // 🔥 FIX: Prevent multiple clicks
+        let isTogglingNotifications = false;
+
         async function togglePushNotifications() {
+            // 🔥 FIX: Prevent double clicks
+            if (isTogglingNotifications) {
+                console.warn('[togglePushNotifications] Already processing...');
+                return;
+            }
+
             if (!swRegistration) {
                 showToast('Service Worker не зарегистрирован', 'error');
                 return;
             }
 
+            const btn = document.getElementById('notificationsBtn');
+
             try {
+                isTogglingNotifications = true;
+                if (btn) {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.6';
+                }
+
                 if (pushSubscription) {
                     // Unsubscribe
+                    console.log('[Push] Отключение уведомлений...');
                     await pushSubscription.unsubscribe();
 
                     // Notify server
-                    await fetch(`${API_URL}/push/unsubscribe`, {
+                    const response = await fetch(`${API_URL}/push/unsubscribe`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -3037,11 +3058,17 @@
                         body: JSON.stringify({ endpoint: pushSubscription.endpoint })
                     });
 
+                    if (!response.ok) {
+                        console.warn('[Push] Server unsubscribe failed, but local unsubscribe succeeded');
+                    }
+
                     pushSubscription = null;
                     updateNotificationButton();
-                    console.log('Push unsubscribed');
+                    showToast('Уведомления отключены', 'success');
+                    console.log('[Push] Успешно отключены');
                 } else {
                     // Request permission
+                    console.log('[Push] Запрос разрешения...');
                     const permission = await Notification.requestPermission();
                     if (permission !== 'granted') {
                         showToast('Разрешите уведомления в настройках браузера', 'warning');
@@ -3050,6 +3077,7 @@
                     }
 
                     // Get VAPID public key
+                    console.log('[Push] Получение VAPID ключа...');
                     const keyResponse = await fetch(`${API_URL}/push/vapid-public-key`);
                     if (!keyResponse.ok) {
                         throw new Error('Push notifications not configured on server');
@@ -3057,13 +3085,15 @@
                     const { publicKey } = await keyResponse.json();
 
                     // Subscribe
+                    console.log('[Push] Подписка на уведомления...');
                     pushSubscription = await swRegistration.pushManager.subscribe({
                         userVisibleOnly: true,
                         applicationServerKey: urlBase64ToUint8Array(publicKey)
                     });
 
                     // Send subscription to server
-                    await fetch(`${API_URL}/push/subscribe`, {
+                    console.log('[Push] Отправка подписки на сервер...');
+                    const response = await fetch(`${API_URL}/push/subscribe`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -3072,12 +3102,25 @@
                         body: JSON.stringify({ subscription: pushSubscription })
                     });
 
+                    if (!response.ok) {
+                        throw new Error('Failed to register subscription on server');
+                    }
+
                     updateNotificationButton();
-                    console.log('Push subscribed');
+                    showToast('Уведомления включены', 'success');
+                    console.log('[Push] Успешно включены');
                 }
             } catch (error) {
-                console.error('Toggle push error:', error);
+                console.error('[togglePushNotifications] Error:', error);
                 showToast('Ошибка: ' + error.message, 'error');
+                // Reset button state on error
+                updateNotificationButton();
+            } finally {
+                isTogglingNotifications = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                }
             }
         }
 
