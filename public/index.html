@@ -760,7 +760,8 @@
             pointer-events: none;
         }
 
-        .message:hover .message-actions {
+        .message:hover .message-actions,
+        .message-actions.keep-visible {
             display: flex;
             animation: fadeIn 0.2s ease;
         }
@@ -2542,11 +2543,14 @@
         }
 
         function toggleMessageMenu(messageId) {
-            // Close all other menus
+            // Close all other menus and remove keep-visible from all actions
             document.querySelectorAll('.message-dropdown').forEach(menu => {
                 if (menu.id !== `message-menu-${messageId}`) {
                     menu.style.display = 'none';
                 }
+            });
+            document.querySelectorAll('.message-actions').forEach(actions => {
+                actions.classList.remove('keep-visible');
             });
 
             // Close all emoji pickers
@@ -2559,8 +2563,15 @@
                 const isVisible = menu.style.display === 'block';
                 menu.style.display = isVisible ? 'none' : 'block';
 
-                if (!isVisible) {
-                    applyPermissionVisibility();
+                // Keep message-actions visible when dropdown is open
+                const actions = menu.closest('.message-actions');
+                if (actions) {
+                    if (isVisible) {
+                        actions.classList.remove('keep-visible');
+                    } else {
+                        actions.classList.add('keep-visible');
+                        applyPermissionVisibility();
+                    }
                 }
             }
         }
@@ -2571,6 +2582,10 @@
             });
             document.querySelectorAll('.emoji-picker-inline').forEach(picker => {
                 picker.style.display = 'none';
+            });
+            // Remove keep-visible class from all message-actions
+            document.querySelectorAll('.message-actions').forEach(actions => {
+                actions.classList.remove('keep-visible');
             });
         }
 
