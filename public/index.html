@@ -712,8 +712,8 @@
             padding: 20px 20px calc(20px + var(--chat-input-offset, 120px));
             display: flex;
             flex-direction: column;
+            scroll-behavior: smooth; /* 🔥 Smooth scrolling */
             gap: 15px;
-            scroll-behavior: smooth;
             min-height: 0;
             scroll-padding-bottom: calc(140px + var(--safe-area-bottom, 0px));
             /* Performance optimizations for smooth scrolling */
@@ -4464,23 +4464,31 @@
             });
         }
 
+        // 🔥 FIX: Debounced scroll to avoid triple jumps
+        let scrollTimeout = null;
         function scrollToBottom(force = false) {
             const container = document.getElementById('messagesContainer');
             if (!container) return;
 
+            // Clear previous timeout to avoid multiple scrolls
+            if (scrollTimeout) {
+                cancelAnimationFrame(scrollTimeout);
+            }
+
             // Wait for DOM to render before calculating scroll position
-            requestAnimationFrame(() => {
+            scrollTimeout = requestAnimationFrame(() => {
                 const scrollThreshold = 150; // More forgiving threshold
                 const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < scrollThreshold;
 
                 // Auto-scroll only if user is near bottom or force is true
                 if (force || isNearBottom) {
-                    // Use smooth scroll for better UX (only when forced, instant otherwise)
+                    // Use smooth scroll for better UX
                     container.scrollTo({
                         top: container.scrollHeight,
-                        behavior: force ? 'smooth' : 'auto'
+                        behavior: 'smooth'
                     });
                 }
+                scrollTimeout = null;
             });
         }
 
@@ -4590,8 +4598,7 @@
 
                         if (data.message) {
                             // Don't append here - WebSocket will handle it to avoid duplicates
-                            // Just keep scroll position
-                            scrollToBottom(true);
+                            // WebSocket will also handle scroll
                         }
                     }
                     selectedFiles = [];
@@ -4631,8 +4638,7 @@
                             const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                             if (tempEl) tempEl.remove();
                         }
-                        // Don't append here - let WebSocket handle it
-                        scrollToBottom(true);
+                        // Don't append here - let WebSocket handle it and scroll
                     } else {
                         // Remove temp message on error
                         if (tempMessageId) {
