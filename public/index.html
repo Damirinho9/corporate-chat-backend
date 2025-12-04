@@ -2549,22 +2549,18 @@
                 }
             });
 
+            // Close all emoji pickers
+            document.querySelectorAll('.emoji-picker-inline').forEach(picker => {
+                picker.style.display = 'none';
+            });
+
             const menu = document.getElementById(`message-menu-${messageId}`);
             if (menu) {
                 const isVisible = menu.style.display === 'block';
                 menu.style.display = isVisible ? 'none' : 'block';
 
-                // 🔥 FIX: Prevent dropdown from closing when mouse moves over it
                 if (!isVisible) {
                     applyPermissionVisibility();
-
-                    // Add hover tracking to keep menu open
-                    menu.addEventListener('mouseenter', () => {
-                        menu.setAttribute('data-keep-open', 'true');
-                    });
-                    menu.addEventListener('mouseleave', () => {
-                        menu.removeAttribute('data-keep-open');
-                    });
                 }
             }
         }
@@ -2579,7 +2575,7 @@
         }
 
         function showEmojiPickerInMenu(messageId, event) {
-            // 🔥 FIX: Prevent menu from closing when clicking reaction button
+            // Prevent menu from closing when clicking reaction button
             if (event) {
                 event.stopPropagation();
             }
@@ -2588,16 +2584,6 @@
             if (picker) {
                 const isVisible = picker.style.display === 'flex';
                 picker.style.display = isVisible ? 'none' : 'flex';
-
-                // 🔥 FIX: Prevent picker from closing when mouse moves over it
-                if (!isVisible) {
-                    picker.addEventListener('mouseenter', () => {
-                        picker.setAttribute('data-keep-open', 'true');
-                    });
-                    picker.addEventListener('mouseleave', () => {
-                        picker.removeAttribute('data-keep-open');
-                    });
-                }
             }
         }
 
@@ -2758,25 +2744,14 @@
             }
         }
 
-        // 🔥 FIX: Update click outside handler to close menus (but keep open when hovering)
+        // Close menus when clicking outside
         document.addEventListener('click', (e) => {
-            // Don't close if clicking inside message actions
-            if (e.target.closest('.message-actions')) {
+            // Don't close if clicking inside message actions or dropdown menu
+            if (e.target.closest('.message-actions') || e.target.closest('.message-dropdown')) {
                 return;
             }
 
-            // Don't close if hovering over dropdown menu
-            const dropdown = e.target.closest('.message-dropdown');
-            if (dropdown && dropdown.hasAttribute('data-keep-open')) {
-                return;
-            }
-
-            // Don't close if hovering over emoji picker
-            const emojiPicker = e.target.closest('.emoji-picker-inline');
-            if (emojiPicker && emojiPicker.hasAttribute('data-keep-open')) {
-                return;
-            }
-
+            // Otherwise close all menus
             closeAllMenus();
         });
 
