@@ -4072,6 +4072,22 @@
                 }
             }
 
+            // Direct chats section - show all direct message chats
+            if ((activeSectionFilter === 'all' || activeSectionFilter === 'Отделы') && directChats.length > 0) {
+                // Filter to show only chats with messages or active conversations
+                const activeDirectChats = directChats.filter(chat => {
+                    // Show if has messages or unread count
+                    return chat.last_message || chat.unread_count > 0;
+                });
+
+                if (activeDirectChats.length > 0) {
+                    html += `<div class="chat-section">
+                                <h4>💬 Личные сообщения</h4>
+                                <ul>${activeDirectChats.map(chat => renderChatItem(chat)).join('')}</ul>
+                            </div>`;
+                }
+            }
+
             // Admins section (only visible to admins)
             if (activeSectionFilter === 'all' || activeSectionFilter === 'Администраторы') {
                 const adminContacts = contacts.admins?.users || [];
