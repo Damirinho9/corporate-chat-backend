@@ -189,6 +189,18 @@ const getContactsStructured = async (req, res) => {
                 return;
             }
 
+            // 🔥 FIX: Operators should not see other operators in contacts
+            // Skip adding user if:
+            // - Current user is operator AND
+            // - Contact user is also operator AND
+            // - They are in the same department
+            if (req.user.role === 'operator' &&
+                row.role === 'operator' &&
+                row.id !== req.user.id &&
+                normalizeDepartmentName(req.user.department) === normalizedName) {
+                return; // Skip this operator
+            }
+
             if (!departmentMap.has(normalizedName)) {
                 departmentMap.set(normalizedName, []);
             }
