@@ -917,7 +917,7 @@
 
         .message-dropdown {
             position: absolute;
-            top: 40px;
+            top: 36px; /* 🔥 Reduced from 40px to close gap */
             right: 0;
             background: var(--bg-primary);
             border: 1px solid var(--border);
@@ -926,7 +926,9 @@
             min-width: 200px;
             display: none;
             z-index: 100;
-            padding: 4px 0;
+            padding: 6px 0; /* 🔥 Increased from 4px for easier hover */
+            pointer-events: auto; /* Ensure mouse events are captured */
+            cursor: default;
         }
 
         .message-dropdown.show {
@@ -2552,8 +2554,17 @@
                 const isVisible = menu.style.display === 'block';
                 menu.style.display = isVisible ? 'none' : 'block';
 
+                // 🔥 FIX: Prevent dropdown from closing when mouse moves over it
                 if (!isVisible) {
                     applyPermissionVisibility();
+
+                    // Add hover tracking to keep menu open
+                    menu.addEventListener('mouseenter', () => {
+                        menu.setAttribute('data-keep-open', 'true');
+                    });
+                    menu.addEventListener('mouseleave', () => {
+                        menu.removeAttribute('data-keep-open');
+                    });
                 }
             }
         }
@@ -2747,14 +2758,20 @@
             }
         }
 
-        // 🔥 FIX: Update click outside handler to close menus (but keep emoji picker open when hovering)
+        // 🔥 FIX: Update click outside handler to close menus (but keep open when hovering)
         document.addEventListener('click', (e) => {
-            // Don't close if clicking inside message actions or dropdown
-            if (e.target.closest('.message-actions') || e.target.closest('.message-dropdown')) {
+            // Don't close if clicking inside message actions
+            if (e.target.closest('.message-actions')) {
                 return;
             }
 
-            // Don't close if clicking on emoji picker that should stay open
+            // Don't close if hovering over dropdown menu
+            const dropdown = e.target.closest('.message-dropdown');
+            if (dropdown && dropdown.hasAttribute('data-keep-open')) {
+                return;
+            }
+
+            // Don't close if hovering over emoji picker
             const emojiPicker = e.target.closest('.emoji-picker-inline');
             if (emojiPicker && emojiPicker.hasAttribute('data-keep-open')) {
                 return;
