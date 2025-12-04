@@ -450,8 +450,19 @@ const initializeSocket = (server) => {
     // Helper function to check chat access
     const checkChatAccess = async (userId, chatId) => {
         try {
+            // First, check if user is admin - admins have access to all chats
+            const userResult = await query(
+                `SELECT role FROM users WHERE id = $1`,
+                [userId]
+            );
+
+            if (userResult.rows.length > 0 && userResult.rows[0].role === 'admin') {
+                return true; // Admins can access all chats
+            }
+
+            // For non-admins, check if they are participants
             const result = await query(
-                `SELECT 1 FROM chat_participants 
+                `SELECT 1 FROM chat_participants
                  WHERE chat_id = $1 AND user_id = $2`,
                 [chatId, userId]
             );
