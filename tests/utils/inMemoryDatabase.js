@@ -13,7 +13,10 @@ class InMemoryDatabase {
             reactions: [],
             mentions: [],
             admin_logs: [],
-            message_deletion_history: []
+            message_deletion_history: [],
+            calls: [],
+            call_participants: [],
+            call_events: []
         };
         this.sequences = {
             users: 1,
@@ -23,7 +26,10 @@ class InMemoryDatabase {
             reactions: 1,
             mentions: 1,
             admin_logs: 1,
-            message_deletion_history: 1
+            message_deletion_history: 1,
+            calls: 1,
+            call_participants: 1,
+            call_events: 1
         };
     }
 
@@ -417,6 +423,18 @@ class InMemoryDatabase {
             return this.handleInsert('message_deletion_history', normalized, params);
         }
 
+        if (normalized.startsWith('INSERT INTO calls')) {
+            return this.handleInsert('calls', normalized, params);
+        }
+
+        if (normalized.startsWith('INSERT INTO call_participants')) {
+            return this.handleInsert('call_participants', normalized, params);
+        }
+
+        if (normalized.startsWith('INSERT INTO call_events')) {
+            return this.handleInsert('call_events', normalized, params);
+        }
+
         if (normalized.startsWith('UPDATE users SET')) {
             return this.handleUpdateUsers(normalized, params);
         }
@@ -782,6 +800,251 @@ class InMemoryDatabase {
             return { rows: [{ can_send: true }], rowCount: 1 };
         }
 
+        // ============================================================
+        // CALLS SYSTEM QUERIES
+        // ============================================================
+
+        // SELECT id, name FROM users WHERE username = $1
+        if (normalized.startsWith('SELECT id, name FROM users WHERE username =')) {
+            const username = params[0];
+            const user = this.data.users.find(u => u.username === username);
+            return {
+                rows: user ? [{ id: user.id, name: user.name }] : [],
+                rowCount: user ? 1 : 0
+            };
+        }
+
+        // SELECT name FROM users WHERE id = $1
+        if (normalized.startsWith('SELECT name FROM users WHERE id =')) {
+            const userId = toInt(params[0]);
+            const user = this.data.users.find(u => u.id === userId);
+            return {
+                rows: user ? [{ name: user.name }] : [],
+                rowCount: user ? 1 : 0
+            };
+        }
+
+        // SELECT * FROM calls WHERE chat_id = $1 AND status = 'ringing'
+        if (normalized.includes("SELECT * FROM calls WHERE chat_id =") && normalized.includes("AND status = 'ringing'")) {
+            const chatId = toInt(params[0]);
+            const calls = this.data.calls.filter(c =>
+                c.chat_id === chatId && c.status === 'ringing'
+            );
+            return {
+                rows: calls,
+                rowCount: calls.length
+            };
+        }
+
+        // SELECT * FROM calls WHERE chat_id = $1 AND status IN ('ringing', 'ongoing')
+        if (normalized.includes("SELECT id FROM calls WHERE chat_id =") && normalized.includes("AND status IN ('ringing', 'ongoing')")) {
+            const chatId = toInt(params[0]);
+            const calls = this.data.calls.filter(c =>
+                c.chat_id === chatId && (c.status === 'ringing' || c.status === 'ongoing')
+            );
+            return {
+                rows: calls.map(c => ({ id: c.id })),
+                rowCount: calls.length
+            };
+        }
+
+        // SELECT * FROM calls WHERE id = $1
+        if (normalized.startsWith('SELECT * FROM calls WHERE id =')) {
+            const callId = toInt(params[0]);
+            const call = this.data.calls.find(c => c.id === callId);
+            return {
+                rows: call ? [call] : [],
+                rowCount: call ? 1 : 0
+            };
+        }
+
+        // SELECT status, started_at FROM calls WHERE id = $1
+        if (normalized.startsWith('SELECT status, started_at FROM calls WHERE id =')) {
+            const callId = toInt(params[0]);
+            const call = this.data.calls.find(c => c.id === callId);
+            return {
+                rows: call ? [{ status: call.status, started_at: call.started_at }] : [],
+                rowCount: call ? 1 : 0
+            };
+        }
+
+        // SELECT status FROM calls WHERE id = $1
+        if (normalized.startsWith('SELECT status FROM calls WHERE id =')) {
+            const callId = toInt(params[0]);
+            const call = this.data.calls.find(c => c.id === callId);
+            return {
+                rows: call ? [{ status: call.status }] : [],
+                rowCount: call ? 1 : 0
+            };
+        }
+
+        // SELECT EXTRACT(EPOCH FROM (ended_at - started_at)) as duration FROM calls WHERE id = $1
+        if (normalized.includes('EXTRACT(EPOCH FROM (ended_at - started_at)) as duration')) {
+            const callId = toInt(params[0]);
+            const call = this.data.calls.find(c => c.id === callId);
+            if (!call || !call.started_at || !call.ended_at) {
+                return { rows: [{ duration: 0 }], rowCount: 1 };
+            }
+            const duration = (new Date(call.ended_at) - new Date(call.started_at)) / 1000;
+            return {
+                rows: [{ duration }],
+                rowCount: 1
+            };
+        }
+
+        // SELECT * FROM call_participants WHERE call_id = $1 AND user_id = $2
+        if (normalized.startsWith('SELECT * FROM call_participants WHERE call_id =')) {
+            const callId = toInt(params[0]);
+            const userId = toInt(params[1]);
+            const participant = this.data.call_participants.find(
+                p => p.call_id === callId && p.user_id === userId
+            );
+            return {
+                rows: participant ? [participant] : [],
+                rowCount: participant ? 1 : 0
+            };
+        }
+
+        // SELECT * FROM call_events WHERE call_id = $1 AND event_type = $2
+        if (normalized.startsWith('SELECT * FROM call_events WHERE call_id =') && normalized.includes('AND event_type =')) {
+            const callId = toInt(params[0]);
+            const eventType = params[1];
+            const events = this.data.call_events.filter(
+                e => e.call_id === callId && e.event_type === eventType
+            );
+            return {
+                rows: events,
+                rowCount: events.length
+            };
+        }
+
+        // SELECT metadata FROM call_events WHERE call_id = $1 AND event_type = $2
+        if (normalized.startsWith('SELECT metadata FROM call_events WHERE call_id =')) {
+            const callId = toInt(params[0]);
+            const eventType = params[1];
+            const events = this.data.call_events.filter(
+                e => e.call_id === callId && e.event_type === eventType
+            );
+            return {
+                rows: events.map(e => ({ metadata: e.metadata })),
+                rowCount: events.length
+            };
+        }
+
+        // SELECT event_type, COUNT(*) as count FROM call_events GROUP BY event_type
+        if (normalized.includes('SELECT event_type, COUNT(*) as count FROM call_events GROUP BY event_type')) {
+            const eventCounts = {};
+            this.data.call_events.forEach(e => {
+                eventCounts[e.event_type] = (eventCounts[e.event_type] || 0) + 1;
+            });
+            const rows = Object.entries(eventCounts).map(([event_type, count]) => ({
+                event_type,
+                count: String(count)
+            }));
+            return {
+                rows,
+                rowCount: rows.length
+            };
+        }
+
+        // SELECT COUNT(*) FROM calls
+        if (normalized === 'SELECT COUNT(*) FROM calls') {
+            return {
+                rows: [{ count: String(this.data.calls.length) }],
+                rowCount: 1
+            };
+        }
+
+        // SELECT COUNT(*) FROM call_participants
+        if (normalized === 'SELECT COUNT(*) FROM call_participants') {
+            return {
+                rows: [{ count: String(this.data.call_participants.length) }],
+                rowCount: 1
+            };
+        }
+
+        // SELECT COUNT(*) FROM call_events
+        if (normalized === 'SELECT COUNT(*) FROM call_events') {
+            return {
+                rows: [{ count: String(this.data.call_events.length) }],
+                rowCount: 1
+            };
+        }
+
+        // Check orphan events
+        if (normalized.includes('SELECT COUNT(*) FROM call_events ce LEFT JOIN calls c ON c.id = ce.call_id WHERE c.id IS NULL')) {
+            const orphans = this.data.call_events.filter(e => {
+                return !this.data.calls.some(c => c.id === e.call_id);
+            });
+            return {
+                rows: [{ count: String(orphans.length) }],
+                rowCount: 1
+            };
+        }
+
+        // Check orphan participants
+        if (normalized.includes('SELECT COUNT(*) FROM call_participants cp LEFT JOIN calls c ON c.id = cp.call_id WHERE c.id IS NULL')) {
+            const orphans = this.data.call_participants.filter(p => {
+                return !this.data.calls.some(c => c.id === p.call_id);
+            });
+            return {
+                rows: [{ count: String(orphans.length) }],
+                rowCount: 1
+            };
+        }
+
+        // UPDATE calls SET status = $1 WHERE id = $2
+        if (normalized.startsWith('UPDATE calls SET status =') && !normalized.includes('started_at')) {
+            const status = params[0];
+            const callId = toInt(params[1]);
+            const call = this.data.calls.find(c => c.id === callId);
+            if (call) {
+                call.status = status;
+            }
+            return { rows: [], rowCount: call ? 1 : 0 };
+        }
+
+        // UPDATE calls SET status = $1, started_at = NOW() WHERE id = $2
+        if (normalized.startsWith('UPDATE calls SET status =') && normalized.includes('started_at')) {
+            const status = params[0];
+            const callId = toInt(params[1]);
+            const call = this.data.calls.find(c => c.id === callId);
+            if (call) {
+                call.status = status;
+                call.started_at = new Date().toISOString();
+            }
+            return { rows: [], rowCount: call ? 1 : 0 };
+        }
+
+        // UPDATE calls SET status = $1, ended_at = NOW() WHERE id = $2
+        if (normalized.startsWith('UPDATE calls SET status =') && normalized.includes('ended_at')) {
+            const status = params[0];
+            const callId = toInt(params[1]);
+            const call = this.data.calls.find(c => c.id === callId);
+            if (call) {
+                call.status = status;
+                call.ended_at = new Date().toISOString();
+            }
+            return { rows: [], rowCount: call ? 1 : 0 };
+        }
+
+        // SELECT u.id, u.name FROM chat_participants cp JOIN users u ON u.id = cp.user_id WHERE cp.chat_id = $1 AND u.id != $2
+        if (normalized.includes('SELECT u.id, u.name FROM chat_participants cp JOIN users u ON u.id = cp.user_id WHERE cp.chat_id =') && normalized.includes('AND u.id !=')) {
+            const chatId = toInt(params[0]);
+            const excludeUserId = toInt(params[1]);
+            const participants = this.data.chat_participants
+                .filter(cp => cp.chat_id === chatId)
+                .map(cp => {
+                    const user = this.data.users.find(u => u.id === cp.user_id && u.id !== excludeUserId);
+                    return user ? { id: user.id, name: user.name } : null;
+                })
+                .filter(Boolean);
+            return {
+                rows: participants,
+                rowCount: participants.length
+            };
+        }
+
         if (normalized.startsWith('SELECT')) {
             console.warn('⚠️ Необработанный SELECT, возвращается пустой результат:', normalized);
             return { rows: [], rowCount: 0 };
@@ -904,6 +1167,33 @@ class InMemoryDatabase {
                 entity.deleted_message_created_at = entity.deleted_message_created_at || null;
                 entity.deleted_at = entity.deleted_at || new Date().toISOString();
                 this.data.message_deletion_history.push(entity);
+            } else if (table === 'calls') {
+                entity.id = this.nextId('calls');
+                entity.chat_id = Number(entity.chat_id);
+                entity.initiated_by = Number(entity.initiated_by);
+                entity.created_at = entity.created_at || new Date().toISOString();
+                entity.started_at = entity.started_at || null;
+                entity.ended_at = entity.ended_at || null;
+                this.data.calls.push(entity);
+            } else if (table === 'call_participants') {
+                entity.call_id = Number(entity.call_id);
+                entity.user_id = Number(entity.user_id);
+                entity.joined_at = entity.joined_at || new Date().toISOString();
+                entity.left_at = entity.left_at || null;
+                this.data.call_participants.push(entity);
+            } else if (table === 'call_events') {
+                entity.id = this.nextId('call_events');
+                entity.call_id = Number(entity.call_id);
+                entity.user_id = entity.user_id ? Number(entity.user_id) : null;
+                entity.created_at = entity.created_at || new Date().toISOString();
+                if (typeof entity.metadata === 'string') {
+                    try {
+                        entity.metadata = JSON.parse(entity.metadata);
+                    } catch (e) {
+                        entity.metadata = null;
+                    }
+                }
+                this.data.call_events.push(entity);
             }
 
             if (returnAllColumns) {
