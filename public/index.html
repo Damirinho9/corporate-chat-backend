@@ -762,8 +762,8 @@
 
         .message:hover .message-actions,
         .message-actions.keep-visible {
-            display: flex;
-            animation: fadeIn 0.2s ease;
+            opacity: 1;
+            pointer-events: auto;
         }
 
         .message.own {
@@ -886,8 +886,11 @@
             position: absolute;
             top: -10px;
             right: 10px;
-            display: none;
+            display: flex;
             gap: 4px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
         }
 
         .message.own .message-actions {
