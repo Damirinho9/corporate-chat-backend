@@ -107,8 +107,8 @@ async function handleStartCall(socket, io, data) {
     // Создание звонка
     const roomName = `corporate-chat-${chatId}-${Date.now()}`;
     const callResult = await query(`
-        INSERT INTO calls (chat_id, room_name, type, initiated_by, status, created_at)
-        VALUES ($1, $2, $3, $4, 'ringing', NOW())
+        INSERT INTO calls (chat_id, room_name, type, initiated_by, status)
+        VALUES ($1, $2, $3, $4, 'ringing')
         RETURNING *
     `, [chatId, roomName, type || 'video', userId]);
 
@@ -116,8 +116,8 @@ async function handleStartCall(socket, io, data) {
 
     // Логирование события
     await query(`
-        INSERT INTO call_events (call_id, user_id, event_type, created_at)
-        VALUES ($1, $2, 'created', NOW())
+        INSERT INTO call_events (call_id, user_id, event_type)
+        VALUES ($1, $2, 'created')
     `, [call.id, userId]);
 
     // Уведомить инициатора
@@ -169,21 +169,20 @@ async function handleAcceptCall(socket, io, data) {
 
     // Добавить участника
     await query(`
-        INSERT INTO call_participants (call_id, user_id, status, joined_at)
-        VALUES ($1, $2, 'joined', NOW())
-        ON CONFLICT (call_id, user_id) DO NOTHING
-    `, [callId, userId]);
+        INSERT INTO call_participants (call_id, user_id, status)
+        VALUES ($1, $2, $3)
+    `, [callId, userId, 'joined']);
 
     // Обновить статус звонка
     await query(`
-        UPDATE calls SET status = 'ongoing', started_at = NOW()
-        WHERE id = $1
-    `, [callId]);
+        UPDATE calls SET status = $1, started_at = NOW()
+        WHERE id = $2
+    `, ['ongoing', callId]);
 
     // Логирование
     await query(`
-        INSERT INTO call_events (call_id, user_id, event_type, created_at)
-        VALUES ($1, $2, 'accepted', NOW())
+        INSERT INTO call_events (call_id, user_id, event_type)
+        VALUES ($1, $2, 'accepted')
     `, [callId, userId]);
 
     // Подтвердить принимающему
@@ -216,12 +215,12 @@ async function handleRejectCall(socket, io, data) {
     const call = callResult.rows[0];
 
     // Обновить статус
-    await query(`UPDATE calls SET status = 'rejected' WHERE id = $1`, [callId]);
+    await query(`UPDATE calls SET status = $1 WHERE id = $2`, ['rejected', callId]);
 
     // Логирование
     await query(`
-        INSERT INTO call_events (call_id, user_id, event_type, metadata, created_at)
-        VALUES ($1, $2, 'rejected', $3, NOW())
+        INSERT INTO call_events (call_id, user_id, event_type, metadata)
+        VALUES ($1, $2, 'rejected', $3)
     `, [callId, userId, JSON.stringify({ reason: reason || 'user_declined' })]);
 
     // Уведомить всех
@@ -249,14 +248,14 @@ async function handleEndCall(socket, io, data) {
     // Обновить статус
     await query(`
         UPDATE calls
-        SET status = 'ended', ended_at = NOW()
-        WHERE id = $1
-    `, [callId]);
+        SET status = $1, ended_at = NOW()
+        WHERE id = $2
+    `, ['ended', callId]);
 
     // Логирование
     await query(`
-        INSERT INTO call_events (call_id, user_id, event_type, created_at)
-        VALUES ($1, $2, 'ended', NOW())
+        INSERT INTO call_events (call_id, user_id, event_type)
+        VALUES ($1, $2, 'ended')
     `, [callId, userId]);
 
     // Получить длительность
@@ -478,8 +477,8 @@ async function handleEndCall(socket, io, data) {
 
         // Создать новый звонок
         const newCallResult = await query(`
-            INSERT INTO calls (chat_id, room_name, type, initiated_by, status, created_at)
-            VALUES ($1, $2, 'audio', $3, 'ringing', NOW())
+            INSERT INTO calls (chat_id, room_name, type, initiated_by, status)
+            VALUES ($1, $2, 'audio', $3, 'ringing')
             RETURNING *
         `, [directChat.id, `corporate-chat-${directChat.id}-${Date.now()}`, admin.id]);
 

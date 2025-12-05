@@ -878,16 +878,26 @@ class InMemoryDatabase {
             };
         }
 
-        // SELECT EXTRACT(EPOCH FROM (ended_at - started_at)) as duration FROM calls WHERE id = $1
-        if (normalized.includes('EXTRACT(EPOCH FROM (ended_at - started_at)) as duration')) {
+        // SELECT status, ended_at, started_at, EXTRACT(...) as duration FROM calls WHERE id = $1
+        if (normalized.includes('EXTRACT(EPOCH FROM (ended_at - started_at)) as duration') && normalized.includes('FROM calls WHERE id =')) {
             const callId = toInt(params[0]);
             const call = this.data.calls.find(c => c.id === callId);
-            if (!call || !call.started_at || !call.ended_at) {
-                return { rows: [{ duration: 0 }], rowCount: 1 };
+            if (!call) {
+                return { rows: [], rowCount: 0 };
             }
-            const duration = (new Date(call.ended_at) - new Date(call.started_at)) / 1000;
+
+            let duration = 0;
+            if (call.started_at && call.ended_at) {
+                duration = (new Date(call.ended_at) - new Date(call.started_at)) / 1000;
+            }
+
             return {
-                rows: [{ duration }],
+                rows: [{
+                    status: call.status,
+                    ended_at: call.ended_at,
+                    started_at: call.started_at,
+                    duration
+                }],
                 rowCount: 1
             };
         }
@@ -905,10 +915,20 @@ class InMemoryDatabase {
             };
         }
 
-        // SELECT * FROM call_events WHERE call_id = $1 AND event_type = $2
+        // SELECT * FROM call_events WHERE call_id = $1 AND event_type = $2 OR 'literal'
         if (normalized.startsWith('SELECT * FROM call_events WHERE call_id =') && normalized.includes('AND event_type =')) {
             const callId = toInt(params[0]);
-            const eventType = params[1];
+
+            // Check if event_type is a literal string or a parameter
+            let eventType;
+            if (normalized.includes("event_type = '")) {
+                // Extract literal string
+                const match = normalized.match(/event_type = '([^']+)'/);
+                eventType = match ? match[1] : params[1];
+            } else {
+                eventType = params[1];
+            }
+
             const events = this.data.call_events.filter(
                 e => e.call_id === callId && e.event_type === eventType
             );
@@ -918,10 +938,20 @@ class InMemoryDatabase {
             };
         }
 
-        // SELECT metadata FROM call_events WHERE call_id = $1 AND event_type = $2
+        // SELECT metadata FROM call_events WHERE call_id = $1 AND event_type = $2 OR 'literal'
         if (normalized.startsWith('SELECT metadata FROM call_events WHERE call_id =')) {
             const callId = toInt(params[0]);
-            const eventType = params[1];
+
+            // Check if event_type is a literal string or a parameter
+            let eventType;
+            if (normalized.includes("event_type = '")) {
+                // Extract literal string
+                const match = normalized.match(/event_type = '([^']+)'/);
+                eventType = match ? match[1] : params[1];
+            } else {
+                eventType = params[1];
+            }
+
             const events = this.data.call_events.filter(
                 e => e.call_id === callId && e.event_type === eventType
             );
@@ -963,6 +993,24 @@ class InMemoryDatabase {
             };
         }
 
+        // SELECT * FROM call_events
+        if (normalized === 'SELECT * FROM call_events') {
+            return {
+                rows: this.data.call_events.map(e => ({ ...e })),
+                rowCount: this.data.call_events.length
+            };
+        }
+
+        // SELECT * FROM call_events WHERE call_id = $1
+        if (normalized === 'SELECT * FROM call_events WHERE call_id = $1') {
+            const callId = toInt(params[0]);
+            const events = this.data.call_events.filter(e => e.call_id === callId);
+            return {
+                rows: events.map(e => ({ ...e })),
+                rowCount: events.length
+            };
+        }
+
         // SELECT COUNT(*) FROM call_events
         if (normalized === 'SELECT COUNT(*) FROM call_events') {
             return {
@@ -993,8 +1041,8 @@ class InMemoryDatabase {
             };
         }
 
-        // UPDATE calls SET status = $1 WHERE id = $2
-        if (normalized.startsWith('UPDATE calls SET status =') && !normalized.includes('started_at')) {
+        // UPDATE calls SET status = $1 WHERE id = $2 (no timestamps)
+        if (normalized.startsWith('UPDATE calls SET status =') && !normalized.includes('started_at') && !normalized.includes('ended_at')) {
             const status = params[0];
             const callId = toInt(params[1]);
             const call = this.data.calls.find(c => c.id === callId);
