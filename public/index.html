@@ -2878,6 +2878,12 @@
                 return;
             }
 
+            // Phase 3: Prevent duplicate calls (race condition)
+            if (currentActiveCall || currentIncomingCall) {
+                showToast('Звонок уже активен', 'warning');
+                return;
+            }
+
             // Emit start_call to backend
             socket.emit('start_call', {
                 chatId: currentChatId,
@@ -2956,11 +2962,48 @@
         function setupJitsiEventListeners() {
             if (!jitsiApi) return;
 
-            // Listen for hangup event
+            // Phase 3: Enhanced Jitsi event listeners for stability
+
+            // Listen for hangup event (when user clicks hangup button)
             jitsiApi.addEventListener('readyToClose', () => {
-                console.log('[Call] Jitsi hangup detected');
+                console.log('[Call] Jitsi readyToClose event');
                 endActiveCall();
             });
+
+            // Listen for when user leaves the conference (alternative to readyToClose)
+            jitsiApi.addEventListener('videoConferenceLeft', () => {
+                console.log('[Call] Jitsi videoConferenceLeft event');
+                // Only trigger if call hasn't already been ended
+                if (currentActiveCall) {
+                    endActiveCall();
+                }
+            });
+
+            // Listen for successful join
+            jitsiApi.addEventListener('videoConferenceJoined', (event) => {
+                console.log('[Call] Jitsi videoConferenceJoined:', event);
+                showToast('Вы присоединились к звонку', 'success');
+            });
+
+            // Listen for participant joined
+            jitsiApi.addEventListener('participantJoined', (event) => {
+                console.log('[Call] Jitsi participantJoined:', event);
+            });
+
+            // Listen for participant left
+            jitsiApi.addEventListener('participantLeft', (event) => {
+                console.log('[Call] Jitsi participantLeft:', event);
+            });
+
+            // Listen for errors
+            jitsiApi.addEventListener('errorOccurred', (event) => {
+                console.error('[Call] Jitsi error:', event);
+                if (event.error && event.error.name === 'connection.droppedError') {
+                    showToast('Проблема с подключением к звонку', 'error');
+                }
+            });
+
+            console.log('[Call] Jitsi event listeners configured');
         }
 
         // ========== END CALL ==========
@@ -3202,6 +3245,12 @@
         function joinActiveCall() {
             if (!currentActiveCall) {
                 showToast('Нет активного звонка', 'error');
+                return;
+            }
+
+            // Phase 3: Check if already in a call (Jitsi already open)
+            if (jitsiApi) {
+                showToast('Вы уже в звонке', 'warning');
                 return;
             }
 
@@ -4170,6 +4219,13 @@
                 if (currentUser) {
                     loadChats().catch(err => console.error('[Socket] Failed to reload chats:', err));
                 }
+
+                // Phase 3: Check active call status on reconnect
+                if (currentChatId) {
+                    checkActiveCallInChat(currentChatId).catch(err => {
+                        console.error('[Socket] Failed to check active call:', err);
+                    });
+                }
             });
 
             socket.on('disconnect', (reason) => {
@@ -4262,7 +4318,36 @@
             });
 
             socket.on('error', (err) => {
-                showToast(err.message || 'Ошибка сокета', 'error');
+                // Phase 3: Enhanced error handling for calls
+                const message = err.message || 'Ошибка сокета';
+
+                // Special handling for call-related errors
+                if (message.includes('Call') || message.includes('call')) {
+                    console.error('[Call] Error:', err);
+
+                    // If call ended or not found, close modals
+                    if (message.includes('not found') || message.includes('ended')) {
+                        if (currentActiveCall) {
+                            closeModal();
+                            if (jitsiApi) {
+                                try {
+                                    jitsiApi.dispose();
+                                } catch (e) {
+                                    // Already disposed
+                                }
+                                jitsiApi = null;
+                            }
+                            currentActiveCall = null;
+                        }
+                        if (currentIncomingCall) {
+                            closeIncomingCallModal();
+                            currentIncomingCall = null;
+                        }
+                        hideActiveCallIndicator();
+                    }
+                }
+
+                showToast(message, 'error');
             });
         }
 

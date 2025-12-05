@@ -655,7 +655,16 @@ const initializeSocket = (server) => {
                 const { chat_id: chatId, started_at, status } = callResult.rows[0];
 
                 if (status === 'ended') {
-                    return; // Already ended
+                    return; // Already ended, silently ignore
+                }
+
+                // Phase 3: Edge case - verify user is a participant before allowing end
+                const participantCheck = await query(`
+                    SELECT 1 FROM call_participants WHERE call_id = $1 AND user_id = $2
+                `, [callId, userId]);
+
+                if (participantCheck.rowCount === 0) {
+                    return socket.emit('error', { message: 'You are not a participant in this call' });
                 }
 
                 // 2. Calculate duration
@@ -887,6 +896,115 @@ const initializeSocket = (server) => {
             // Remove from connected users
             connectedUsers.delete(userId);
             userSockets.delete(socket.id);
+
+            // ========== HANDLE ACTIVE CALLS ON DISCONNECT (Phase 3: Stability) ==========
+            try {
+                // 1. Find all active calls where user is a participant
+                const activeCallsResult = await query(`
+                    SELECT DISTINCT c.id, c.chat_id, c.initiated_by, c.type, c.started_at
+                    FROM calls c
+                    JOIN call_participants cp ON c.id = cp.call_id
+                    WHERE cp.user_id = $1
+                    AND cp.status = 'joined'
+                    AND c.status IN ('ringing', 'ongoing')
+                `, [userId]);
+
+                for (const call of activeCallsResult.rows) {
+                    const { id: callId, chat_id: chatId, initiated_by: initiatorId, type, started_at } = call;
+
+                    console.log(`🔌 Disconnect: User ${userId} in active call ${callId} (initiator: ${initiatorId})`);
+
+                    // 2. Update participant status to 'left'
+                    await query(`
+                        UPDATE call_participants
+                        SET status = 'left', left_at = NOW()
+                        WHERE call_id = $1 AND user_id = $2
+                    `, [callId, userId]);
+
+                    // 3. Log disconnect event
+                    await query(`
+                        INSERT INTO call_events (call_id, user_id, event_type, metadata)
+                        VALUES ($1, $2, 'participant_disconnected', $3)
+                    `, [callId, userId, JSON.stringify({ reason: 'websocket_disconnect' })]);
+
+                    // 4. Check if user was the initiator
+                    if (initiatorId === userId) {
+                        // Initiator disconnected - end the entire call
+                        const startedAt = new Date(started_at);
+                        const endedAt = new Date();
+                        const duration = Math.floor((endedAt - startedAt) / 1000);
+
+                        await query(`
+                            UPDATE calls
+                            SET status = 'ended', ended_at = NOW()
+                            WHERE id = $1
+                        `, [callId]);
+
+                        // Update all remaining participants to 'left'
+                        await query(`
+                            UPDATE call_participants
+                            SET status = 'left', left_at = NOW()
+                            WHERE call_id = $1 AND status = 'joined'
+                        `, [callId]);
+
+                        // Notify all participants that call ended
+                        io.to(`chat_${chatId}`).emit('call_ended', {
+                            callId,
+                            endedBy: userId,
+                            userName: socket.user.name,
+                            duration,
+                            reason: 'initiator_disconnected'
+                        });
+
+                        console.log(`🔚 Call auto-ended (initiator disconnected): Call ${callId}`);
+                    } else {
+                        // Non-initiator disconnected - just notify and check remaining participants
+                        const remainingResult = await query(`
+                            SELECT COUNT(*) as count
+                            FROM call_participants
+                            WHERE call_id = $1 AND status = 'joined'
+                        `, [callId]);
+
+                        const remainingCount = parseInt(remainingResult.rows[0].count);
+
+                        // Notify chat about participant leaving
+                        io.to(`chat_${chatId}`).emit('call_participant_left', {
+                            callId,
+                            userId,
+                            userName: socket.user.name,
+                            participantCount: remainingCount,
+                            reason: 'disconnected'
+                        });
+
+                        // If no participants left, end the call
+                        if (remainingCount === 0) {
+                            const startedAt = new Date(started_at);
+                            const endedAt = new Date();
+                            const duration = Math.floor((endedAt - startedAt) / 1000);
+
+                            await query(`
+                                UPDATE calls
+                                SET status = 'ended', ended_at = NOW()
+                                WHERE id = $1
+                            `, [callId]);
+
+                            io.to(`chat_${chatId}`).emit('call_ended', {
+                                callId,
+                                endedBy: null,
+                                userName: 'System',
+                                duration,
+                                reason: 'all_participants_disconnected'
+                            });
+
+                            console.log(`🔚 Call auto-ended (no participants): Call ${callId}`);
+                        } else {
+                            console.log(`👋 Participant disconnected: ${socket.user.name} → Call ${callId} (${remainingCount} remaining)`);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error handling calls on disconnect:', error);
+            }
 
             // Notify others that user is offline
             socket.broadcast.emit('user_offline', {
