@@ -772,6 +772,17 @@
             pointer-events: none;
         }
 
+        /* When dropdown is open, disable pointer events on messages WITHOUT open menu */
+        body.dropdown-open .message:not(:has(.message-actions.keep-visible)) {
+            pointer-events: none;
+        }
+
+        /* But keep the message WITH open menu interactive */
+        body.dropdown-open .message:has(.message-actions.keep-visible) {
+            pointer-events: auto;
+            z-index: 2000; /* Much higher to ensure it's above all other messages */
+        }
+
         .message.own {
             flex-direction: row-reverse;
         }
