@@ -193,6 +193,32 @@ const sendNewMessageNotification = async (recipientId, senderName, messagePrevie
     return sendPushToUser(recipientId, payload);
 };
 
+// Send notification for incoming call (Phase 4: UX improvements)
+const sendIncomingCallNotification = async (recipientId, callerName, callType, chatId, chatName, callId) => {
+    const callTypeIcon = callType === 'video' ? '📹' : '📞';
+    const callTypeText = callType === 'video' ? 'Видеозвонок' : 'Аудиозвонок';
+
+    const payload = {
+        type: 'incoming_call',
+        title: `${callTypeIcon} Входящий звонок`,
+        body: `${callerName} звонит вам${chatName ? ` в "${chatName}"` : ''}`,
+        icon: '/favicon.ico',
+        badge: '/favicon.ico',
+        data: {
+            chatId,
+            callId,
+            callType,
+            url: `/?chat=${chatId}`
+        },
+        tag: `call-${callId}`, // Unique tag per call
+        renotify: true,
+        requireInteraction: true, // Keep notification visible until user interacts
+        vibrate: [200, 100, 200, 100, 200] // Vibration pattern for mobile
+    };
+
+    return sendPushToUser(recipientId, payload);
+};
+
 // Get user's subscription status
 const getSubscriptionStatus = async (req, res) => {
     try {
@@ -250,6 +276,7 @@ module.exports = {
     unsubscribe,
     sendPushToUser,
     sendNewMessageNotification,
+    sendIncomingCallNotification,
     getSubscriptionStatus,
     testPush
 };

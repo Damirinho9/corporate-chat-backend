@@ -1,7 +1,7 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const { query } = require('../config/database');
-const { sendNewMessageNotification } = require('../controllers/pushController');
+const { sendNewMessageNotification, sendIncomingCallNotification } = require('../controllers/pushController');
 
 // Store connected users
 const connectedUsers = new Map(); // userId -> socketId
@@ -456,7 +456,10 @@ const initializeSocket = (server) => {
                     VALUES ($1, $2, 'joined', NOW())
                 `, [callId, userId]);
 
-                // 5. Get chat participants (exclude initiator)
+                // 5. Get chat info and participants (exclude initiator)
+                const chatInfoResult = await query(`SELECT name FROM chats WHERE id = $1`, [chatId]);
+                const chatName = chatInfoResult.rows[0]?.name;
+
                 const participantsResult = await query(`
                     SELECT user_id FROM chat_participants
                     WHERE chat_id = $1 AND user_id != $2
@@ -473,7 +476,7 @@ const initializeSocket = (server) => {
                 });
 
                 // 7. Notify all other participants about incoming call
-                participantIds.forEach(participantId => {
+                participantIds.forEach(async (participantId) => {
                     const participantSocketId = connectedUsers.get(participantId);
                     if (participantSocketId) {
                         io.to(participantSocketId).emit('incoming_call', {
@@ -488,6 +491,20 @@ const initializeSocket = (server) => {
                             }
                         });
                     }
+
+                    // 8. Send push notification to offline/background participants (Phase 4: UX)
+                    try {
+                        await sendIncomingCallNotification(
+                            participantId,
+                            socket.user.name,
+                            type || 'video',
+                            chatId,
+                            chatName,
+                            callId
+                        );
+                    } catch (pushError) {
+                        console.error(`Failed to send push to user ${participantId}:`, pushError.message);
+                    }
                 });
 
                 // 8. Log event
@@ -495,6 +512,40 @@ const initializeSocket = (server) => {
                     INSERT INTO call_events (call_id, event_type, user_id, metadata)
                     VALUES ($1, 'call_initiated', $2, $3)
                 `, [callId, userId, JSON.stringify({ type: type || 'video', participantCount: participantIds.length })]);
+
+                // 9. Create system message in chat (Phase 4: UX improvements)
+                const callTypeIcon = type === 'video' ? '📹' : '📞';
+                const callTypeText = type === 'video' ? 'Видеозвонок' : 'Аудиозвонок';
+                await query(`
+                    INSERT INTO messages (chat_id, user_id, content, metadata)
+                    VALUES ($1, $2, $3, $4)
+                `, [
+                    chatId,
+                    userId,
+                    `${callTypeIcon} ${callTypeText} начат`,
+                    JSON.stringify({
+                        type: 'call',
+                        call_id: callId,
+                        call_type: type || 'video',
+                        status: 'started'
+                    })
+                ]);
+
+                // Broadcast new message to chat
+                io.to(`chat_${chatId}`).emit('new_message', {
+                    chatId,
+                    message: {
+                        content: `${callTypeIcon} ${callTypeText} начат`,
+                        user: { id: userId, name: socket.user.name },
+                        metadata: {
+                            type: 'call',
+                            call_id: callId,
+                            call_type: type || 'video',
+                            status: 'started'
+                        },
+                        created_at: new Date().toISOString()
+                    }
+                });
 
                 console.log(`📞 Call started: ${socket.user.name} → Chat ${chatId} (${type || 'video'})`);
 
@@ -698,6 +749,50 @@ const initializeSocket = (server) => {
                     INSERT INTO call_events (call_id, event_type, user_id, metadata)
                     VALUES ($1, 'call_ended', $2, $3)
                 `, [callId, userId, JSON.stringify({ duration })]);
+
+                // 7. Create system message in chat (Phase 4: UX improvements)
+                const callData = await query(`SELECT type FROM calls WHERE id = $1`, [callId]);
+                const callType = callData.rows[0]?.type || 'video';
+                const callTypeIcon = callType === 'video' ? '📹' : '📞';
+                const callTypeText = callType === 'video' ? 'Видеозвонок' : 'Аудиозвонок';
+
+                // Format duration as MM:SS
+                const minutes = Math.floor(duration / 60);
+                const seconds = duration % 60;
+                const durationText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+                await query(`
+                    INSERT INTO messages (chat_id, user_id, content, metadata)
+                    VALUES ($1, $2, $3, $4)
+                `, [
+                    chatId,
+                    userId,
+                    `${callTypeIcon} ${callTypeText} завершён • ${durationText}`,
+                    JSON.stringify({
+                        type: 'call',
+                        call_id: callId,
+                        call_type: callType,
+                        status: 'ended',
+                        duration: duration
+                    })
+                ]);
+
+                // Broadcast new message to chat
+                io.to(`chat_${chatId}`).emit('new_message', {
+                    chatId,
+                    message: {
+                        content: `${callTypeIcon} ${callTypeText} завершён • ${durationText}`,
+                        user: { id: userId, name: socket.user.name },
+                        metadata: {
+                            type: 'call',
+                            call_id: callId,
+                            call_type: callType,
+                            status: 'ended',
+                            duration: duration
+                        },
+                        created_at: new Date().toISOString()
+                    }
+                });
 
                 console.log(`🔚 Call ended: ${socket.user.name} → Call ${callId} (${duration}s)`);
 

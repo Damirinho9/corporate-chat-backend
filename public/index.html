@@ -2884,6 +2884,20 @@
                 return;
             }
 
+            // Phase 4: Check participant availability for direct chats
+            const chat = chats.find(c => c.id === currentChatId);
+            if (chat && chat.type === 'direct') {
+                // For direct chats, check if partner is online
+                const participants = Array.isArray(chat.participants) ? chat.participants : [];
+                const partner = participants.find(p => Number(p.id) !== Number(currentUser?.id));
+
+                if (partner) {
+                    // Note: We don't block the call, just warn user
+                    // The call will still go through and send push notification
+                    showToast(`Звонок ${partner.name}...`, 'info');
+                }
+            }
+
             // Emit start_call to backend
             socket.emit('start_call', {
                 chatId: currentChatId,
@@ -3000,6 +3014,24 @@
                 console.error('[Call] Jitsi error:', event);
                 if (event.error && event.error.name === 'connection.droppedError') {
                     showToast('Проблема с подключением к звонку', 'error');
+                }
+            });
+
+            // Phase 4: Listen for connection quality changes
+            let lastQualityNotification = null;
+            jitsiApi.addEventListener('participantConnectionStatusChanged', (event) => {
+                console.log('[Call] Connection status changed:', event);
+                const { connectionStatus } = event;
+
+                // Notify user about poor connection quality
+                if (connectionStatus === 'interrupted' || connectionStatus === 'restoring') {
+                    if (lastQualityNotification !== 'poor') {
+                        showToast('Слабое соединение...', 'warning');
+                        lastQualityNotification = 'poor';
+                    }
+                } else if (connectionStatus === 'active' && lastQualityNotification === 'poor') {
+                    showToast('Соединение восстановлено', 'success');
+                    lastQualityNotification = 'good';
                 }
             });
 
