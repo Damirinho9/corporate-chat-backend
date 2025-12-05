@@ -2162,6 +2162,7 @@
                 isRecording = false;
                 voiceBtn.textContent = '🎤';
                 voiceBtn.style.color = '';
+                emitVoiceRecording(false); // 🔥 Notify others: stopped recording
                 showToast('Запись остановлена', 'info');
             } else {
                 // Start recording
@@ -2175,6 +2176,7 @@
                     };
 
                     mediaRecorder.onstop = async () => {
+                        emitVoiceRecording(false); // 🔥 Ensure stopped signal sent
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                         const audioFile = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
 
@@ -2219,6 +2221,7 @@
                     isRecording = true;
                     voiceBtn.textContent = '⏹️';
                     voiceBtn.style.color = '#f44336';
+                    emitVoiceRecording(true); // 🔥 Notify others: started recording
                     showToast('Запись началась... Нажмите ещё раз чтобы остановить', 'info');
                 } catch (error) {
                     console.error('Voice recording error:', error);
@@ -3362,14 +3365,24 @@
             socket.on('user_typing', (data) => {
                 if (data.chatId === currentChatId && data.userId !== currentUser.id) {
                     const indicator = document.getElementById('typingIndicator');
-                    indicator.textContent = `${data.userName} печатает...`;
+                    const text = data.isVoice
+                        ? `${data.userName} записывает голосовое...`
+                        : `${data.userName} печатает...`;
+                    indicator.textContent = text;
                     indicator.style.display = 'block';
+
+                    // Auto-hide after 5 seconds if no updates
+                    clearTimeout(indicator.hideTimeout);
+                    indicator.hideTimeout = setTimeout(() => {
+                        indicator.style.display = 'none';
+                    }, 5000);
                 }
             });
 
             socket.on('user_stop_typing', (data) => {
                 if (data.chatId === currentChatId && data.userId !== currentUser.id) {
                     const indicator = document.getElementById('typingIndicator');
+                    clearTimeout(indicator.hideTimeout);
                     indicator.style.display = 'none';
                 }
             });
@@ -4800,10 +4813,11 @@
 
         // ==================== TYPING INDICATOR ====================
         let typingTimeout = null;
+        let isRecordingVoice = false;
 
         function emitTyping() {
-            if (socket && currentChatId) {
-                socket.emit('typing', { chatId: currentChatId, userId: currentUser.id, userName: currentUser.name });
+            if (socket && currentChatId && currentUser) {
+                socket.emit('typing_start', { chatId: currentChatId, userId: currentUser.id, userName: currentUser.name });
             }
         }
 
@@ -4812,9 +4826,22 @@
             emitTyping();
             typingTimeout = setTimeout(() => {
                 if (socket && currentChatId) {
-                    socket.emit('stop_typing', { chatId: currentChatId, userId: currentUser.id });
+                    socket.emit('typing_stop', { chatId: currentChatId, userId: currentUser.id });
                 }
             }, 3000);
+        }
+
+        function emitVoiceRecording(isRecording) {
+            if (socket && currentChatId && currentUser) {
+                const eventType = isRecording ? 'typing_start' : 'typing_stop';
+                socket.emit(eventType, {
+                    chatId: currentChatId,
+                    userId: currentUser.id,
+                    userName: currentUser.name,
+                    isVoice: isRecording
+                });
+            }
+            isRecordingVoice = isRecording;
         }
 
         // ==================== EVENT LISTENERS ====================

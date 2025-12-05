@@ -245,7 +245,7 @@ const initializeSocket = (server) => {
         // Handle typing indicator
         socket.on('typing_start', async (data) => {
             try {
-                const { chatId } = data;
+                const { chatId, isVoice } = data;
 
                 // Check if user has access to chat
                 const hasAccess = await checkChatAccess(userId, chatId);
@@ -264,7 +264,8 @@ const initializeSocket = (server) => {
                 socket.to(`chat_${chatId}`).emit('user_typing', {
                     chatId,
                     userId,
-                    userName: socket.user.name
+                    userName: socket.user.name,
+                    isVoice: isVoice || false
                 });
             } catch (error) {
                 console.error('Typing start error:', error);
@@ -273,7 +274,18 @@ const initializeSocket = (server) => {
 
         socket.on('typing_stop', (data) => {
             const { chatId } = data;
-            stopTyping(chatId, userId);
+
+            // Remove from typing users
+            if (typingUsers.has(chatId)) {
+                typingUsers.get(chatId).delete(userId);
+            }
+
+            // Notify others in the chat
+            socket.to(`chat_${chatId}`).emit('user_stop_typing', {
+                chatId,
+                userId,
+                userName: socket.user.name
+            });
         });
 
         // Handle message read
@@ -439,10 +451,15 @@ const initializeSocket = (server) => {
     const stopTyping = (chatId, userId) => {
         if (typingUsers.has(chatId)) {
             typingUsers.get(chatId).delete(userId);
-            
-            io.to(`chat_${chatId}`).emit('user_stopped_typing', {
+
+            // Get user info to send with event
+            const socketId = connectedUsers.get(userId);
+            const socket = socketId ? io.sockets.sockets.get(socketId) : null;
+
+            io.to(`chat_${chatId}`).emit('user_stop_typing', {
                 chatId,
-                userId
+                userId,
+                userName: socket?.user?.name || 'User'
             });
         }
     };
