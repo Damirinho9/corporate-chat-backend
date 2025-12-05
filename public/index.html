@@ -766,6 +766,12 @@
             pointer-events: auto;
         }
 
+        /* When dropdown menu is open, disable hover on all OTHER message buttons */
+        body.dropdown-open .message:hover .message-actions:not(.keep-visible) {
+            opacity: 0;
+            pointer-events: none;
+        }
+
         .message.own {
             flex-direction: row-reverse;
         }
@@ -2566,6 +2572,8 @@
             document.querySelectorAll('.message-actions').forEach(actions => {
                 actions.classList.remove('keep-visible');
             });
+            // Remove global flag - allow hover on all buttons again
+            document.body.classList.remove('dropdown-open');
 
             // If it was closed, now open it (toggle behavior)
             if (!isCurrentlyOpen) {
@@ -2574,6 +2582,8 @@
                 if (actions) {
                     actions.classList.add('keep-visible');
                 }
+                // Add global flag - disable hover on other buttons
+                document.body.classList.add('dropdown-open');
                 applyPermissionVisibility();
             }
         }
@@ -2589,6 +2599,8 @@
             document.querySelectorAll('.message-actions').forEach(actions => {
                 actions.classList.remove('keep-visible');
             });
+            // Remove global flag - allow hover on all buttons again
+            document.body.classList.remove('dropdown-open');
         }
 
         function showEmojiPickerInMenu(messageId, event) {
