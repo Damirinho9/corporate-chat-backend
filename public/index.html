@@ -2573,13 +2573,192 @@
             }
         }
 
-        // ==================== JITSI CALLS ====================
+        // ==================== CALLS SYSTEM ====================
+
+        // Global variables for calls management
+        let currentIncomingCall = null; // { callId, roomName, type, initiator }
+        let currentActiveCall = null; // { callId, roomName, type }
+        let callTimeoutId = null;
+        let ringtoneStopFunction = null;
+        let jitsiApi = null;
+
+        // ========== RINGTONE GENERATION ==========
+
+        function playRingtone() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                // Ringtone frequency (pleasant tone)
+                oscillator.frequency.value = 440; // A note
+                oscillator.type = 'sine';
+                gainNode.gain.value = 0.3;
+
+                oscillator.start();
+
+                // Pattern: 2 sec on, 1 sec off (repeat)
+                let isPlaying = true;
+                let isOn = true;
+
+                const ringtoneInterval = setInterval(() => {
+                    if (!isPlaying) {
+                        clearInterval(ringtoneInterval);
+                        oscillator.stop();
+                        audioContext.close();
+                        return;
+                    }
+
+                    // Toggle on/off
+                    if (isOn) {
+                        gainNode.gain.value = 0; // off
+                        isOn = false;
+                        setTimeout(() => { if (isPlaying) gainNode.gain.value = 0.3; }, 1000); // 1 sec pause
+                    } else {
+                        gainNode.gain.value = 0.3; // on
+                        isOn = true;
+                    }
+                }, 3000); // 2 sec on + 1 sec off = 3 sec cycle
+
+                // Return stop function
+                return () => {
+                    isPlaying = false;
+                    clearInterval(ringtoneInterval);
+                    try {
+                        oscillator.stop();
+                        audioContext.close();
+                    } catch (e) {
+                        // Already stopped
+                    }
+                };
+
+            } catch (error) {
+                console.error('[Ringtone] Error:', error);
+                return () => {}; // Return no-op function
+            }
+        }
+
+        // ========== INCOMING CALL MODAL MANAGEMENT ==========
+
+        function showIncomingCallModal(callData) {
+            const { callId, callerName, callType, initiator } = callData;
+
+            // Get modal elements
+            const modal = document.getElementById('incomingCallModal');
+            const avatarEl = document.getElementById('callerAvatar');
+            const nameEl = document.getElementById('callerName');
+            const typeEl = document.getElementById('callType');
+
+            // Set caller initials
+            const initials = callerName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+            avatarEl.textContent = initials;
+
+            // Set caller info
+            nameEl.textContent = callerName;
+            typeEl.innerHTML = callType === 'video'
+                ? '📹 Видеозвонок'
+                : '📞 Аудиозвонок';
+
+            // Show modal
+            modal.style.display = 'flex';
+
+            console.log(`[Call] Incoming call modal shown: ${callerName} (${callType})`);
+        }
+
+        function closeIncomingCallModal() {
+            const modal = document.getElementById('incomingCallModal');
+            modal.style.display = 'none';
+            console.log('[Call] Incoming call modal closed');
+        }
+
+        // ========== INCOMING CALL ACTIONS ==========
+
+        function acceptIncomingCall() {
+            if (!currentIncomingCall) {
+                console.warn('[Call] No incoming call to accept');
+                return;
+            }
+
+            const { callId, roomName, type } = currentIncomingCall;
+
+            // 1. Stop ringtone
+            if (ringtoneStopFunction) {
+                ringtoneStopFunction();
+                ringtoneStopFunction = null;
+            }
+
+            // 2. Clear timeout
+            if (callTimeoutId) {
+                clearTimeout(callTimeoutId);
+                callTimeoutId = null;
+            }
+
+            // 3. Close incoming call modal
+            closeIncomingCallModal();
+
+            // 4. Emit acceptance to backend via WebSocket
+            if (socket && socket.connected) {
+                socket.emit('accept_call', { callId });
+            } else {
+                showToast('Ошибка: нет соединения с сервером', 'error');
+                currentIncomingCall = null;
+                return;
+            }
+
+            // 5. Wait for confirmation, then open Jitsi
+            // (handled in socket.on('call_accepted_confirmed'))
+
+            console.log(`[Call] Accepting call ${callId}`);
+        }
+
+        function rejectIncomingCall(reason = 'declined') {
+            if (!currentIncomingCall) {
+                console.warn('[Call] No incoming call to reject');
+                return;
+            }
+
+            const { callId } = currentIncomingCall;
+
+            // 1. Stop ringtone
+            if (ringtoneStopFunction) {
+                ringtoneStopFunction();
+                ringtoneStopFunction = null;
+            }
+
+            // 2. Clear timeout
+            if (callTimeoutId) {
+                clearTimeout(callTimeoutId);
+                callTimeoutId = null;
+            }
+
+            // 3. Emit rejection to backend
+            if (socket && socket.connected) {
+                socket.emit('reject_call', { callId, reason });
+            }
+
+            // 4. Close modal
+            closeIncomingCallModal();
+
+            // 5. Show toast
+            showToast('Звонок отклонён', 'info');
+
+            // 6. Cleanup
+            currentIncomingCall = null;
+
+            console.log(`[Call] Rejected call ${callId} (${reason})`);
+        }
+
+        // ========== START CALL (INITIATOR) ==========
+
         function startAudioCall() {
             if (!currentChatId) {
                 showToast('Выберите чат для звонка', 'warning');
                 return;
             }
-            startJitsiCall(false); // audio only
+            initiateCall('audio');
         }
 
         function startVideoCall() {
@@ -2587,30 +2766,32 @@
                 showToast('Выберите чат для видеозвонка', 'warning');
                 return;
             }
-            startJitsiCall(true); // video enabled
+            initiateCall('video');
         }
 
-        async function startJitsiCall(withVideo = true) {
-            const roomName = `corporate-chat-${currentChatId}-${Date.now()}`;
+        function initiateCall(type = 'video') {
+            if (!socket || !socket.connected) {
+                showToast('Ошибка: нет соединения с сервером', 'error');
+                return;
+            }
+
+            // Emit start_call to backend
+            socket.emit('start_call', {
+                chatId: currentChatId,
+                type: type
+            });
+
+            // Wait for 'call_created' event to get room_name
+            console.log(`[Call] Initiating ${type} call in chat ${currentChatId}`);
+        }
+
+        // ========== OPEN JITSI MODAL ==========
+
+        function openJitsiModal(roomName, withVideo, callId) {
             const displayName = currentUser?.name || 'User';
 
-            // Log call to database
-            try {
-                await fetch(`${API_URL}/calls`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        chat_id: currentChatId,
-                        room_name: roomName,
-                        type: withVideo ? 'video' : 'audio'
-                    })
-                });
-            } catch (error) {
-                console.error('Log call error:', error);
-            }
+            // Store active call
+            currentActiveCall = { callId, roomName, type: withVideo ? 'video' : 'audio' };
 
             // Open Jitsi in modal
             const modalTitle = document.getElementById('modalTitle');
@@ -2620,7 +2801,9 @@
             modalBody.innerHTML = `
                 <div id="jitsiContainer" style="width: 100%; height: 500px;"></div>
                 <div style="margin-top: 10px; text-align: center;">
-                    <button onclick="closeModal()" style="padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 8px; cursor: pointer;">Завершить звонок</button>
+                    <button onclick="endActiveCall()" style="padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        Завершить звонок
+                    </button>
                 </div>
             `;
 
@@ -2654,15 +2837,202 @@
                 const script = document.createElement('script');
                 script.src = 'https://meet.jit.si/external_api.js';
                 script.onload = () => {
-                    new JitsiMeetExternalAPI(jitsiDomain, options);
+                    jitsiApi = new JitsiMeetExternalAPI(jitsiDomain, options);
+                    setupJitsiEventListeners();
                 };
                 document.head.appendChild(script);
             } else {
-                new JitsiMeetExternalAPI(jitsiDomain, options);
+                jitsiApi = new JitsiMeetExternalAPI(jitsiDomain, options);
+                setupJitsiEventListeners();
             }
 
             showToast('Звонок начался', 'success');
+            console.log(`[Call] Jitsi opened for call ${callId}`);
         }
+
+        function setupJitsiEventListeners() {
+            if (!jitsiApi) return;
+
+            // Listen for hangup event
+            jitsiApi.addEventListener('readyToClose', () => {
+                console.log('[Call] Jitsi hangup detected');
+                endActiveCall();
+            });
+        }
+
+        // ========== END CALL ==========
+
+        function endActiveCall() {
+            if (!currentActiveCall) {
+                console.warn('[Call] No active call to end');
+                closeModal(); // Close modal anyway
+                return;
+            }
+
+            const { callId } = currentActiveCall;
+
+            // Emit end_call to backend
+            if (socket && socket.connected) {
+                socket.emit('end_call', { callId });
+            }
+
+            // Close modal
+            closeModal();
+
+            // Cleanup Jitsi
+            if (jitsiApi) {
+                try {
+                    jitsiApi.dispose();
+                } catch (e) {
+                    console.warn('[Call] Error disposing Jitsi:', e);
+                }
+                jitsiApi = null;
+            }
+
+            // Cleanup
+            currentActiveCall = null;
+
+            console.log(`[Call] Ended call ${callId}`);
+        }
+
+        // ========== SOCKET EVENT HANDLERS ==========
+
+        function setupCallSocketHandlers() {
+            if (!socket) {
+                console.error('[Call] Socket not initialized');
+                return;
+            }
+
+            // Handle incoming call
+            socket.on('incoming_call', (data) => {
+                console.log('[Call] Incoming call received:', data);
+
+                const { callId, chatId, roomName, type, initiator } = data;
+
+                // Store incoming call data
+                currentIncomingCall = {
+                    callId,
+                    chatId,
+                    roomName,
+                    type,
+                    initiator
+                };
+
+                // Show incoming call modal
+                showIncomingCallModal({
+                    callId,
+                    callerName: initiator.name,
+                    callType: type,
+                    initiator
+                });
+
+                // Play ringtone
+                ringtoneStopFunction = playRingtone();
+
+                // Set timeout for auto-reject (30 seconds)
+                callTimeoutId = setTimeout(() => {
+                    console.log('[Call] Auto-rejecting call after 30 seconds');
+                    rejectIncomingCall('timeout');
+                }, 30000);
+            });
+
+            // Handle call created (initiator receives this)
+            socket.on('call_created', (data) => {
+                console.log('[Call] Call created:', data);
+
+                const { callId, roomName, type } = data;
+
+                // Open Jitsi immediately for initiator
+                openJitsiModal(roomName, type === 'video', callId);
+            });
+
+            // Handle call accepted confirmation (acceptor receives this)
+            socket.on('call_accepted_confirmed', (data) => {
+                console.log('[Call] Call accepted confirmed:', data);
+
+                const { callId, roomName, type } = data;
+
+                // Open Jitsi for acceptor
+                openJitsiModal(roomName, type === 'video', callId);
+
+                // Cleanup incoming call state
+                currentIncomingCall = null;
+            });
+
+            // Handle call accepted notification (all participants receive this)
+            socket.on('call_accepted', (data) => {
+                console.log('[Call] Call accepted by:', data.userName);
+                // Optional: show toast notification
+                if (data.userId !== currentUser?.id) {
+                    showToast(`${data.userName} присоединился к звонку`, 'info');
+                }
+            });
+
+            // Handle call rejected (initiator receives this)
+            socket.on('call_rejected', (data) => {
+                console.log('[Call] Call rejected:', data);
+
+                const { userName, reason } = data;
+                const reasonText = reason === 'timeout' ? 'не ответил' : 'отклонил звонок';
+                showToast(`${userName} ${reasonText}`, 'info');
+
+                // If initiator, close modal
+                if (currentActiveCall && currentActiveCall.callId === data.callId) {
+                    closeModal();
+                    if (jitsiApi) {
+                        jitsiApi.dispose();
+                        jitsiApi = null;
+                    }
+                    currentActiveCall = null;
+                }
+            });
+
+            // Handle call ended (all participants receive this)
+            socket.on('call_ended', (data) => {
+                console.log('[Call] Call ended:', data);
+
+                const { endedBy, userName, duration } = data;
+
+                // Format duration
+                const minutes = Math.floor(duration / 60);
+                const seconds = duration % 60;
+                const durationText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+                showToast(`Звонок завершён (${durationText})`, 'info');
+
+                // Close modal if active
+                if (currentActiveCall && currentActiveCall.callId === data.callId) {
+                    closeModal();
+                    if (jitsiApi) {
+                        try {
+                            jitsiApi.dispose();
+                        } catch (e) {
+                            // Already disposed
+                        }
+                        jitsiApi = null;
+                    }
+                    currentActiveCall = null;
+                }
+
+                // Close incoming call modal if still open
+                if (currentIncomingCall && currentIncomingCall.callId === data.callId) {
+                    if (ringtoneStopFunction) {
+                        ringtoneStopFunction();
+                        ringtoneStopFunction = null;
+                    }
+                    if (callTimeoutId) {
+                        clearTimeout(callTimeoutId);
+                        callTimeoutId = null;
+                    }
+                    closeIncomingCallModal();
+                    currentIncomingCall = null;
+                }
+            });
+
+            console.log('[Call] Socket handlers setup complete');
+        }
+
+        // ==================== END CALLS SYSTEM ====================
 
         function resolveMediaUrl(url) {
             if (!url) return null;
@@ -3553,6 +3923,9 @@
                     t: Date.now()  // Timestamp to prevent caching
                 }
             });
+
+            // 📞 Setup call event handlers
+            setupCallSocketHandlers();
 
             socket.on('connect', () => {
                 socketConnected = true;
