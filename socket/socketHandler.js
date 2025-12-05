@@ -417,6 +417,289 @@ const initializeSocket = (server) => {
             stopTyping(chatId, userId);
         });
 
+        // ==================== CALLS SYSTEM ====================
+
+        // Handle start_call - initiate audio/video call
+        socket.on('start_call', async (data) => {
+            try {
+                const { chatId, type } = data;
+
+                // 1. Check if user has access to chat
+                const hasAccess = await checkChatAccess(userId, chatId);
+                if (!hasAccess) {
+                    return socket.emit('error', { message: 'No access to this chat' });
+                }
+
+                // 2. Check if there's already an active call
+                const activeCall = await query(`
+                    SELECT id FROM calls
+                    WHERE chat_id = $1 AND status IN ('ringing', 'ongoing')
+                `, [chatId]);
+
+                if (activeCall.rows.length > 0) {
+                    return socket.emit('error', { message: 'Call already in progress in this chat' });
+                }
+
+                // 3. Create call in database
+                const roomName = `corporate-chat-${chatId}-${Date.now()}`;
+                const callResult = await query(`
+                    INSERT INTO calls (chat_id, room_name, type, initiated_by, status, started_at)
+                    VALUES ($1, $2, $3, $4, 'ringing', NOW())
+                    RETURNING *
+                `, [chatId, roomName, type || 'video', userId]);
+
+                const callId = callResult.rows[0].id;
+
+                // 4. Add initiator as participant
+                await query(`
+                    INSERT INTO call_participants (call_id, user_id, status, joined_at)
+                    VALUES ($1, $2, 'joined', NOW())
+                `, [callId, userId]);
+
+                // 5. Get chat participants (exclude initiator)
+                const participantsResult = await query(`
+                    SELECT user_id FROM chat_participants
+                    WHERE chat_id = $1 AND user_id != $2
+                `, [chatId, userId]);
+
+                const participantIds = participantsResult.rows.map(r => r.user_id);
+
+                // 6. Notify initiator with call details
+                socket.emit('call_created', {
+                    callId,
+                    roomName,
+                    type: type || 'video',
+                    chatId
+                });
+
+                // 7. Notify all other participants about incoming call
+                participantIds.forEach(participantId => {
+                    const participantSocketId = connectedUsers.get(participantId);
+                    if (participantSocketId) {
+                        io.to(participantSocketId).emit('incoming_call', {
+                            callId,
+                            chatId,
+                            roomName,
+                            type: type || 'video',
+                            initiator: {
+                                id: userId,
+                                name: socket.user.name,
+                                avatar: null
+                            }
+                        });
+                    }
+                });
+
+                // 8. Log event
+                await query(`
+                    INSERT INTO call_events (call_id, event_type, user_id, metadata)
+                    VALUES ($1, 'call_initiated', $2, $3)
+                `, [callId, userId, JSON.stringify({ type: type || 'video', participantCount: participantIds.length })]);
+
+                console.log(`📞 Call started: ${socket.user.name} → Chat ${chatId} (${type || 'video'})`);
+
+            } catch (error) {
+                console.error('Start call error:', error);
+                socket.emit('error', { message: 'Failed to start call', detail: error.message });
+            }
+        });
+
+        // Handle accept_call - user accepts incoming call
+        socket.on('accept_call', async (data) => {
+            try {
+                const { callId } = data;
+
+                if (!callId) {
+                    return socket.emit('error', { message: 'callId is required' });
+                }
+
+                // 1. Get call details
+                const callResult = await query(`
+                    SELECT chat_id, room_name, type, status FROM calls WHERE id = $1
+                `, [callId]);
+
+                if (callResult.rows.length === 0) {
+                    return socket.emit('error', { message: 'Call not found' });
+                }
+
+                const { chat_id: chatId, room_name: roomName, type, status } = callResult.rows[0];
+
+                if (status === 'ended' || status === 'rejected') {
+                    return socket.emit('error', { message: 'Call has already ended' });
+                }
+
+                // 2. Add user as participant
+                await query(`
+                    INSERT INTO call_participants (call_id, user_id, status, joined_at)
+                    VALUES ($1, $2, 'joined', NOW())
+                    ON CONFLICT DO NOTHING
+                `, [callId, userId]);
+
+                // 3. Update call status to 'ongoing' if still 'ringing'
+                await query(`
+                    UPDATE calls SET status = 'ongoing'
+                    WHERE id = $1 AND status = 'ringing'
+                `, [callId]);
+
+                // 4. Confirm to user with room details
+                socket.emit('call_accepted_confirmed', {
+                    callId,
+                    roomName,
+                    type,
+                    chatId
+                });
+
+                // 5. Notify all participants in chat about acceptance
+                io.to(`chat_${chatId}`).emit('call_accepted', {
+                    callId,
+                    userId,
+                    userName: socket.user.name
+                });
+
+                // 6. Log event
+                await query(`
+                    INSERT INTO call_events (call_id, event_type, user_id)
+                    VALUES ($1, 'call_accepted', $2)
+                `, [callId, userId]);
+
+                console.log(`✅ Call accepted: ${socket.user.name} → Call ${callId}`);
+
+            } catch (error) {
+                console.error('Accept call error:', error);
+                socket.emit('error', { message: 'Failed to accept call', detail: error.message });
+            }
+        });
+
+        // Handle reject_call - user rejects incoming call
+        socket.on('reject_call', async (data) => {
+            try {
+                const { callId, reason } = data;
+
+                if (!callId) {
+                    return socket.emit('error', { message: 'callId is required' });
+                }
+
+                // 1. Get call details
+                const callResult = await query(`
+                    SELECT chat_id, initiated_by, status FROM calls WHERE id = $1
+                `, [callId]);
+
+                if (callResult.rows.length === 0) {
+                    return socket.emit('error', { message: 'Call not found' });
+                }
+
+                const { chat_id: chatId, initiated_by: initiatorId, status } = callResult.rows[0];
+
+                if (status === 'ended' || status === 'rejected') {
+                    return; // Already ended, silently ignore
+                }
+
+                // 2. Notify initiator about rejection
+                const initiatorSocketId = connectedUsers.get(initiatorId);
+                if (initiatorSocketId) {
+                    io.to(initiatorSocketId).emit('call_rejected', {
+                        callId,
+                        userId,
+                        userName: socket.user.name,
+                        reason: reason || 'declined'
+                    });
+                }
+
+                // 3. Check total participants in chat
+                const participantsResult = await query(`
+                    SELECT COUNT(*) as total FROM chat_participants
+                    WHERE chat_id = $1
+                `, [chatId]);
+
+                const totalParticipants = parseInt(participantsResult.rows[0].total);
+
+                // 4. If direct chat (2 participants) and rejected, end call
+                if (totalParticipants === 2) {
+                    await query(`
+                        UPDATE calls SET status = 'rejected', ended_at = NOW()
+                        WHERE id = $1
+                    `, [callId]);
+                }
+
+                // 5. Log event
+                await query(`
+                    INSERT INTO call_events (call_id, event_type, user_id, metadata)
+                    VALUES ($1, 'call_rejected', $2, $3)
+                `, [callId, userId, JSON.stringify({ reason: reason || 'declined' })]);
+
+                console.log(`❌ Call rejected: ${socket.user.name} → Call ${callId} (${reason || 'declined'})`);
+
+            } catch (error) {
+                console.error('Reject call error:', error);
+            }
+        });
+
+        // Handle end_call - user ends active call
+        socket.on('end_call', async (data) => {
+            try {
+                const { callId } = data;
+
+                if (!callId) {
+                    return socket.emit('error', { message: 'callId is required' });
+                }
+
+                // 1. Get call details
+                const callResult = await query(`
+                    SELECT chat_id, started_at, status FROM calls WHERE id = $1
+                `, [callId]);
+
+                if (callResult.rows.length === 0) {
+                    return socket.emit('error', { message: 'Call not found' });
+                }
+
+                const { chat_id: chatId, started_at, status } = callResult.rows[0];
+
+                if (status === 'ended') {
+                    return; // Already ended
+                }
+
+                // 2. Calculate duration
+                const duration = Math.floor((Date.now() - new Date(started_at)) / 1000);
+
+                // 3. Update call status
+                await query(`
+                    UPDATE calls
+                    SET status = 'ended', ended_at = NOW()
+                    WHERE id = $1
+                `, [callId]);
+
+                // 4. Update all participants left_at and duration
+                await query(`
+                    UPDATE call_participants
+                    SET left_at = NOW(),
+                        duration = EXTRACT(EPOCH FROM (NOW() - joined_at))::INTEGER
+                    WHERE call_id = $1 AND left_at IS NULL
+                `, [callId]);
+
+                // 5. Notify all participants in chat about call end
+                io.to(`chat_${chatId}`).emit('call_ended', {
+                    callId,
+                    endedBy: userId,
+                    userName: socket.user.name,
+                    duration
+                });
+
+                // 6. Log event
+                await query(`
+                    INSERT INTO call_events (call_id, event_type, user_id, metadata)
+                    VALUES ($1, 'call_ended', $2, $3)
+                `, [callId, userId, JSON.stringify({ duration })]);
+
+                console.log(`🔚 Call ended: ${socket.user.name} → Call ${callId} (${duration}s)`);
+
+            } catch (error) {
+                console.error('End call error:', error);
+                socket.emit('error', { message: 'Failed to end call', detail: error.message });
+            }
+        });
+
+        // ==================== END CALLS SYSTEM ====================
+
         // Handle disconnect
         socket.on('disconnect', async () => {
             console.log(`❌ User disconnected: ${socket.user.name} (${socket.user.id})`);
