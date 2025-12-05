@@ -2546,36 +2546,30 @@
         }
 
         function toggleMessageMenu(messageId) {
-            // Close all other menus and remove keep-visible from all actions
-            document.querySelectorAll('.message-dropdown').forEach(menu => {
-                if (menu.id !== `message-menu-${messageId}`) {
-                    menu.style.display = 'none';
-                }
+            const menu = document.getElementById(`message-menu-${messageId}`);
+            if (!menu) return;
+
+            const isCurrentlyOpen = menu.style.display === 'block';
+
+            // ALWAYS close all menus first (including current one)
+            document.querySelectorAll('.message-dropdown').forEach(m => {
+                m.style.display = 'none';
+            });
+            document.querySelectorAll('.emoji-picker-inline').forEach(picker => {
+                picker.style.display = 'none';
             });
             document.querySelectorAll('.message-actions').forEach(actions => {
                 actions.classList.remove('keep-visible');
             });
 
-            // Close all emoji pickers
-            document.querySelectorAll('.emoji-picker-inline').forEach(picker => {
-                picker.style.display = 'none';
-            });
-
-            const menu = document.getElementById(`message-menu-${messageId}`);
-            if (menu) {
-                const isVisible = menu.style.display === 'block';
-                menu.style.display = isVisible ? 'none' : 'block';
-
-                // Keep message-actions visible when dropdown is open
+            // If it was closed, now open it (toggle behavior)
+            if (!isCurrentlyOpen) {
+                menu.style.display = 'block';
                 const actions = menu.closest('.message-actions');
                 if (actions) {
-                    if (isVisible) {
-                        actions.classList.remove('keep-visible');
-                    } else {
-                        actions.classList.add('keep-visible');
-                        applyPermissionVisibility();
-                    }
+                    actions.classList.add('keep-visible');
                 }
+                applyPermissionVisibility();
             }
         }
 
