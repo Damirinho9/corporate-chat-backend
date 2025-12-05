@@ -332,6 +332,59 @@ router.put('/chats/:chatId/participants/:userId/permissions',
     chatController.updateParticipantPermissions
 );
 
+// Check for active call in chat (Phase 2: Group Calls)
+router.get('/chats/:chatId/active-call',
+    authenticateToken,
+    [param('chatId').isInt()],
+    validate,
+    async (req, res) => {
+        try {
+            const chatId = parseInt(req.params.chatId);
+            const userId = req.user.id;
+
+            // Verify user has access to this chat
+            const accessCheck = await query(`
+                SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2
+            `, [chatId, userId]);
+
+            if (accessCheck.rowCount === 0) {
+                return res.status(403).json({ error: 'Access denied to this chat' });
+            }
+
+            // Check for active call (status = 'ongoing')
+            const callResult = await query(`
+                SELECT
+                    c.id as "callId",
+                    c.room_name as "roomName",
+                    c.type,
+                    COUNT(cp.id) FILTER (WHERE cp.status = 'joined') as participant_count
+                FROM calls c
+                LEFT JOIN call_participants cp ON c.id = cp.call_id
+                WHERE c.chat_id = $1 AND c.status = 'ongoing'
+                GROUP BY c.id
+                LIMIT 1
+            `, [chatId]);
+
+            if (callResult.rowCount > 0) {
+                const call = callResult.rows[0];
+                res.json({
+                    activeCall: {
+                        callId: call.callId,
+                        roomName: call.roomName,
+                        type: call.type,
+                        participantCount: parseInt(call.participant_count) || 0
+                    }
+                });
+            } else {
+                res.json({ activeCall: null });
+            }
+        } catch (error) {
+            console.error('Check active call error:', error);
+            res.status(500).json({ error: 'Failed to check active call', detail: error.message });
+        }
+    }
+);
+
 // ==================== DEPARTMENT ROUTES ====================
 
 // Get structured contacts (departments + assistants)

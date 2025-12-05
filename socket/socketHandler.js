@@ -698,6 +698,172 @@ const initializeSocket = (server) => {
             }
         });
 
+        // Handle join_call (for group calls - Phase 2)
+        socket.on('join_call', async (data) => {
+            try {
+                const { callId } = data;
+                const userId = socket.user.id;
+
+                console.log(`📞 Join call request: ${socket.user.name} → Call ${callId}`);
+
+                // 1. Verify call exists and is ongoing
+                const callResult = await query(`
+                    SELECT c.*, COUNT(cp.id) as participant_count
+                    FROM calls c
+                    LEFT JOIN call_participants cp ON c.id = cp.call_id AND cp.status = 'joined'
+                    WHERE c.id = $1 AND c.status = 'ongoing'
+                    GROUP BY c.id
+                `, [callId]);
+
+                if (callResult.rowCount === 0) {
+                    return socket.emit('error', { message: 'Call not found or not active' });
+                }
+
+                const call = callResult.rows[0];
+
+                // 2. Check if user is already a participant
+                const existingParticipant = await query(`
+                    SELECT id FROM call_participants WHERE call_id = $1 AND user_id = $2
+                `, [callId, userId]);
+
+                if (existingParticipant.rowCount > 0) {
+                    return socket.emit('error', { message: 'You are already in this call' });
+                }
+
+                // 3. Verify user has access to the chat
+                const accessCheck = await query(`
+                    SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2
+                `, [call.chat_id, userId]);
+
+                if (accessCheck.rowCount === 0) {
+                    return socket.emit('error', { message: 'Access denied to this chat' });
+                }
+
+                // 4. Add user as participant
+                await query(`
+                    INSERT INTO call_participants (call_id, user_id, status)
+                    VALUES ($1, $2, 'joined')
+                `, [callId, userId]);
+
+                // 5. Log event
+                await query(`
+                    INSERT INTO call_events (call_id, user_id, event_type)
+                    VALUES ($1, $2, 'joined')
+                `, [callId, userId]);
+
+                // 6. Emit confirmation to joining user with room details
+                socket.emit('call_joined_confirmed', {
+                    callId,
+                    roomName: call.room_name,
+                    type: call.type,
+                    participantCount: parseInt(call.participant_count) + 1
+                });
+
+                // 7. Notify all participants in the chat about new joiner
+                io.to(`chat_${call.chat_id}`).emit('call_participant_joined', {
+                    callId,
+                    userId,
+                    userName: socket.user.name,
+                    participantCount: parseInt(call.participant_count) + 1
+                });
+
+                console.log(`✅ User joined call: ${socket.user.name} → Call ${callId} (${parseInt(call.participant_count) + 1} participants)`);
+
+            } catch (error) {
+                console.error('Join call error:', error);
+                socket.emit('error', { message: 'Failed to join call', detail: error.message });
+            }
+        });
+
+        // Handle leave_call (for group calls - Phase 2)
+        socket.on('leave_call', async (data) => {
+            try {
+                const { callId } = data;
+                const userId = socket.user.id;
+
+                console.log(`🚪 Leave call request: ${socket.user.name} → Call ${callId}`);
+
+                // 1. Verify user is in the call
+                const participantResult = await query(`
+                    SELECT cp.*, c.chat_id
+                    FROM call_participants cp
+                    JOIN calls c ON cp.call_id = c.id
+                    WHERE cp.call_id = $1 AND cp.user_id = $2 AND cp.status = 'joined'
+                `, [callId, userId]);
+
+                if (participantResult.rowCount === 0) {
+                    return socket.emit('error', { message: 'You are not in this call' });
+                }
+
+                const chatId = participantResult.rows[0].chat_id;
+
+                // 2. Update participant status to 'left'
+                await query(`
+                    UPDATE call_participants
+                    SET status = 'left', left_at = NOW()
+                    WHERE call_id = $1 AND user_id = $2
+                `, [callId, userId]);
+
+                // 3. Log event
+                await query(`
+                    INSERT INTO call_events (call_id, user_id, event_type)
+                    VALUES ($1, $2, 'left')
+                `, [callId, userId]);
+
+                // 4. Get remaining participant count
+                const remainingResult = await query(`
+                    SELECT COUNT(*) as count
+                    FROM call_participants
+                    WHERE call_id = $1 AND status = 'joined'
+                `, [callId]);
+
+                const remainingCount = parseInt(remainingResult.rows[0].count);
+
+                // 5. Emit confirmation to leaving user
+                socket.emit('call_left_confirmed', { callId });
+
+                // 6. Notify all participants about user leaving
+                io.to(`chat_${chatId}`).emit('call_participant_left', {
+                    callId,
+                    userId,
+                    userName: socket.user.name,
+                    participantCount: remainingCount
+                });
+
+                // 7. If no participants left, end the call automatically
+                if (remainingCount === 0) {
+                    const callResult = await query(`SELECT * FROM calls WHERE id = $1`, [callId]);
+                    const call = callResult.rows[0];
+
+                    const startedAt = new Date(call.started_at);
+                    const endedAt = new Date();
+                    const duration = Math.floor((endedAt - startedAt) / 1000);
+
+                    await query(`
+                        UPDATE calls
+                        SET status = 'ended', ended_at = NOW()
+                        WHERE id = $1
+                    `, [callId]);
+
+                    io.to(`chat_${chatId}`).emit('call_ended', {
+                        callId,
+                        endedBy: null,
+                        userName: 'System',
+                        duration,
+                        reason: 'all_participants_left'
+                    });
+
+                    console.log(`🔚 Call auto-ended (no participants): Call ${callId}`);
+                }
+
+                console.log(`👋 User left call: ${socket.user.name} → Call ${callId} (${remainingCount} remaining)`);
+
+            } catch (error) {
+                console.error('Leave call error:', error);
+                socket.emit('error', { message: 'Failed to leave call', detail: error.message });
+            }
+        });
+
         // ==================== END CALLS SYSTEM ====================
 
         // Handle disconnect

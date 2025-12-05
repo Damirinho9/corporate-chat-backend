@@ -1761,6 +1761,88 @@
             font-weight: 500;
         }
 
+        /* ==================== ACTIVE CALL INDICATOR ==================== */
+        .active-call-indicator {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin: 8px 12px 0 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            animation: slideInDown 0.3s ease-out;
+        }
+
+        @keyframes slideInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .active-call-indicator-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .active-call-icon {
+            font-size: 24px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        .active-call-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .active-call-label {
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .active-call-participants {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+        }
+
+        .active-call-join-btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .active-call-join-btn:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+
+        .active-call-join-btn:active {
+            transform: scale(0.95);
+        }
+
         /* Mobile optimizations */
         @media (max-width: 480px) {
             .incoming-call-content {
@@ -1934,6 +2016,20 @@
                             <h2 id="chatTitle">Выберите чат</h2>
                             <p id="chatSubtitle"></p>
                         </div>
+                    </div>
+
+                    <!-- Active Call Indicator -->
+                    <div class="active-call-indicator" id="activeCallIndicator" style="display: none;">
+                        <div class="active-call-indicator-content">
+                            <span class="active-call-icon">📞</span>
+                            <div class="active-call-info">
+                                <span class="active-call-label">Активный звонок</span>
+                                <span class="active-call-participants" id="activeCallParticipants">0 участников</span>
+                            </div>
+                        </div>
+                        <button class="active-call-join-btn" id="activeCallJoinBtn" onclick="joinActiveCall()">
+                            Присоединиться
+                        </button>
                     </div>
                 </div>
                 
@@ -2745,7 +2841,14 @@
             // 5. Show toast
             showToast('Звонок отклонён', 'info');
 
-            // 6. Cleanup
+            // 6. For group chats, check if call is still active and show indicator (Phase 2)
+            if (currentChatId) {
+                setTimeout(() => {
+                    checkActiveCallInChat(currentChatId);
+                }, 500);
+            }
+
+            // 7. Cleanup
             currentIncomingCall = null;
 
             console.log(`[Call] Rejected call ${callId} (${reason})`);
@@ -3014,6 +3117,9 @@
                     currentActiveCall = null;
                 }
 
+                // Hide active call indicator (Phase 2: Group Calls)
+                hideActiveCallIndicator();
+
                 // Close incoming call modal if still open
                 if (currentIncomingCall && currentIncomingCall.callId === data.callId) {
                     if (ringtoneStopFunction) {
@@ -3030,6 +3136,132 @@
             });
 
             console.log('[Call] Socket handlers setup complete');
+        }
+
+        // ========== ACTIVE CALL INDICATOR (Phase 2: Group Calls) ==========
+
+        function showActiveCallIndicator(callData) {
+            const indicator = document.getElementById('activeCallIndicator');
+            const participantsEl = document.getElementById('activeCallParticipants');
+
+            if (!indicator || !participantsEl) return;
+
+            const { callId, roomName, type, participantCount } = callData;
+
+            // Update global state
+            currentActiveCall = { callId, roomName, type };
+
+            // Update participant count
+            const count = participantCount || 0;
+            participantsEl.textContent = `${count} ${count === 1 ? 'участник' : 'участников'}`;
+
+            // Show indicator
+            indicator.style.display = 'flex';
+
+            console.log('[Call] Active call indicator shown:', callData);
+        }
+
+        function hideActiveCallIndicator() {
+            const indicator = document.getElementById('activeCallIndicator');
+            if (indicator) {
+                indicator.style.display = 'none';
+            }
+            currentActiveCall = null;
+            console.log('[Call] Active call indicator hidden');
+        }
+
+        function updateActiveCallParticipantCount(count) {
+            const participantsEl = document.getElementById('activeCallParticipants');
+            if (participantsEl) {
+                participantsEl.textContent = `${count} ${count === 1 ? 'участник' : 'участников'}`;
+            }
+        }
+
+        async function checkActiveCallInChat(chatId) {
+            try {
+                const response = await fetch(`/api/chats/${chatId}/active-call`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.activeCall) {
+                        showActiveCallIndicator(data.activeCall);
+                    } else {
+                        hideActiveCallIndicator();
+                    }
+                } else {
+                    hideActiveCallIndicator();
+                }
+            } catch (error) {
+                console.error('[Call] Error checking active call:', error);
+                hideActiveCallIndicator();
+            }
+        }
+
+        function joinActiveCall() {
+            if (!currentActiveCall) {
+                showToast('Нет активного звонка', 'error');
+                return;
+            }
+
+            const { callId, roomName, type } = currentActiveCall;
+
+            console.log('[Call] Joining active call:', callId);
+
+            // Emit join_call event
+            socket.emit('join_call', { callId });
+        }
+
+        // ========== SOCKET HANDLERS FOR GROUP CALLS (Phase 2) ==========
+
+        function setupGroupCallSocketHandlers() {
+            // Handle successful join confirmation
+            socket.on('call_joined_confirmed', (data) => {
+                const { callId, roomName, type, participantCount } = data;
+                console.log('[Call] Join confirmed, opening Jitsi:', data);
+
+                // Update participant count in indicator
+                updateActiveCallParticipantCount(participantCount);
+
+                // Open Jitsi modal
+                openJitsiModal(roomName, type === 'video', callId);
+            });
+
+            // Handle participant joined event
+            socket.on('call_participant_joined', (data) => {
+                const { callId, userId, userName, participantCount } = data;
+                console.log('[Call] Participant joined:', userName, participantCount);
+
+                // Update participant count in indicator if this is the current chat's call
+                if (currentActiveCall && currentActiveCall.callId === callId) {
+                    updateActiveCallParticipantCount(participantCount);
+                }
+
+                // Show notification
+                showToast(`${userName} присоединился к звонку`, 'info');
+            });
+
+            // Handle participant left event
+            socket.on('call_participant_left', (data) => {
+                const { callId, userId, userName, participantCount } = data;
+                console.log('[Call] Participant left:', userName, participantCount);
+
+                // Update participant count in indicator if this is the current chat's call
+                if (currentActiveCall && currentActiveCall.callId === callId) {
+                    updateActiveCallParticipantCount(participantCount);
+                }
+
+                // Show notification
+                showToast(`${userName} покинул звонок`, 'info');
+            });
+
+            // Handle call leave confirmation
+            socket.on('call_left_confirmed', (data) => {
+                console.log('[Call] Left call confirmed:', data);
+            });
+
+            console.log('[Call] Group call socket handlers setup complete');
         }
 
         // ==================== END CALLS SYSTEM ====================
@@ -3926,6 +4158,7 @@
 
             // 📞 Setup call event handlers
             setupCallSocketHandlers();
+            setupGroupCallSocketHandlers();
 
             socket.on('connect', () => {
                 socketConnected = true;
@@ -4990,6 +5223,9 @@
             await loadMessages(chatId);
 
             markChatAsRead(chatId);
+
+            // Check for active call in this chat (Phase 2: Group Calls)
+            await checkActiveCallInChat(chatId);
 
             console.log('[openChat] Чат успешно открыт:', chatId);
 
