@@ -1913,6 +1913,26 @@
                 }
             });
 
+            // 🔥 Hide "Create Department" button for ROPs
+            const createDeptBtn = document.querySelector('#departments .header button[onclick*="CreateDepartmentModal"]');
+            if (createDeptBtn) {
+                createDeptBtn.style.display = 'none';
+            }
+
+            // 🔥 Hide "department" option in chat type selector
+            setTimeout(() => {
+                const chatTypeSelect = document.getElementById('newChatType');
+                if (chatTypeSelect) {
+                    const deptOption = Array.from(chatTypeSelect.options).find(opt => opt.value === 'department');
+                    if (deptOption) {
+                        deptOption.style.display = 'none';
+                        deptOption.disabled = true;
+                    }
+                    // Set default to "group"
+                    chatTypeSelect.value = 'group';
+                }
+            }, 100);
+
             // Hide admin and rop roles from role selects
             const roleSelects = document.querySelectorAll('select[name="role"], #createRole, #editRole');
             roleSelects.forEach(select => {
@@ -2307,6 +2327,11 @@ async function loadChats() {
                 // Filter chats by department for ROPs
                 if (isRop && ropDepartment) {
                     allChats = allChats.filter(chat => {
+                        // 🔥 Hide "Руководство" chat from ROPs - admin-only chat
+                        if (chat.type === 'group' && (chat.name === 'Руководство' || chat.name.toLowerCase().includes('руководство'))) {
+                            return false;
+                        }
+
                         // Department chats: show only ROP's department
                         if (chat.type === 'department') {
                             return chat.department === ropDepartment || chat.name === ropDepartment;
@@ -2369,6 +2394,12 @@ async function loadChats() {
                         typeLabel = chat.type || 'N/A';
                     }
 
+                    // 🔥 ROPs cannot delete department chats
+                    const canDelete = isAdmin || (isRop && chat.type !== 'department');
+                    const deleteButton = canDelete
+                        ? `<button class="btn-delete" onclick="deleteChat(${chat.id})">Удалить</button>`
+                        : '';
+
                     return `
                         <tr>
                             <td>${chat.id}</td>
@@ -2379,7 +2410,7 @@ async function loadChats() {
                             <td>
                                 <button class="btn-add" onclick="openEditChatModal(${chat.id}, { focusParticipants: true })">Добавить пользователя</button>
                                 <button class="btn-edit" onclick="openEditChatModal(${chat.id})">Редактировать</button>
-                                <button class="btn-delete" onclick="deleteChat(${chat.id})">Удалить</button>
+                                ${deleteButton}
                             </td>
                         </tr>
                     `;
