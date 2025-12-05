@@ -891,6 +891,11 @@
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.2s ease;
+            z-index: 10;
+        }
+
+        .message-actions.keep-visible {
+            z-index: 1000; /* Much higher when menu is open */
         }
 
         .message.own .message-actions {
@@ -929,7 +934,7 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             min-width: 200px;
             display: none;
-            z-index: 100;
+            z-index: 1001; /* Higher than message-actions.keep-visible */
             padding: 6px 0; /* 🔥 Increased from 4px for easier hover */
             pointer-events: auto; /* Ensure mouse events are captured */
             cursor: default;
