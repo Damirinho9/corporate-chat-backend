@@ -602,6 +602,18 @@ const startServer = async () => {
 // Graceful shutdown
 const shutdown = async (signal) => {
   console.log(`\n⚠️ ${signal} received. Shutting down gracefully...`);
+
+  // Import graceful shutdown from socketHandler
+  const { gracefulShutdown: shutdownSockets } = require('./socket/socketHandler');
+
+  // Shutdown Socket.IO connections first
+  try {
+    await shutdownSockets();
+  } catch (error) {
+    console.error('❌ Error shutting down Socket.IO:', error);
+  }
+
+  // Then close HTTP server
   server.close(async () => {
     console.log('✅ HTTP server closed');
     try {
@@ -613,10 +625,12 @@ const shutdown = async (signal) => {
       process.exit(1);
     }
   });
+
+  // Force shutdown after 15 seconds (increased from 10s to allow Socket.IO cleanup)
   setTimeout(() => {
     console.error('⚠️ Forcing shutdown after timeout');
     process.exit(1);
-  }, 10000);
+  }, 15000);
 };
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));

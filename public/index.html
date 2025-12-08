@@ -4302,6 +4302,12 @@
                 showToast('Переподключено', 'success');
             });
 
+            // 🔥 FIX: Handle graceful server shutdown
+            socket.on('server:shutdown', (data) => {
+                console.log('[Socket] Server shutdown notification:', data);
+                showToast('⚙️ Сервер обновляется. Подключение будет восстановлено автоматически...', 'info', { duration: 5000 });
+            });
+
             socket.on('new_message', (data) => {
                 const incomingChatId = Number(data.chatId ?? data.chat_id ?? data.message?.chat_id);
                 const inActiveChat = incomingChatId && Number(currentChatId) === incomingChatId;

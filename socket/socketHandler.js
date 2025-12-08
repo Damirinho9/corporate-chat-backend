@@ -1227,10 +1227,58 @@ const isUserOnline = (userId) => {
     return connectedUsers.has(userId);
 };
 
+// Graceful shutdown for WebSocket connections
+const gracefulShutdown = async () => {
+    if (!ioInstance) {
+        console.log('ℹ️ No Socket.IO instance to shutdown');
+        return;
+    }
+
+    console.log('🔌 Closing Socket.IO connections gracefully...');
+
+    try {
+        // Send shutdown warning to all connected clients
+        ioInstance.emit('server:shutdown', {
+            message: 'Server is shutting down for maintenance. You will be reconnected automatically.',
+            timestamp: new Date().toISOString()
+        });
+
+        // Wait a bit for the message to be delivered
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Get all connected sockets
+        const sockets = await ioInstance.fetchSockets();
+        console.log(`📊 Disconnecting ${sockets.length} active Socket.IO connections...`);
+
+        // Disconnect all sockets gracefully
+        for (const socket of sockets) {
+            socket.disconnect(true);
+        }
+
+        // Close the Socket.IO server
+        ioInstance.close(() => {
+            console.log('✅ Socket.IO server closed');
+        });
+
+        // Clear connection tracking
+        connectedUsers.clear();
+        userSockets.clear();
+        typingUsers.clear();
+
+    } catch (error) {
+        console.error('❌ Error during Socket.IO shutdown:', error);
+        // Try to force close even if there's an error
+        if (ioInstance) {
+            ioInstance.close();
+        }
+    }
+};
+
 module.exports = {
     initializeSocket,
     emitToChat,
     getOnlineUsersCount,
     getOnlineUsers,
-    isUserOnline
+    isUserOnline,
+    gracefulShutdown
 };
