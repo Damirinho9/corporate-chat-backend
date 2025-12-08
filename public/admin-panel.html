@@ -2753,8 +2753,15 @@ async function loadChats() {
                 const select = document.getElementById('addUserSelectUser');
                 select.innerHTML = '<option value="">Выберите пользователя...</option>';
 
-                // Filter users that are not already in this department or show all
-                const users = data.users || [];
+                // 🔥 FIX: ROP can only add users without a department
+                let users = data.users || [];
+
+                if (isRop) {
+                    // Filter: show only users without department
+                    users = users.filter(user => !user.department || user.department === null || user.department === '');
+                    console.log('[ROP Mode] Filtered users without department:', users.length);
+                }
+
                 users.forEach(user => {
                     const displayRole = ROLE_LABELS[user.role] || user.role;
                     const departmentInfo = user.department ? ` • ${user.department}` : ' • Без отдела';

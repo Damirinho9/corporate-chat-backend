@@ -455,7 +455,7 @@ const addUserToDepartment = async (req, res) => {
 
         // Проверяем пользователя
         const userCheck = await query(
-            'SELECT id FROM users WHERE id = $1',
+            'SELECT id, department, role FROM users WHERE id = $1',
             [userId]
         );
 
@@ -466,12 +466,23 @@ const addUserToDepartment = async (req, res) => {
             });
         }
 
+        const targetUser = userCheck.rows[0];
+
         // РОП может добавлять только в свой отдел
         if (req.user.role === 'rop') {
             if (req.user.department !== departmentName) {
                 return res.status(403).json({
                     error: 'ROPs can only add users to their own department',
                     code: 'PERMISSION_DENIED'
+                });
+            }
+
+            // 🔥 FIX: РОП может добавлять только пользователей БЕЗ отдела
+            if (targetUser.department && targetUser.department !== null) {
+                return res.status(403).json({
+                    error: 'ROPs can only add users without a department. This user already belongs to another department.',
+                    code: 'USER_HAS_DEPARTMENT',
+                    currentDepartment: targetUser.department
                 });
             }
         }
