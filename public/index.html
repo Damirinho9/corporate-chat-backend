@@ -446,6 +446,9 @@
             border-bottom: 1px solid var(--border);
             transition: background 0.2s;
             list-style: none;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
         }
 
         .chat-item:hover {
@@ -454,6 +457,28 @@
 
         .chat-item.active {
             background: var(--bg-tertiary);
+        }
+
+        /* 🎨 Аватар чата (как в WhatsApp) */
+        .chat-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 20px;
+            color: white;
+            flex-shrink: 0;
+            text-transform: uppercase;
+            user-select: none;
+        }
+
+        .chat-content-wrapper {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .chat-item-header {
@@ -560,10 +585,6 @@
 
         .department-toggle.expanded {
             transform: rotate(90deg);
-        }
-
-        .department-info {
-            flex: 1;
         }
 
         .department-contacts {
@@ -4760,6 +4781,98 @@
                 .replace(/[^a-z0-9а-яё-]/gi, '');
         }
 
+        // 🎨 Получить иконку для отдела (буква/цифра как в WhatsApp)
+        function getDepartmentIcon(name, chatType) {
+            if (!name) return '💬';
+
+            const nameLower = String(name).toLowerCase().trim();
+
+            // Direct чаты - иконка пользователя
+            if (chatType === 'direct') {
+                return '👤';
+            }
+
+            // Групповые чаты - иконка группы
+            if (chatType === 'group') {
+                return '👥';
+            }
+
+            // Специальные отделы с буквами
+            if (nameLower.includes('ассистент')) return 'А';
+            if (nameLower.includes('руководство')) return 'Р';
+
+            // Отделы с цифрами: "2 отдел" -> "2", "3 отдел" -> "3"
+            const numberMatch = name.match(/^(\d+)/);
+            if (numberMatch) {
+                return numberMatch[1];
+            }
+
+            // Другие отделы - первая буква
+            const firstChar = name.trim()[0];
+            if (firstChar) {
+                return firstChar.toUpperCase();
+            }
+
+            return '📁';
+        }
+
+        // 🎨 Получить цвет для отдела (разные цвета как в WhatsApp)
+        function getDepartmentColor(name, chatType) {
+            if (!name) return '#6B7280'; // серый по умолчанию
+
+            const nameLower = String(name).toLowerCase().trim();
+
+            // Direct чаты - синий
+            if (chatType === 'direct') {
+                return '#3B82F6'; // blue-500
+            }
+
+            // Групповые чаты - фиолетовый
+            if (chatType === 'group') {
+                return '#8B5CF6'; // violet-500
+            }
+
+            // Специальные цвета для известных отделов
+            const colorMap = {
+                'ассистент': '#10B981',  // green-500 (Ассистенты)
+                'руководство': '#EF4444', // red-500 (Руководство)
+                '2': '#F59E0B',          // amber-500 (2 отдел)
+                '3': '#06B6D4',          // cyan-500 (3 отдел)
+                '4': '#8B5CF6',          // violet-500 (4 отдел)
+                '5': '#EC4899',          // pink-500 (5 отдел)
+            };
+
+            // Проверяем специальные отделы
+            for (const [key, color] of Object.entries(colorMap)) {
+                if (nameLower.includes(key) || name.startsWith(key)) {
+                    return color;
+                }
+            }
+
+            // Генерируем цвет на основе хеша названия (для консистентности)
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+
+            // Палитра ярких цветов (как в WhatsApp)
+            const colors = [
+                '#10B981', // green
+                '#3B82F6', // blue
+                '#F59E0B', // amber
+                '#EF4444', // red
+                '#8B5CF6', // violet
+                '#EC4899', // pink
+                '#06B6D4', // cyan
+                '#F97316', // orange
+                '#14B8A6', // teal
+                '#A855F7', // purple
+            ];
+
+            const index = Math.abs(hash) % colors.length;
+            return colors[index];
+        }
+
         function toggleDepartment(event, deptKey) {
             if (event) {
                 event.stopPropagation();
@@ -4966,14 +5079,23 @@
 
                 const isActive = Number(chat.id) === Number(currentChatId);
 
+                // 🎨 Получаем иконку и цвет для аватара
+                const avatarIcon = getDepartmentIcon(rawName || chat.department, chat.type);
+                const avatarColor = getDepartmentColor(rawName || chat.department, chat.type);
+
                 const content = `
-                    <div class="chat-item-header">
-                        <span class="chat-name">${chatName}</span>
-                        ${unreadBadge}
+                    <div class="chat-avatar" style="background-color: ${avatarColor};">
+                        ${avatarIcon}
                     </div>
-                    <div class="chat-last-message">
-                        <span class="chat-last-message-text">${lastMessageText}</span>
-                        ${timestamp ? `<span class="chat-timestamp">${timestamp}</span>` : ''}
+                    <div class="chat-content-wrapper">
+                        <div class="chat-item-header">
+                            <span class="chat-name">${chatName}</span>
+                            ${unreadBadge}
+                        </div>
+                        <div class="chat-last-message">
+                            <span class="chat-last-message-text">${lastMessageText}</span>
+                            ${timestamp ? `<span class="chat-timestamp">${timestamp}</span>` : ''}
+                        </div>
                     </div>
                 `;
 
@@ -4984,9 +5106,7 @@
                             data-chat-id="${chat.id}"
                             onclick="openChat(${chat.id})">
                             <button class="${arrowClass}" onclick="toggleDepartment(event, '${deptKey}')">&#9656;</button>
-                            <div class="department-info">
-                                ${content}
-                            </div>
+                            ${content}
                         </li>
                     `;
                 }
@@ -5169,15 +5289,24 @@
                     (!directChatId && currentDirectContactId && Number(user.id) === Number(currentDirectContactId));
                 const chatAttr = directChatId ? ` data-chat-id="${directChatId}"` : '';
 
+                // 🎨 Аватар для контакта (всегда синий с первой буквой имени)
+                const firstLetter = user.name ? user.name.trim()[0].toUpperCase() : '?';
+                const avatarColor = '#3B82F6'; // синий для личных контактов
+
                 return `
                     <li class="chat-item contact-item${contactNestingClass}${isActive ? ' active' : ''}"
                         data-contact-id="${user.id}"${chatAttr}
                         onclick="openDirectChatWithUser(${user.id}, '${escapeHtml(user.name)}')">
-                        <div class="chat-item-header">
-                            <span class="chat-name">${emoji} ${escapeHtml(user.name)}</span>
+                        <div class="chat-avatar" style="background-color: ${avatarColor};">
+                            ${firstLetter}
                         </div>
-                        <div class="chat-last-message">
-                            <span class="chat-last-message-text">${role}</span>
+                        <div class="chat-content-wrapper">
+                            <div class="chat-item-header">
+                                <span class="chat-name">${escapeHtml(user.name)}</span>
+                            </div>
+                            <div class="chat-last-message">
+                                <span class="chat-last-message-text">${emoji} ${role}</span>
+                            </div>
                         </div>
                     </li>
                 `;
@@ -5212,10 +5341,17 @@
                                             })}
                                         </ul>`;
                         } else if (hasContacts) {
+                            // 🎨 Аватар для отдела без группового чата (с контактами)
+                            const deptIcon = getDepartmentIcon(section.dept?.department, 'department');
+                            const deptColor = getDepartmentColor(section.dept?.department, 'department');
+
                             html += `<div class="department-section" data-department="${section.deptKey}">
                                         <div class="chat-item department-main disabled">
                                             <button class="department-toggle ${section.isExpanded ? 'expanded' : ''}" onclick="toggleDepartment(event, '${section.deptKey}')">&#9656;</button>
-                                            <div class="department-info">
+                                            <div class="chat-avatar" style="background-color: ${deptColor};">
+                                                ${deptIcon}
+                                            </div>
+                                            <div class="chat-content-wrapper">
                                                 <div class="chat-item-header">
                                                     <span class="chat-name">${deptName}</span>
                                                 </div>
@@ -5225,9 +5361,16 @@
                                             </div>
                                         </div>`;
                         } else {
+                            // 🎨 Аватар для отдела без группового чата (без контактов)
+                            const deptIcon = getDepartmentIcon(section.dept?.department, 'department');
+                            const deptColor = getDepartmentColor(section.dept?.department, 'department');
+
                             html += `<div class="department-section" data-department="${section.deptKey}">
                                         <div class="chat-item department-main disabled">
-                                            <div class="department-info">
+                                            <div class="chat-avatar" style="background-color: ${deptColor};">
+                                                ${deptIcon}
+                                            </div>
+                                            <div class="chat-content-wrapper">
                                                 <div class="chat-item-header">
                                                     <span class="chat-name">${deptName}</span>
                                                 </div>
