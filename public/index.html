@@ -3075,9 +3075,17 @@
 
         // ========== SOCKET EVENT HANDLERS ==========
 
+        let socketHandlersInitialized = false; // Prevent duplicate handler registration
+
         function setupCallSocketHandlers() {
             if (!socket) {
                 console.error('[Call] Socket not initialized');
+                return;
+            }
+
+            // Prevent duplicate registration
+            if (socketHandlersInitialized) {
+                console.log('[Call] Socket handlers already initialized, skipping...');
                 return;
             }
 
@@ -3213,6 +3221,8 @@
             console.log('[Call] Socket handlers setup complete');
         }
 
+        // Note: setupGroupCallSocketHandlers also sets socketHandlersInitialized = true
+
         // ========== ACTIVE CALL INDICATOR (Phase 2: Group Calls) ==========
 
         function showActiveCallIndicator(callData) {
@@ -3341,6 +3351,9 @@
             socket.on('call_left_confirmed', (data) => {
                 console.log('[Call] Left call confirmed:', data);
             });
+
+            // Mark handlers as initialized to prevent duplicates
+            socketHandlersInitialized = true;
 
             console.log('[Call] Group call socket handlers setup complete');
         }
@@ -4202,44 +4215,14 @@
 
         // ==================== SOCKET ====================
         let socketConnected = false;
+        let mainSocketHandlersInitialized = false; // Prevent duplicate main handlers
 
-        function connectSocket() {
-            // 🔥 FIX: Prevent duplicate socket connections
-            if (socket && socket.connected) {
-                console.log('[connectSocket] Already connected, skipping...');
+        function setupMainSocketHandlers() {
+            // Prevent duplicate registration
+            if (mainSocketHandlersInitialized) {
+                console.log('[Socket] Main handlers already initialized, skipping...');
                 return;
             }
-
-            socket = io(window.location.origin, {
-                auth: { token },
-                // 🔥 VPN/RUSSIA FIX: Aggressive settings for VPN, DPI, and Russian internet restrictions
-                reconnection: true,
-                reconnectionAttempts: Infinity,
-                reconnectionDelay: 500,           // ⚡ Faster reconnect for VPN switches
-                reconnectionDelayMax: 3000,       // ⚡ Max 3s instead of 5s
-                timeout: 30000,                    // ⚡ 30s timeout for slow VPN connections
-                transports: ['polling', 'websocket'], // ⚡ Polling first to bypass DPI/WebSocket blocks
-                upgrade: true,                     // ⚡ Try to upgrade to WebSocket if possible
-                rememberUpgrade: false,            // ⚡ Don't remember upgrade to handle VPN IP changes
-
-                // ⚡ Aggressive ping/pong to detect dead connections fast
-                pingTimeout: 45000,                // Wait 45s for pong
-                pingInterval: 15000,               // Send ping every 15s
-
-                // ⚡ For unstable connections
-                forceNew: false,
-                multiplex: true,
-                autoConnect: true,
-
-                // ⚡ Query params to bypass some proxies
-                query: {
-                    t: Date.now()  // Timestamp to prevent caching
-                }
-            });
-
-            // 📞 Setup call event handlers
-            setupCallSocketHandlers();
-            setupGroupCallSocketHandlers();
 
             socket.on('connect', () => {
                 socketConnected = true;
@@ -4381,6 +4364,50 @@
 
                 showToast(message, 'error');
             });
+
+            // Mark main handlers as initialized
+            mainSocketHandlersInitialized = true;
+            console.log('[Socket] Main handlers initialized');
+        }
+
+        function connectSocket() {
+            // 🔥 FIX: Prevent duplicate socket connections
+            if (socket && socket.connected) {
+                console.log('[connectSocket] Already connected, skipping...');
+                return;
+            }
+
+            socket = io(window.location.origin, {
+                auth: { token },
+                // 🔥 VPN/RUSSIA FIX: Aggressive settings for VPN, DPI, and Russian internet restrictions
+                reconnection: true,
+                reconnectionAttempts: Infinity,
+                reconnectionDelay: 500,           // ⚡ Faster reconnect for VPN switches
+                reconnectionDelayMax: 3000,       // ⚡ Max 3s instead of 5s
+                timeout: 30000,                    // ⚡ 30s timeout for slow VPN connections
+                transports: ['polling', 'websocket'], // ⚡ Polling first to bypass DPI/WebSocket blocks
+                upgrade: true,                     // ⚡ Try to upgrade to WebSocket if possible
+                rememberUpgrade: false,            // ⚡ Don't remember upgrade to handle VPN IP changes
+
+                // ⚡ Aggressive ping/pong to detect dead connections fast
+                pingTimeout: 45000,                // Wait 45s for pong
+                pingInterval: 15000,               // Send ping every 15s
+
+                // ⚡ For unstable connections
+                forceNew: false,
+                multiplex: true,
+                autoConnect: true,
+
+                // ⚡ Query params to bypass some proxies
+                query: {
+                    t: Date.now()  // Timestamp to prevent caching
+                }
+            });
+
+            // Setup all socket event handlers (only once)
+            setupMainSocketHandlers();
+            setupCallSocketHandlers();
+            setupGroupCallSocketHandlers();
         }
 
         // ==================== LOAD CHATS ====================
@@ -5360,7 +5387,17 @@
         }
 
         // ==================== LOAD MESSAGES ====================
+        let currentLoadingChatId = null; // Prevent duplicate loads
+
         async function loadMessages(chatId) {
+            // Prevent duplicate calls for same chat
+            if (currentLoadingChatId === chatId) {
+                console.log('[loadMessages] Already loading messages for chat', chatId, '- skipping duplicate call');
+                return;
+            }
+
+            currentLoadingChatId = chatId;
+
             const messagesContainer = document.getElementById('messagesContainer');
             messagesContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;"><div style="text-align:center;color:var(--text-secondary);"><div style="font-size:32px;margin-bottom:10px;">⏳</div><div>Загрузка сообщений...</div></div></div>';
 
@@ -5432,6 +5469,9 @@
                     </div>
                 `;
                 showToast('Ошибка загрузки сообщений', 'error');
+            } finally {
+                // Reset loading flag to allow future loads
+                currentLoadingChatId = null;
             }
         }
 
