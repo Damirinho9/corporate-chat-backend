@@ -223,7 +223,7 @@ const canCreateDirectMessage = async (req, res, next) => {
 // Check if user can view all messages (admins only)
 const canViewAllMessages = (req, res, next) => {
     if (req.user.role !== 'admin') {
-        return res.status(403).json({ 
+        return res.status(403).json({
             error: 'Only admins can view all messages',
             code: 'ADMIN_ONLY'
         });
@@ -231,9 +231,84 @@ const canViewAllMessages = (req, res, next) => {
     next();
 };
 
+// Check if user can manage chat (add/remove participants, edit settings)
+// According to permissionsMatrix: manageChats
+// - admin: true (all chats)
+// - assistant: true (all chats)
+// - rop: 'department' (only department chats)
+// - operator: false
+// - employee: false
+const canManageChat = async (req, res, next) => {
+    try {
+        const chatId = req.params.chatId;
+        const userRole = req.user.role;
+        const userDept = req.user.department;
+
+        // Admins and assistants can manage all chats
+        if (userRole === 'admin' || userRole === 'assistant') {
+            return next();
+        }
+
+        // ROPs can only manage department chats
+        if (userRole === 'rop') {
+            // Get chat info
+            const chatResult = await query(
+                'SELECT type, department FROM chats WHERE id = $1',
+                [chatId]
+            );
+
+            if (chatResult.rows.length === 0) {
+                return res.status(404).json({
+                    error: 'Chat not found',
+                    code: 'CHAT_NOT_FOUND'
+                });
+            }
+
+            const chat = chatResult.rows[0];
+
+            // ROP can manage department chats of their own department
+            if (chat.type === 'department' && chat.department === userDept) {
+                return next();
+            }
+
+            // ROP can also manage group chats they created or are admin of
+            if (chat.type === 'group') {
+                // Check if ROP is chat admin
+                const participantCheck = await query(
+                    'SELECT role FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
+                    [chatId, req.user.id]
+                );
+
+                if (participantCheck.rows.length > 0 &&
+                    (participantCheck.rows[0].role === 'owner' || participantCheck.rows[0].role === 'admin')) {
+                    return next();
+                }
+            }
+
+            return res.status(403).json({
+                error: 'You can only manage chats in your department',
+                code: 'DEPARTMENT_ONLY'
+            });
+        }
+
+        // All other roles cannot manage chats
+        return res.status(403).json({
+            error: 'You do not have permission to manage chats',
+            code: 'MANAGE_CHAT_DENIED'
+        });
+    } catch (error) {
+        console.error('Manage chat permission check error:', error);
+        res.status(500).json({
+            error: 'Failed to verify manage permission',
+            code: 'PERMISSION_CHECK_ERROR'
+        });
+    }
+};
+
 module.exports = {
     canAccessChat,
     canSendToChat,
     canCreateDirectMessage,
-    canViewAllMessages
+    canViewAllMessages,
+    canManageChat
 };

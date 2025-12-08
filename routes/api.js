@@ -21,7 +21,7 @@ const pushController = require('../controllers/pushController');
 const { PERMISSIONS_MATRIX } = require('../config/permissionsMatrix');
 
 const { authenticateToken, requireAdmin, requireHead, requireAdminOrRop } = require('../middleware/auth');
-const { canAccessChat, canSendToChat, canCreateDirectMessage } = require('../middleware/permissions');
+const { canAccessChat, canSendToChat, canCreateDirectMessage, canManageChat } = require('../middleware/permissions');
 
 const { body, param, query: queryValidator, validationResult } = require('express-validator');
 
@@ -261,7 +261,7 @@ router.post('/chats/group',
 
 router.post('/chats/:chatId/participants',
     authenticateToken,
-    requireAdmin,
+    canManageChat,
     [
         param('chatId').isInt(),
         body('userId').isInt()
@@ -272,7 +272,7 @@ router.post('/chats/:chatId/participants',
 
 router.delete('/chats/:chatId/participants/:userId',
     authenticateToken,
-    requireAdmin,
+    canManageChat,
     [
         param('chatId').isInt(),
         param('userId').isInt()
@@ -297,10 +297,10 @@ router.delete('/chats/:chatId',
     chatController.deleteChat
 );
 
-// Chat settings routes (admin/rop)
+// Chat settings routes (admin/assistant/rop with department check)
 router.get('/chats/:chatId/settings',
     authenticateToken,
-    requireAdminOrRop,
+    canManageChat,
     [param('chatId').isInt()],
     validate,
     chatController.getChatSettings
@@ -308,7 +308,7 @@ router.get('/chats/:chatId/settings',
 
 router.put('/chats/:chatId/settings',
     authenticateToken,
-    requireAdminOrRop,
+    canManageChat,
     [
         param('chatId').isInt(),
         body('name').optional().trim().isLength({ min: 2, max: 100 }),
@@ -320,7 +320,7 @@ router.put('/chats/:chatId/settings',
 
 router.put('/chats/:chatId/participants/:userId/permissions',
     authenticateToken,
-    requireAdmin,
+    canManageChat,
     [
         param('chatId').isInt(),
         param('userId').isInt(),
