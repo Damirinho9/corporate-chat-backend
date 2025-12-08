@@ -98,21 +98,44 @@
         if (!root) return null;
         if (audioElement) return audioElement;
         if (typeof Audio === 'undefined') return null;
-        audioElement = new Audio(SOUND_SRC);
-        audioElement.preload = 'auto';
-        audioElement.volume = 0.4;
-        return audioElement;
+        try {
+            audioElement = new Audio(SOUND_SRC);
+            audioElement.preload = 'auto';
+            audioElement.volume = 0.4;
+            // 🔥 FIX: Handle load errors gracefully
+            audioElement.addEventListener('error', (e) => {
+                console.warn('[notificationUI] Audio load error:', e);
+            });
+            return audioElement;
+        } catch (err) {
+            console.warn('[notificationUI] Audio creation error:', err);
+            return null;
+        }
     }
 
     async function playNotificationSound() {
         const audio = getAudioElement();
         if (!audio) return false;
         try {
+            // 🔥 FIX: Reset to beginning before playing
             audio.currentTime = 0;
-            await audio.play();
-            return true;
+
+            // 🔥 FIX: Play with promise handling for better cross-browser support
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                await playPromise;
+                return true;
+            } else {
+                // Old browsers that don't return a promise
+                return true;
+            }
         } catch (err) {
-            console.warn('[notificationUI] Cannot play sound:', err.message || err);
+            // NotAllowedError means user hasn't interacted with the page yet
+            if (err.name === 'NotAllowedError') {
+                console.log('[notificationUI] Sound autoplay blocked (user interaction required)');
+            } else {
+                console.warn('[notificationUI] Cannot play sound:', err.message || err);
+            }
             return false;
         }
     }

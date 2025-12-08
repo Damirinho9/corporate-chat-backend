@@ -2682,6 +2682,12 @@
 
         function playRingtone() {
             try {
+                // 🔥 FIX: Check if AudioContext is supported
+                if (!window.AudioContext && !window.webkitAudioContext) {
+                    console.warn('[Ringtone] AudioContext not supported');
+                    return () => {};
+                }
+
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
@@ -2695,6 +2701,7 @@
                 gainNode.gain.value = 0.3;
 
                 oscillator.start();
+                console.log('[Ringtone] Started playing');
 
                 // Pattern: 2 sec on, 1 sec off (repeat)
                 let isPlaying = true;
@@ -2703,8 +2710,12 @@
                 const ringtoneInterval = setInterval(() => {
                     if (!isPlaying) {
                         clearInterval(ringtoneInterval);
-                        oscillator.stop();
-                        audioContext.close();
+                        try {
+                            oscillator.stop();
+                            audioContext.close();
+                        } catch (e) {
+                            // Already stopped
+                        }
                         return;
                     }
 
@@ -2712,7 +2723,11 @@
                     if (isOn) {
                         gainNode.gain.value = 0; // off
                         isOn = false;
-                        setTimeout(() => { if (isPlaying) gainNode.gain.value = 0.3; }, 1000); // 1 sec pause
+                        setTimeout(() => {
+                            if (isPlaying) {
+                                gainNode.gain.value = 0.3;
+                            }
+                        }, 1000); // 1 sec pause
                     } else {
                         gainNode.gain.value = 0.3; // on
                         isOn = true;
@@ -2726,8 +2741,10 @@
                     try {
                         oscillator.stop();
                         audioContext.close();
+                        console.log('[Ringtone] Stopped');
                     } catch (e) {
                         // Already stopped
+                        console.log('[Ringtone] Already stopped');
                     }
                 };
 
@@ -4027,22 +4044,34 @@
             const btn = document.getElementById('notificationsBtn');
             if (!btn) return;
 
+            // 🔥 FIX: Add smooth transition for state changes
+            btn.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+
             if (Notification.permission === 'denied') {
                 btn.textContent = '🔕';
                 btn.title = 'Уведомления заблокированы';
                 btn.disabled = true;
                 btn.classList.remove('active');
+                btn.style.opacity = '0.5';
             } else if (pushSubscription) {
                 btn.textContent = '🔔';
                 btn.title = 'Уведомления включены (нажмите чтобы отключить)';
                 btn.classList.add('active');
                 btn.disabled = false;
+                btn.style.opacity = '1';
             } else {
                 btn.textContent = '🔕';
                 btn.title = 'Включить уведомления';
                 btn.classList.remove('active');
                 btn.disabled = false;
+                btn.style.opacity = '1';
             }
+
+            // 🔥 FIX: Return the button state for use in finally block
+            return {
+                shouldBeDisabled: Notification.permission === 'denied',
+                currentOpacity: btn.style.opacity
+            };
         }
 
         // 🔥 FIX: Prevent multiple clicks
@@ -4143,9 +4172,16 @@
                 updateNotificationButton();
             } finally {
                 isTogglingNotifications = false;
-                if (btn) {
+
+                // 🔥 FIX: Don't override button state set by updateNotificationButton()
+                // Only restore button if permission is not denied
+                if (btn && Notification.permission !== 'denied') {
                     btn.disabled = false;
                     btn.style.opacity = '1';
+                } else if (btn && Notification.permission === 'denied') {
+                    // Keep button disabled and dimmed if permission is denied
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
                 }
             }
         }
@@ -4288,7 +4324,18 @@
                     const preview = (typeof rawPreview === 'string' ? rawPreview : '') || 'Новое сообщение';
                     const limitedPreview = preview.slice(0, 120);
                     showToast(`${sender}: ${limitedPreview}`, 'info', { duration: 4500 });
-                    playNotificationSound();
+
+                    // 🔥 FIX: Play sound with error handling
+                    playNotificationSound().then((played) => {
+                        if (played) {
+                            console.log('[Sound] Message notification played');
+                        } else {
+                            console.log('[Sound] Message notification could not play (user interaction required)');
+                        }
+                    }).catch((err) => {
+                        console.warn('[Sound] Message notification error:', err);
+                    });
+
                     requestNotificationPermission().then(() => {
                         showBrowserNotification({
                             title: sender,
