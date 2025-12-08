@@ -2954,6 +2954,20 @@ async function loadChats() {
                 toggleDepartmentField(roleSelect);
             }
 
+            // 🔥 FIX: ROP creates operators in their department by default
+            if (isRop && ropDepartment) {
+                // Set default role to operator
+                if (roleSelect) {
+                    roleSelect.value = 'operator';
+                    toggleDepartmentField(roleSelect);
+                }
+                // Set default department to ROP's department
+                if (departmentSelect) {
+                    departmentSelect.value = ropDepartment;
+                }
+                console.log('[ROP Mode] Auto-filled: role=operator, department=' + ropDepartment);
+            }
+
             openModalElement(document.getElementById('createUserModal'), { focusTarget: fullNameInput });
         }
 
