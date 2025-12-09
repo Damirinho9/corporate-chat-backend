@@ -6066,12 +6066,31 @@
                     }
 
                     if (data.message) {
-                        // Remove temp message - WebSocket will add real message to avoid duplicates
+                        // 🔥 FIX: Convert temp message to real message instead of removing
+                        // This ensures message appears immediately even if WebSocket is slow/fails
                         if (tempMessageId) {
                             const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
-                            if (tempEl) tempEl.remove();
+                            if (tempEl) {
+                                // Update temp message with real ID and remove "sending" state
+                                tempEl.removeAttribute('data-message-id');
+                                tempEl.setAttribute('data-real-message-id', data.message.id);
+                                tempEl.classList.remove('sending');
+
+                                // Update message time to server time
+                                const timeEl = tempEl.querySelector('.message-time');
+                                if (timeEl && data.message.created_at) {
+                                    const serverTime = new Date(data.message.created_at).toLocaleTimeString('ru-RU', {
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    });
+                                    timeEl.textContent = serverTime;
+                                }
+
+                                console.log('[sendMessage] Converted temp message to real:', data.message.id);
+                            }
                         }
-                        // Don't append here - let WebSocket handle it and scroll
+                        // WebSocket will try to add the message but deduplication will prevent it
+                        scrollToBottom(true);
                     } else {
                         // Remove temp message on error
                         if (tempMessageId) {
