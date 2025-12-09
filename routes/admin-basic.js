@@ -374,19 +374,14 @@ router.delete('/admin/users/:userId', authenticateToken, async (req, res) => {
         if (req.user.role !== 'admin' && req.user.role !== 'rop') {
             return res.status(403).json({ error: 'Access denied' });
         }
-        
+
         const { userId } = req.params;
-        
-        // Hard delete - permanently remove from database
-        // First, remove user from chat_participants
-        await query('DELETE FROM chat_participants WHERE user_id = $1', [userId]);
-        
-        // Remove user's messages (or set author to null if you want to keep messages)
-        await query('DELETE FROM messages WHERE author_id = $1', [userId]);
-        
-        // Finally, delete the user
+
+        // 🔥 FIX: No need to manually delete chat_participants and messages
+        // They are deleted automatically via ON DELETE CASCADE
+        // Just delete the user - cascades handle the rest
         await query('DELETE FROM users WHERE id = $1', [userId]);
-        
+
         res.json({ success: true });
     } catch (err) {
         console.error('Delete user error:', err);
