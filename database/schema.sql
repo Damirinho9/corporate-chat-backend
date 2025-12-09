@@ -105,7 +105,7 @@ CREATE TABLE files (
 -- Admin logs table
 CREATE TABLE admin_logs (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     action VARCHAR(100) NOT NULL,
     details JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
