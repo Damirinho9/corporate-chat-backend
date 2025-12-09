@@ -2152,16 +2152,6 @@
         const directChatByUser = new Map();
         const notificationUI = window.notificationUI || {};
 
-        // 🔥 FIX: Track locally processed message IDs to prevent duplication
-        const locallyProcessedMessageIds = new Set();
-
-        // Auto-clear Set every 5 minutes to prevent memory leak
-        setInterval(() => {
-            if (locallyProcessedMessageIds.size > 100) {
-                console.log('[Cleanup] Clearing processed message IDs set, size:', locallyProcessedMessageIds.size);
-                locallyProcessedMessageIds.clear();
-            }
-        }, 5 * 60 * 1000); // 5 minutes
         const {
             ensureToastContainer = () => {},
             showToast = () => {},
@@ -4544,16 +4534,6 @@
                 const inActiveChat = incomingChatId && Number(currentChatId) === incomingChatId;
                 const isOwn = Number(data.message?.user_id) === Number(currentUser?.id);
 
-                // 🔥 FIX: Skip if this message was already processed locally
-                if (isOwn && data.message?.id && locallyProcessedMessageIds.has(data.message.id)) {
-                    console.log('[WebSocket] Skipping duplicate own message:', data.message.id);
-                    // Still update chat list but don't append message
-                    if (incomingChatId) {
-                        updateChatLastMessage(incomingChatId, data.message);
-                    }
-                    return;
-                }
-
                 if (incomingChatId) {
                     updateChatLastMessage(incomingChatId, data.message);
                 }
@@ -5901,10 +5881,30 @@
 
             // Deduplication: check if message already exists (prevent double-add)
             if (!isTempSending && message.id) {
+                // Check by ID attribute
                 const existing = messagesContainer.querySelector(`[data-real-message-id="${message.id}"]`);
                 if (existing) {
-                    console.log('[appendMessage] Skipping duplicate message:', message.id);
+                    console.log('[appendMessage] Skipping duplicate message by ID:', message.id);
                     return;
+                }
+
+                // 🔥 FIX: Also check by content for own messages (prevents race condition)
+                // When HTTP response comes before WebSocket event, deduplication by ID works
+                // But when WebSocket comes first, we need content-based deduplication
+                const isOwn = message.user_id === currentUser.id;
+                if (isOwn && message.content) {
+                    const recentMessages = Array.from(messagesContainer.querySelectorAll('.message.own'))
+                        .slice(-5); // Check last 5 own messages
+                    const duplicate = recentMessages.find(el => {
+                        const bubble = el.querySelector('.message-bubble');
+                        if (!bubble) return false;
+                        const textContent = bubble.textContent.trim();
+                        return textContent.includes(message.content.trim());
+                    });
+                    if (duplicate) {
+                        console.log('[appendMessage] Skipping duplicate own message by content');
+                        return;
+                    }
                 }
             }
 
@@ -6234,13 +6234,10 @@
                                     timeEl.textContent = serverTime;
                                 }
 
-                                // 🔥 FIX: Mark this message as locally processed to prevent WebSocket duplication
-                                locallyProcessedMessageIds.add(data.message.id);
-
                                 console.log('[sendMessage] Converted temp message to real:', data.message.id);
                             }
                         }
-                        // WebSocket will try to add the message but will skip if already in Set
+                        // WebSocket deduplication will prevent duplicates via content check
                         scrollToBottom(true);
                     } else {
                         // Remove temp message on error
