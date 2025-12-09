@@ -2161,7 +2161,44 @@
 
         ensureToastContainer();
 
+        // 🔥 FIX: Automatic token refresh when expired
+        async function refreshAccessToken() {
+            try {
+                const refreshToken = localStorage.getItem('refreshToken');
+                if (!refreshToken) {
+                    console.warn('[Token Refresh] No refresh token available');
+                    return false;
+                }
+
+                console.log('[Token Refresh] Attempting to refresh access token...');
+
+                const response = await fetch(`${API_URL}/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshToken })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.token && data.refreshToken) {
+                        localStorage.setItem('token', data.token);
+                        localStorage.setItem('refreshToken', data.refreshToken);
+                        token = data.token;
+                        console.log('[Token Refresh] ✅ Token refreshed successfully');
+                        return true;
+                    }
+                }
+
+                console.error('[Token Refresh] ❌ Failed to refresh token:', response.status);
+                return false;
+            } catch (error) {
+                console.error('[Token Refresh] ❌ Error refreshing token:', error);
+                return false;
+            }
+        }
+
         // 🔥 VPN/RUSSIA FIX: Retry logic for HTTP requests on slow/unstable VPN connections
+        // 🔥 FIX: Added automatic token refresh on 401 TOKEN_EXPIRED
         async function fetchWithRetry(url, options = {}, maxRetries = 3) {
             const retryDelay = (attempt) => Math.min(1000 * Math.pow(2, attempt), 5000); // 1s, 2s, 4s, max 5s
 
@@ -2178,6 +2215,35 @@
                     });
 
                     clearTimeout(timeoutId);
+
+                    // 🔥 FIX: Automatic token refresh on TOKEN_EXPIRED
+                    if (response.status === 401 && attempt < maxRetries) {
+                        try {
+                            const errorData = await response.clone().json();
+                            if (errorData.code === 'TOKEN_EXPIRED') {
+                                console.log('[fetchWithRetry] Token expired, attempting refresh...');
+                                const refreshed = await refreshAccessToken();
+
+                                if (refreshed) {
+                                    // Update Authorization header with new token
+                                    if (options.headers) {
+                                        options.headers['Authorization'] = `Bearer ${token}`;
+                                    }
+                                    console.log('[fetchWithRetry] Token refreshed, retrying request...');
+                                    await new Promise(resolve => setTimeout(resolve, 500));
+                                    continue; // Retry with new token
+                                } else {
+                                    // Refresh failed, logout user
+                                    console.error('[fetchWithRetry] Token refresh failed, logging out...');
+                                    showToast('Сессия истекла. Пожалуйста, войдите снова.', 'error');
+                                    setTimeout(() => logout(), 2000);
+                                    return response;
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('[fetchWithRetry] Could not parse 401 error:', e);
+                        }
+                    }
 
                     // If server returns 5xx or network error, retry
                     if (response.status >= 500 && attempt < maxRetries) {
@@ -3860,6 +3926,11 @@
                     localStorage.setItem('token', token);
                     localStorage.setItem('user', JSON.stringify(currentUser));
 
+                    // 🔥 FIX: Save refresh token for automatic token renewal
+                    if (data.refreshToken) {
+                        localStorage.setItem('refreshToken', data.refreshToken);
+                    }
+
                     showChatApp();
                 } else {
                     showLoginError(data.error || 'Неверный логин или пароль');
@@ -4004,6 +4075,7 @@
         function logout() {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+            localStorage.removeItem('refreshToken');
             clearStoredReadState();
             token = null;
             currentUser = null;
