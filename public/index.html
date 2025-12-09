@@ -4803,8 +4803,10 @@
                     department: c.department
                 })));
 
+                // 🔥 FIX: Trust server unread_count - don't override with localStorage
+                // Server calculates unread_count based on last_read_at from database
                 syncUnreadMapFromChats();
-                restorePersistedReadState();
+                // restorePersistedReadState(); // ❌ REMOVED: caused counter reset on reload
                 rebuildDirectChatLookup();
                 const filterContacts = (list = []) => (Array.isArray(list) ? list : []).filter(u => Number(u?.id) !== Number(currentUser?.id));
                 contacts = contactsData || { departments: [], assistants: { users: [] }, admins: { users: [] } };
