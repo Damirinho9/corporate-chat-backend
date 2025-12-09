@@ -2161,6 +2161,133 @@
 
         ensureToastContainer();
 
+        // ==================== SECURITY: DevTools Protection for Operators ====================
+        // 🔒 Operators should not have access to browser console and developer tools
+        if (currentUser && currentUser.role === 'operator') {
+            // 1. Disable console methods
+            const noop = () => {};
+            window.console = {
+                log: noop,
+                warn: noop,
+                error: noop,
+                info: noop,
+                debug: noop,
+                trace: noop,
+                dir: noop,
+                dirxml: noop,
+                table: noop,
+                clear: noop,
+                assert: noop,
+                count: noop,
+                time: noop,
+                timeEnd: noop,
+                group: noop,
+                groupEnd: noop,
+                groupCollapsed: noop
+            };
+
+            // 2. Disable right-click (context menu)
+            document.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                return false;
+            }, { capture: true });
+
+            // 3. Block keyboard shortcuts for DevTools
+            document.addEventListener('keydown', (e) => {
+                // F12
+                if (e.key === 'F12') {
+                    e.preventDefault();
+                    return false;
+                }
+                // Ctrl+Shift+I (Inspect)
+                if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+                    e.preventDefault();
+                    return false;
+                }
+                // Ctrl+Shift+J (Console)
+                if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+                    e.preventDefault();
+                    return false;
+                }
+                // Ctrl+Shift+C (Inspect element)
+                if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+                    e.preventDefault();
+                    return false;
+                }
+                // Ctrl+U (View source)
+                if (e.ctrlKey && e.key === 'u') {
+                    e.preventDefault();
+                    return false;
+                }
+                // Cmd+Option+I (Mac)
+                if (e.metaKey && e.altKey && e.key === 'i') {
+                    e.preventDefault();
+                    return false;
+                }
+                // Cmd+Option+J (Mac Console)
+                if (e.metaKey && e.altKey && e.key === 'j') {
+                    e.preventDefault();
+                    return false;
+                }
+                // Cmd+Option+C (Mac Inspect)
+                if (e.metaKey && e.altKey && e.key === 'c') {
+                    e.preventDefault();
+                    return false;
+                }
+            }, { capture: true });
+
+            // 4. Detect if DevTools is already open and warn/logout
+            let devtoolsOpen = false;
+            const threshold = 160; // DevTools width/height threshold
+
+            const detectDevTools = () => {
+                const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+                const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+                const orientation = widthThreshold ? 'vertical' : 'horizontal';
+
+                if (widthThreshold || heightThreshold) {
+                    if (!devtoolsOpen) {
+                        devtoolsOpen = true;
+                        alert('⚠️ Доступ к инструментам разработчика запрещен для операторов.\n\nВы будете перенаправлены на страницу входа.');
+                        // Logout user
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('refreshToken');
+                        localStorage.removeItem('user');
+                        window.location.href = '/login.html';
+                    }
+                } else {
+                    devtoolsOpen = false;
+                }
+            };
+
+            // Check every 1 second
+            setInterval(detectDevTools, 1000);
+
+            // 5. Disable text selection and copy (optional - can be annoying)
+            // Uncomment if you want to prevent copying code
+            /*
+            document.addEventListener('selectstart', (e) => {
+                e.preventDefault();
+                return false;
+            });
+            document.addEventListener('copy', (e) => {
+                e.preventDefault();
+                return false;
+            });
+            */
+
+            // 6. Clear console every second (backup)
+            setInterval(() => {
+                if (window.console && window.console.clear) {
+                    try {
+                        window.console.clear();
+                    } catch (e) {}
+                }
+            }, 1000);
+
+            console.log('[Security] DevTools protection enabled for operator');
+        }
+
         // 🔥 FIX: Automatic token refresh when expired
         async function refreshAccessToken() {
             try {
