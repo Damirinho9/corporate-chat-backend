@@ -4538,10 +4538,15 @@
                 }
 
                 if (inActiveChat) {
-                    appendMessage(data.message);
-                    scrollToBottom();
+                    // 🔥 FIX: Only append messages from others via WebSocket
+                    // Own messages are already displayed locally (converted from temp)
                     if (!isOwn) {
+                        appendMessage(data.message);
+                        scrollToBottom();
                         markChatAsRead(incomingChatId);
+                    } else {
+                        // Own message - already displayed, just ensure scroll
+                        scrollToBottom();
                     }
                 } else if (incomingChatId && !isOwn) {
                     incrementUnreadCount(incomingChatId);
