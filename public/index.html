@@ -2151,6 +2151,17 @@
         const READ_STATE_KEY = 'chatReadState';
         const directChatByUser = new Map();
         const notificationUI = window.notificationUI || {};
+
+        // 🔥 FIX: Track locally processed message IDs to prevent duplication
+        const locallyProcessedMessageIds = new Set();
+
+        // Auto-clear Set every 5 minutes to prevent memory leak
+        setInterval(() => {
+            if (locallyProcessedMessageIds.size > 100) {
+                console.log('[Cleanup] Clearing processed message IDs set, size:', locallyProcessedMessageIds.size);
+                locallyProcessedMessageIds.clear();
+            }
+        }, 5 * 60 * 1000); // 5 minutes
         const {
             ensureToastContainer = () => {},
             showToast = () => {},
@@ -4533,6 +4544,16 @@
                 const inActiveChat = incomingChatId && Number(currentChatId) === incomingChatId;
                 const isOwn = Number(data.message?.user_id) === Number(currentUser?.id);
 
+                // 🔥 FIX: Skip if this message was already processed locally
+                if (isOwn && data.message?.id && locallyProcessedMessageIds.has(data.message.id)) {
+                    console.log('[WebSocket] Skipping duplicate own message:', data.message.id);
+                    // Still update chat list but don't append message
+                    if (incomingChatId) {
+                        updateChatLastMessage(incomingChatId, data.message);
+                    }
+                    return;
+                }
+
                 if (incomingChatId) {
                     updateChatLastMessage(incomingChatId, data.message);
                 }
@@ -6213,10 +6234,13 @@
                                     timeEl.textContent = serverTime;
                                 }
 
+                                // 🔥 FIX: Mark this message as locally processed to prevent WebSocket duplication
+                                locallyProcessedMessageIds.add(data.message.id);
+
                                 console.log('[sendMessage] Converted temp message to real:', data.message.id);
                             }
                         }
-                        // WebSocket will try to add the message but deduplication will prevent it
+                        // WebSocket will try to add the message but will skip if already in Set
                         scrollToBottom(true);
                     } else {
                         // Remove temp message on error
