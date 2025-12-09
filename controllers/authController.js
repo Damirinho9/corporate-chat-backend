@@ -93,6 +93,11 @@ const register = async (req, res) => {
             });
         }
 
+        // 🔥 FIX: Assistants get "Ассистенты" as their department
+        if (normalizedRole === 'assistant' && !trimmedDepartment) {
+            trimmedDepartment = 'Ассистенты';
+        }
+
         const needsDepartment = ['rop', 'operator', 'employee'].includes(normalizedRole);
 
         if (needsDepartment && !trimmedDepartment) {
@@ -166,17 +171,33 @@ const register = async (req, res) => {
                 [newUser.id]
             );
         } else if (normalizedRole === 'assistant') {
-            await query(
-                `INSERT INTO chat_participants (chat_id, user_id)
-                 SELECT c.id, $1
-                 FROM chats c
-                 WHERE c.name = 'Все ассистенты'
-                   AND NOT EXISTS (
-                       SELECT 1 FROM chat_participants cp
-                       WHERE cp.chat_id = c.id AND cp.user_id = $1
-                 )`,
-                [newUser.id]
+            // 🔥 FIX: Add to department chat "Ассистенты", create if doesn't exist
+            const deptChat = await query(
+                `SELECT id FROM chats WHERE type = 'department' AND (department = 'Ассистенты' OR name = 'Ассистенты')`,
+                []
             );
+
+            let assistantsChatId = deptChat.rows[0]?.id;
+
+            if (!assistantsChatId) {
+                // Create Ассистенты department chat if it doesn't exist
+                const created = await query(
+                    `INSERT INTO chats (name, type, department, created_by)
+                     VALUES ('Ассистенты', 'department', 'Ассистенты', $1)
+                     RETURNING id`,
+                    [newUser.id]
+                );
+                assistantsChatId = created.rows[0].id;
+            }
+
+            if (assistantsChatId) {
+                await query(
+                    `INSERT INTO chat_participants (chat_id, user_id)
+                     VALUES ($1, $2)
+                     ON CONFLICT DO NOTHING`,
+                    [assistantsChatId, newUser.id]
+                );
+            }
         } else if (normalizedRole === 'rop') {
             if (trimmedDepartment) {
                 const deptChat = await query(

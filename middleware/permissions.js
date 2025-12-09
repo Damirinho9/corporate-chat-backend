@@ -133,16 +133,26 @@ const canSendToChat = async (req, res, next) => {
 
         // For department chats, allow heads and operators of same department
         if (chat.type === 'department') {
-            // Allow ROP/head or operator of the same department
-            if ((['rop', 'head'].includes(userRole) || userRole === 'operator') && userDept === chat.department) {
-                return next();
-            }
             // Allow admin
             if (userRole === 'admin') {
                 return next();
             }
+
+            // 🔥 FIX: Allow assistants in "Ассистенты" department chat
+            if (userRole === 'assistant') {
+                const chatDeptLower = (chat.department || '').toLowerCase().trim();
+                if (chatDeptLower === 'ассистенты' || chatDeptLower === 'assistants') {
+                    return next();
+                }
+            }
+
+            // Allow ROP/head or operator of the same department
+            if ((['rop', 'head'].includes(userRole) || userRole === 'operator') && userDept === chat.department) {
+                return next();
+            }
+
             // Deny others
-            return res.status(403).json({ 
+            return res.status(403).json({
                 error: 'Only department members can send messages in department chats',
                 code: 'DEPARTMENT_ONLY'
             });
