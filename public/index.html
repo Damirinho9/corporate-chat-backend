@@ -4570,9 +4570,24 @@
             });
 
             socket.on('new_message', (data) => {
+                console.log('[Socket] 📨 Received new_message event:', {
+                    chatId: data.chatId,
+                    chat_id: data.chat_id,
+                    messageId: data.message?.id,
+                    sender: data.message?.user_name,
+                    content: data.message?.content?.substring(0, 50)
+                });
+
                 const incomingChatId = Number(data.chatId ?? data.chat_id ?? data.message?.chat_id);
                 const inActiveChat = incomingChatId && Number(currentChatId) === incomingChatId;
                 const isOwn = Number(data.message?.user_id) === Number(currentUser?.id);
+
+                console.log('[Socket] Message routing:', {
+                    incomingChatId,
+                    currentChatId,
+                    inActiveChat,
+                    isOwn
+                });
 
                 if (incomingChatId) {
                     updateChatLastMessage(incomingChatId, data.message);
