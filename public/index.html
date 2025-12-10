@@ -6033,7 +6033,7 @@
                             <span>Ответить</span>
                         </div>
                         ${(isOwn || currentUser.role === 'admin') && message.content ? `
-                        <div class="dropdown-item" data-permission="editOwnMessages" onclick="editMessage(${message.id}, '${escapeHtml(message.content || '').replace(/'/g, "\\'")}', '${message.created_at}'); closeAllMenus();">
+                        <div class="dropdown-item" data-permission="edit_own_messages" onclick="editMessage(${message.id}, '${escapeHtml(message.content || '').replace(/'/g, "\\'")}', '${message.created_at}'); closeAllMenus();">
                             <span>✏️</span>
                             <span>Редактировать</span>
                         </div>
