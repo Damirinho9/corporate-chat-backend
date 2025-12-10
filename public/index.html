@@ -6039,7 +6039,7 @@
                             <span>↩️</span>
                             <span>Ответить</span>
                         </div>
-                        ${isOwn && message.content ? `
+                        ${(isOwn || currentUser.role === 'admin') && message.content ? `
                         <div class="dropdown-item" data-permission="edit_own_message" onclick="editMessage(${message.id}, '${escapeHtml(message.content || '').replace(/'/g, "\\'")}', '${message.created_at}'); closeAllMenus();">
                             <span>✏️</span>
                             <span>Редактировать</span>
