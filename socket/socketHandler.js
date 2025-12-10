@@ -88,16 +88,23 @@ const initializeSocket = (server) => {
         // Get user's chats and join rooms
         try {
             const chatsResult = await query(
-                `SELECT DISTINCT c.id 
+                `SELECT DISTINCT c.id
                  FROM chats c
                  JOIN chat_participants cp ON c.id = cp.chat_id
                  WHERE cp.user_id = $1`,
                 [userId]
             );
 
+            const chatIds = chatsResult.rows.map(c => c.id);
+            console.log(`[WebSocket] 🚪 User ${socket.user.name} (${userId}) joining ${chatIds.length} rooms:`, chatIds);
+
             chatsResult.rows.forEach(chat => {
-                socket.join(`chat_${chat.id}`);
+                const roomName = `chat_${chat.id}`;
+                socket.join(roomName);
+                console.log(`[WebSocket] ✅ User ${userId} joined room "${roomName}"`);
             });
+
+            console.log(`[WebSocket] 📋 Total rooms for user ${userId}:`, Array.from(socket.rooms));
 
             // Notify others that user is online
             socket.broadcast.emit('user_online', {
@@ -1208,8 +1215,31 @@ const initializeSocket = (server) => {
 };
 
 const emitToChat = (chatId, event, payload) => {
-    if (!ioInstance) return;
-    ioInstance.to(`chat_${chatId}`).emit(event, payload);
+    if (!ioInstance) {
+        console.error(`[WebSocket] ❌ emitToChat failed: ioInstance is null`);
+        return;
+    }
+
+    const roomName = `chat_${chatId}`;
+
+    // 🔥 DEBUG: Check how many sockets are in the room
+    const room = ioInstance.sockets.adapter.rooms.get(roomName);
+    const socketsInRoom = room ? room.size : 0;
+
+    console.log(`[WebSocket] 📡 Emitting "${event}" to room "${roomName}":`, {
+        socketsInRoom,
+        payloadSize: JSON.stringify(payload).length,
+        messageId: payload.message?.id,
+        sender: payload.message?.user_name
+    });
+
+    if (socketsInRoom === 0) {
+        console.warn(`[WebSocket] ⚠️ No sockets in room "${roomName}" - event will not be delivered!`);
+    }
+
+    ioInstance.to(roomName).emit(event, payload);
+
+    console.log(`[WebSocket] ✅ Event "${event}" emitted to ${socketsInRoom} sockets in room "${roomName}"`);
 };
 
 // Get online users count

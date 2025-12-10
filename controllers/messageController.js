@@ -312,10 +312,20 @@ const sendMessage = async (req, res) => {
 
         const payload = completeMessage.rows[0];
 
+        // 🔥 DEBUG: Log before emitting WebSocket event
+        console.log(`[WebSocket] 📤 Emitting new_message to chat_${chatId}:`, {
+            chatId: Number(chatId),
+            messageId: payload.id,
+            sender: payload.user_name,
+            content: payload.content?.substring(0, 50)
+        });
+
         emitToChat(chatId, 'new_message', {
             chatId: Number(chatId),
             message: payload
         });
+
+        console.log(`[WebSocket] ✅ new_message emitted to chat_${chatId}`);
 
         res.status(201).json({
             message: 'Message sent successfully',
