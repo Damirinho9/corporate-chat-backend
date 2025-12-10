@@ -6269,31 +6269,20 @@
                     }
 
                     if (data.message) {
-                        // 🔥 FIX: Convert temp message to real message instead of removing
-                        // This ensures message appears immediately even if WebSocket is slow/fails
+                        // 🔥 FIX: Remove temp message and append real message with full functionality
+                        // This ensures the message has all features (3-dot menu, edit, etc.)
                         if (tempMessageId) {
                             const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                             if (tempEl) {
-                                // Update temp message with real ID and remove "sending" state
-                                tempEl.removeAttribute('data-message-id');
-                                tempEl.setAttribute('data-real-message-id', data.message.id);
-                                tempEl.classList.remove('sending');
-
-                                // Update message time to server time
-                                const timeEl = tempEl.querySelector('.message-time');
-                                if (timeEl && data.message.created_at) {
-                                    const serverTime = new Date(data.message.created_at).toLocaleTimeString('ru-RU', {
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                    });
-                                    timeEl.textContent = serverTime;
-                                }
-
-                                console.log('[sendMessage] Converted temp message to real:', data.message.id);
+                                tempEl.remove();
+                                console.log('[sendMessage] Removed temp message:', tempMessageId);
                             }
                         }
-                        // WebSocket deduplication will prevent duplicates via content check
+
+                        // Add the real message with full functionality (menu, edit, etc.)
+                        appendMessage(data.message);
                         scrollToBottom(true);
+                        console.log('[sendMessage] Added real message:', data.message.id);
                     } else {
                         // Remove temp message on error
                         if (tempMessageId) {
