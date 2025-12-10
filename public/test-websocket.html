@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test - Corporate Chat</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+        }
+        .log-entry.info {
+            color: #0c5460;
+        }
+        .log-entry.success {
+            color: #155724;
+            font-weight: bold;
+        }
+        .log-entry.error {
+            color: #721c24;
+            font-weight: bold;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 WebSocket Diagnostics</h1>
+
+        <div class="test-section">
+            <h2>1. Подключение к WebSocket</h2>
+            <div id="connectionStatus" class="status pending">⏳ Не подключено</div>
+            <div>
+                <label>
+                    Token (из localStorage):
+                    <input type="text" id="tokenInput" placeholder="Автоматически заполнится">
+                </label>
+            </div>
+            <button id="connectBtn" onclick="connectWebSocket()">Подключиться</button>
+            <button id="disconnectBtn" onclick="disconnectWebSocket()" disabled>Отключиться</button>
+        </div>
+
+        <div class="test-section">
+            <h2>2. Тест отправки сообщения</h2>
+            <div id="sendStatus" class="status pending">⏳ Ожидание подключения</div>
+            <div>
+                <label>
+                    Chat ID:
+                    <input type="number" id="chatIdInput" value="2" placeholder="2">
+                </label>
+            </div>
+            <div>
+                <label>
+                    Текст сообщения:
+                    <input type="text" id="messageInput" value="🧪 Автотест WebSocket" placeholder="Тестовое сообщение">
+                </label>
+            </div>
+            <button id="sendBtn" onclick="sendTestMessage()" disabled>Отправить тестовое сообщение</button>
+        </div>
+
+        <div class="test-section">
+            <h2>3. Полученные события WebSocket</h2>
+            <div id="eventsCount" class="status pending">📊 Событий получено: 0</div>
+            <button onclick="clearLog()">Очистить лог</button>
+            <div id="eventsLog" class="log">
+                <div class="log-entry info">Лог событий появится здесь...</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>4. Автотест (отправка + проверка получения)</h2>
+            <div id="autoTestStatus" class="status pending">⏳ Нажмите кнопку для запуска</div>
+            <button id="autoTestBtn" onclick="runAutoTest()" disabled>🚀 Запустить автотест</button>
+            <div id="autoTestDetails" style="margin-top: 10px; font-size: 14px;"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket = null;
+        let eventsReceived = 0;
+        const API_URL = window.location.origin;
+
+        // Get token from localStorage
+        const token = localStorage.getItem('token');
+        document.getElementById('tokenInput').value = token ? token.substring(0, 20) + '...' : 'НЕ НАЙДЕН';
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('eventsLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString('ru-RU');
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('eventsLog').innerHTML = '<div class="log-entry info">Лог очищен...</div>';
+            eventsReceived = 0;
+            updateEventsCount();
+        }
+
+        function updateEventsCount() {
+            document.getElementById('eventsCount').innerHTML = `📊 Событий получено: ${eventsReceived}`;
+        }
+
+        function setStatus(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.className = `status ${type}`;
+        }
+
+        function connectWebSocket() {
+            if (!token) {
+                alert('Token не найден в localStorage. Войдите в систему сначала.');
+                return;
+            }
+
+            log('🔌 Подключение к WebSocket...', 'info');
+            setStatus('connectionStatus', '⏳ Подключение...', 'pending');
+
+            socket = io(API_URL, {
+                auth: { token },
+                transports: ['polling', 'websocket'],
+                upgrade: true,
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5
+            });
+
+            socket.on('connect', () => {
+                log('✅ WebSocket подключен! Socket ID: ' + socket.id, 'success');
+                setStatus('connectionStatus', '✅ Подключено (ID: ' + socket.id + ')', 'success');
+                setStatus('sendStatus', '✅ Готов к отправке', 'success');
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('autoTestBtn').disabled = false;
+            });
+
+            socket.on('disconnect', (reason) => {
+                log('❌ WebSocket отключен: ' + reason, 'error');
+                setStatus('connectionStatus', '❌ Отключено: ' + reason, 'error');
+                setStatus('sendStatus', '⏳ Ожидание подключения', 'pending');
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                document.getElementById('sendBtn').disabled = true;
+                document.getElementById('autoTestBtn').disabled = true;
+            });
+
+            socket.on('connect_error', (error) => {
+                log('❌ Ошибка подключения: ' + error.message, 'error');
+                setStatus('connectionStatus', '❌ Ошибка: ' + error.message, 'error');
+            });
+
+            // Listen for new_message events
+            socket.on('new_message', (data) => {
+                eventsReceived++;
+                updateEventsCount();
+                log(`📨 new_message: chatId=${data.chatId}, messageId=${data.message?.id}, sender=${data.message?.user_name}, content="${data.message?.content?.substring(0, 50)}"`, 'success');
+            });
+
+            // Listen for other events
+            socket.on('user_typing', (data) => {
+                eventsReceived++;
+                updateEventsCount();
+                log(`⌨️ user_typing: chatId=${data.chatId}, user=${data.userName}`, 'info');
+            });
+
+            socket.on('message_deleted', (data) => {
+                eventsReceived++;
+                updateEventsCount();
+                log(`🗑️ message_deleted: messageId=${data.messageId}`, 'info');
+            });
+
+            socket.on('message_read', (data) => {
+                eventsReceived++;
+                updateEventsCount();
+                log(`👁️ message_read: chatId=${data.chatId}, userId=${data.userId}`, 'info');
+            });
+        }
+
+        function disconnectWebSocket() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                log('🔌 Отключено вручную', 'info');
+            }
+        }
+
+        async function sendTestMessage() {
+            const chatId = document.getElementById('chatIdInput').value;
+            const content = document.getElementById('messageInput').value;
+
+            if (!chatId || !content) {
+                alert('Введите Chat ID и текст сообщения');
+                return;
+            }
+
+            log(`📤 Отправка сообщения в чат ${chatId}: "${content}"`, 'info');
+            setStatus('sendStatus', '⏳ Отправка...', 'pending');
+
+            try {
+                const response = await fetch(`${API_URL}/api/chats/${chatId}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    log(`✅ Сообщение отправлено! ID: ${data.message?.id}`, 'success');
+                    setStatus('sendStatus', '✅ Сообщение отправлено (ID: ' + data.message?.id + ')', 'success');
+                } else {
+                    log(`❌ Ошибка отправки: ${data.error || response.statusText}`, 'error');
+                    setStatus('sendStatus', '❌ Ошибка: ' + (data.error || response.statusText), 'error');
+                }
+            } catch (err) {
+                log(`❌ Ошибка сети: ${err.message}`, 'error');
+                setStatus('sendStatus', '❌ Ошибка сети', 'error');
+            }
+        }
+
+        async function runAutoTest() {
+            const detailsDiv = document.getElementById('autoTestDetails');
+            detailsDiv.innerHTML = '';
+
+            log('🚀 ========== АВТОТЕСТ ЗАПУЩЕН ==========', 'success');
+            setStatus('autoTestStatus', '⏳ Выполняется автотест...', 'pending');
+
+            const chatId = document.getElementById('chatIdInput').value;
+            const testMessage = `🧪 Автотест ${new Date().toLocaleTimeString('ru-RU')}`;
+
+            // Step 1: Count events before
+            const eventsBefore = eventsReceived;
+            log(`📊 События ДО отправки: ${eventsBefore}`, 'info');
+
+            // Step 2: Send message
+            log(`📤 Отправка тестового сообщения...`, 'info');
+            try {
+                const response = await fetch(`${API_URL}/api/chats/${chatId}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: testMessage })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Ошибка отправки');
+                }
+
+                log(`✅ Сообщение отправлено! ID: ${data.message?.id}`, 'success');
+
+                // Step 3: Wait for WebSocket event
+                log(`⏳ Ожидание WebSocket события new_message (3 секунды)...`, 'info');
+
+                await new Promise(resolve => setTimeout(resolve, 3000));
+
+                const eventsAfter = eventsReceived;
+                const newEvents = eventsAfter - eventsBefore;
+
+                log(`📊 События ПОСЛЕ отправки: ${eventsAfter} (новых: ${newEvents})`, 'info');
+
+                // Step 4: Результат
+                if (newEvents > 0) {
+                    log(`✅ АВТОТЕСТ ПРОЙДЕН! Получено событий: ${newEvents}`, 'success');
+                    setStatus('autoTestStatus', `✅ ТЕСТ ПРОЙДЕН! Получено ${newEvents} событий`, 'success');
+                    detailsDiv.innerHTML = `
+                        <div style="color: green;">
+                            ✅ WebSocket работает правильно!<br>
+                            📨 Сообщение успешно отправлено и получено через WebSocket<br>
+                            🎉 Real-time обновления функционируют
+                        </div>
+                    `;
+                } else {
+                    log(`❌ АВТОТЕСТ ПРОВАЛЕН! WebSocket события НЕ ПОЛУЧЕНЫ`, 'error');
+                    setStatus('autoTestStatus', `❌ ТЕСТ ПРОВАЛЕН! События не получены`, 'error');
+                    detailsDiv.innerHTML = `
+                        <div style="color: red;">
+                            ❌ WebSocket НЕ работает!<br>
+                            📤 Сообщение отправлено через HTTP API успешно<br>
+                            ❌ НО событие new_message НЕ получено через WebSocket<br>
+                            <br>
+                            <strong>Возможные причины:</strong><br>
+                            • Сервер не отправляет события через socket.io<br>
+                            • Пользователь не добавлен в комнату чата (socket.join)<br>
+                            • Проблема с Nginx proxy для /socket.io/<br>
+                            • Socket.io на сервере не эмитит события<br>
+                        </div>
+                    `;
+                }
+
+            } catch (err) {
+                log(`❌ АВТОТЕСТ ОШИБКА: ${err.message}`, 'error');
+                setStatus('autoTestStatus', `❌ Ошибка: ${err.message}`, 'error');
+            }
+
+            log('🚀 ========== АВТОТЕСТ ЗАВЕРШЕН ==========', 'success');
+        }
+
+        // Auto-connect on page load if token exists
+        window.addEventListener('load', () => {
+            if (token) {
+                log('ℹ️ Token найден, автоподключение...', 'info');
+                setTimeout(connectWebSocket, 500);
+            } else {
+                log('❌ Token не найден в localStorage. Войдите в систему.', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
