@@ -3954,17 +3954,10 @@
         }
 
         async function editMessage(messageId, currentContent, createdAt) {
-            // Check 5-minute window (only for non-admins)
-            if (currentUser.role !== 'admin') {
-                const created = new Date(createdAt);
-                const now = new Date();
-                const diffMinutes = (now - created) / 1000 / 60;
-
-                if (diffMinutes > 5) {
-                    showToast('Сообщение можно редактировать только в течение 5 минут', 'error');
-                    return;
-                }
-            }
+            // 🔥 FIX: Removed client-side time check - rely on server validation instead
+            // Problem: Client time can be out of sync with server time due to timezone or clock differences
+            // Solution: Always allow edit attempt, server will return proper error if time window expired
+            // Server checks time correctly in controllers/messageController.js lines 373-388
 
             const newContent = prompt('Редактировать сообщение:', currentContent);
 
