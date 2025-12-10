@@ -3953,6 +3953,53 @@
             }
         }
 
+        async function editMessage(messageId, currentContent, createdAt) {
+            // Check 5-minute window (only for non-admins)
+            if (currentUser.role !== 'admin') {
+                const created = new Date(createdAt);
+                const now = new Date();
+                const diffMinutes = (now - created) / 1000 / 60;
+
+                if (diffMinutes > 5) {
+                    showToast('Сообщение можно редактировать только в течение 5 минут', 'error');
+                    return;
+                }
+            }
+
+            const newContent = prompt('Редактировать сообщение:', currentContent);
+
+            if (newContent === null || newContent.trim() === '') {
+                return; // Cancelled or empty
+            }
+
+            if (newContent.trim() === currentContent.trim()) {
+                showToast('Сообщение не изменилось', 'info');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/messages/${messageId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: newContent.trim() })
+                });
+
+                if (response.ok) {
+                    showToast('Сообщение отредактировано', 'success');
+                    await loadMessages(currentChatId);
+                } else {
+                    const error = await response.json();
+                    showToast(error.error || 'Ошибка редактирования', 'error');
+                }
+            } catch (err) {
+                console.error('[editMessage] Error:', err);
+                showToast('Ошибка редактирования', 'error');
+            }
+        }
+
         async function deleteMessage(messageId) {
             if (!confirm('Удалить это сообщение?')) {
                 return;
@@ -5992,6 +6039,12 @@
                             <span>↩️</span>
                             <span>Ответить</span>
                         </div>
+                        ${isOwn && message.content ? `
+                        <div class="dropdown-item" data-permission="edit_own_message" onclick="editMessage(${message.id}, '${escapeHtml(message.content || '').replace(/'/g, "\\'")}', '${message.created_at}'); closeAllMenus();">
+                            <span>✏️</span>
+                            <span>Редактировать</span>
+                        </div>
+                        ` : ''}
                         <div class="dropdown-item" onclick="showEmojiPickerInMenu(${message.id}, event)">
                             <span>😊</span>
                             <span>Реакция</span>
