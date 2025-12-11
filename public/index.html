@@ -4459,9 +4459,38 @@
             } catch (error) {
                 console.error('[togglePushNotifications] Error:', error);
                 showToast('Ошибка: ' + error.message, 'error');
+
+                // 🔥 DEBUG: Log state before calling updateNotificationButton
+                console.log('[Push] Catch block - Before updateNotificationButton:', {
+                    errorName: error.name,
+                    errorMessage: error.message,
+                    permission: Notification.permission,
+                    hasSubscription: !!pushSubscription,
+                    btnDisabled: btn?.disabled,
+                    btnOpacity: btn?.style.opacity
+                });
+
                 // Reset button state on error
                 updateNotificationButton();
+
+                // 🔥 DEBUG: Log state after calling updateNotificationButton
+                console.log('[Push] Catch block - After updateNotificationButton:', {
+                    btnDisabled: btn?.disabled,
+                    btnOpacity: btn?.style.opacity,
+                    btnText: btn?.textContent
+                });
             } finally {
+                // 🔥 DEBUG: Log state before restoring button
+                console.log('[Push] Finally block - Before restore:', {
+                    isTogglingNotifications,
+                    permission: Notification.permission,
+                    btnExists: !!btn,
+                    btnDisabled: btn?.disabled,
+                    btnOpacity: btn?.style.opacity,
+                    btnText: btn?.textContent,
+                    hasSubscription: !!pushSubscription
+                });
+
                 isTogglingNotifications = false;
 
                 // 🔥 FIX: Don't override button state set by updateNotificationButton()
@@ -4469,11 +4498,21 @@
                 if (btn && Notification.permission !== 'denied') {
                     btn.disabled = false;
                     btn.style.opacity = '1';
+                    console.log('[Push] Finally - Button restored to clickable');
                 } else if (btn && Notification.permission === 'denied') {
                     // Keep button disabled and dimmed if permission is denied
                     btn.disabled = true;
                     btn.style.opacity = '0.5';
+                    console.log('[Push] Finally - Button kept disabled (permission denied)');
                 }
+
+                // 🔥 DEBUG: Log state after restoring button
+                console.log('[Push] Finally block - After restore:', {
+                    isTogglingNotifications,
+                    btnDisabled: btn?.disabled,
+                    btnOpacity: btn?.style.opacity,
+                    btnText: btn?.textContent
+                });
             }
         }
 
