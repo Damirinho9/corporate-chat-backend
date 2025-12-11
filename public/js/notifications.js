@@ -91,55 +91,71 @@
         }
     }
 
-    let audioElement = null;
-    // 🔥 FIX: Use short MP3 notification sound (cross-browser compatible)
-    // This is a valid 0.15-second beep sound encoded as base64 MP3
-    const SOUND_SRC = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhAC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7v////////////////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/7kGQAAANUMEoFPeACNQV40KEYABEY41g5vAAA9RjpZxRTAImU+W8eshaFpAQgALAAYALATx/nYDYCMJ0HITQYYA7AH4c7MoGsnCMU5pnW+OQnBcDrQ9Xx7w37/D+PimYavV8elKUpT5fqx5VjV6vZ38eJR48eRKa9KUp7v396UgPHkQwMAAAAAA//8MAOp39nAgQmSqe6nShjWaDKmRLHVczmWWqMCxiAq4tmDmPGD9R6IjBTY3RtVTWxCv6y11NTyqiNSEBQBMTbdbfmPjsCnn';
+    // 🔥 FIX: Use Web Audio API to generate beep sound (works everywhere)
+    let audioContext = null;
 
+    function initAudioContext() {
+        if (!audioContext && (window.AudioContext || window.webkitAudioContext)) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        return audioContext;
+    }
 
-    function getAudioElement() {
-        if (!root) return null;
-        if (audioElement) return audioElement;
-        if (typeof Audio === 'undefined') return null;
+    function playNotificationSound() {
         try {
-            audioElement = new Audio(SOUND_SRC);
-            audioElement.preload = 'auto';
-            audioElement.volume = 0.4;
-            // 🔥 FIX: Handle load errors gracefully
-            audioElement.addEventListener('error', (e) => {
-                console.warn('[notificationUI] Audio load error:', e);
-            });
-            return audioElement;
+            const ctx = initAudioContext();
+            if (!ctx) {
+                console.warn('[notificationUI] Web Audio API not supported');
+                return Promise.resolve(false);
+            }
+
+            // Resume context if suspended (required for autoplay policy)
+            if (ctx.state === 'suspended') {
+                return ctx.resume().then(() => {
+                    return playBeep(ctx);
+                }).catch(err => {
+                    console.warn('[notificationUI] Cannot resume audio context:', err.message);
+                    return false;
+                });
+            }
+
+            return playBeep(ctx);
         } catch (err) {
-            console.warn('[notificationUI] Audio creation error:', err);
-            return null;
+            console.warn('[notificationUI] Sound error:', err.message || err);
+            return Promise.resolve(false);
         }
     }
 
-    async function playNotificationSound() {
-        const audio = getAudioElement();
-        if (!audio) return false;
+    function playBeep(ctx) {
         try {
-            // 🔥 FIX: Reset to beginning before playing
-            audio.currentTime = 0;
+            // Create oscillator (beep generator)
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
 
-            // 🔥 FIX: Play with promise handling for better cross-browser support
-            const playPromise = audio.play();
-            if (playPromise !== undefined) {
-                await playPromise;
-                return true;
-            } else {
-                // Old browsers that don't return a promise
-                return true;
-            }
+            // Connect: oscillator -> gain -> output
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            // Configure beep sound
+            oscillator.frequency.value = 800; // 800 Hz tone
+            oscillator.type = 'sine'; // Smooth sine wave
+
+            // Envelope: fade in and out to avoid clicks
+            const now = ctx.currentTime;
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01); // Fade in
+            gainNode.gain.linearRampToValueAtTime(0.3, now + 0.08); // Hold
+            gainNode.gain.linearRampToValueAtTime(0, now + 0.12); // Fade out
+
+            // Play for 120ms
+            oscillator.start(now);
+            oscillator.stop(now + 0.12);
+
+            console.log('[notificationUI] Beep sound played');
+            return Promise.resolve(true);
         } catch (err) {
-            // NotAllowedError means user hasn't interacted with the page yet
-            if (err.name === 'NotAllowedError') {
-                console.log('[notificationUI] Sound autoplay blocked (user interaction required)');
-            } else {
-                console.warn('[notificationUI] Cannot play sound:', err.message || err);
-            }
-            return false;
+            console.warn('[notificationUI] Beep generation error:', err.message);
+            return Promise.resolve(false);
         }
     }
 
