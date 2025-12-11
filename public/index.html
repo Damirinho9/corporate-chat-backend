@@ -4288,13 +4288,29 @@
 
             if (soundEnabled) {
                 btn.textContent = '🔊';
-                btn.title = 'Звуковые уведомления включены (клик - выключить)';
+                btn.title = 'Звук включен (клик - выключить, двойной клик - тест)';
                 btn.style.opacity = '1';
             } else {
                 btn.textContent = '🔇';
-                btn.title = 'Звуковые уведомления выключены (клик - включить)';
+                btn.title = 'Звук выключен (клик - включить, двойной клик - тест)';
                 btn.style.opacity = '0.6';
             }
+        }
+
+        function testSound() {
+            console.log('[Sound] Testing notification sound...');
+            playNotificationSound().then((played) => {
+                if (played) {
+                    console.log('[Sound] ✅ Test sound played successfully');
+                    showToast('✅ Звук работает!', 'success');
+                } else {
+                    console.log('[Sound] ⚠️ Test sound could not play');
+                    showToast('⚠️ Не удалось воспроизвести звук. Нажмите на страницу и попробуйте еще раз.', 'warning');
+                }
+            }).catch((err) => {
+                console.warn('[Sound] ❌ Test sound error:', err);
+                showToast('❌ Ошибка воспроизведения звука', 'error');
+            });
         }
 
         // Initialize sound button on page load
@@ -6513,6 +6529,7 @@
             document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
             document.getElementById('logoutBtn')?.addEventListener('click', logout);
             document.getElementById('soundBtn')?.addEventListener('click', toggleSoundNotifications);
+            document.getElementById('soundBtn')?.addEventListener('dblclick', testSound);
             document.getElementById('notificationsBtn')?.addEventListener('click', togglePushNotifications);
             document.getElementById('sendBtn')?.addEventListener('click', sendMessage);
             document.getElementById('mobileBackBtn')?.addEventListener('click', closeMobileChat);
