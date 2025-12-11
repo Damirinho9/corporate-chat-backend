@@ -1985,6 +1985,7 @@
                     </div>
                     <div class="header-actions">
                         <button class="icon-btn" id="adminBtn" title="Админ-панель" style="display:none">🛠️</button>
+                        <button class="icon-btn" id="soundBtn" title="Звуковые уведомления включены">🔊</button>
                         <button class="icon-btn" id="notificationsBtn" title="Включить уведомления" style="display:none">🔔</button>
                         <button class="icon-btn" id="themeToggle" title="Тема">🌓</button>
                         <button class="icon-btn" id="logoutBtn" title="Выход">🚪</button>
@@ -4269,11 +4270,48 @@
             initPushNotifications();
         }
 
+        // ==================== SOUND NOTIFICATIONS ====================
+        // Sound enabled by default for all browsers
+        let soundEnabled = localStorage.getItem('soundNotifications') !== 'false';
+
+        function toggleSoundNotifications() {
+            soundEnabled = !soundEnabled;
+            localStorage.setItem('soundNotifications', soundEnabled);
+            updateSoundButton();
+            console.log('[Sound] Notifications', soundEnabled ? 'enabled' : 'disabled');
+            showToast(soundEnabled ? '🔊 Звук включен' : '🔇 Звук выключен', 'success');
+        }
+
+        function updateSoundButton() {
+            const btn = document.getElementById('soundBtn');
+            if (!btn) return;
+
+            if (soundEnabled) {
+                btn.textContent = '🔊';
+                btn.title = 'Звуковые уведомления включены (клик - выключить)';
+                btn.style.opacity = '1';
+            } else {
+                btn.textContent = '🔇';
+                btn.title = 'Звуковые уведомления выключены (клик - включить)';
+                btn.style.opacity = '0.6';
+            }
+        }
+
+        // Initialize sound button on page load
+        updateSoundButton();
+
         // ==================== PUSH NOTIFICATIONS ====================
         let pushSubscription = null;
         let swRegistration = null;
 
         async function initPushNotifications() {
+            // 🔥 FIX: Hide Push button for Opera (not supported)
+            const isOpera = navigator.userAgent.includes('OPR/') || navigator.userAgent.includes('Opera/');
+            if (isOpera) {
+                console.log('[Push] Opera detected - Push notifications not supported, using sound notifications only');
+                return;
+            }
+
             // Check if push is supported
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
                 console.log('[Push] Push notifications not supported');
@@ -4298,7 +4336,7 @@
                 // Update UI
                 updateNotificationButton();
 
-                // Show button
+                // Show button (only for non-Opera browsers)
                 const notifBtn = document.getElementById('notificationsBtn');
                 if (notifBtn) {
                     notifBtn.style.display = 'block';
@@ -4700,16 +4738,20 @@
                     const limitedPreview = preview.slice(0, 120);
                     showToast(`${sender}: ${limitedPreview}`, 'info', { duration: 4500 });
 
-                    // 🔥 FIX: Play sound with error handling
-                    playNotificationSound().then((played) => {
-                        if (played) {
-                            console.log('[Sound] Message notification played');
-                        } else {
-                            console.log('[Sound] Message notification could not play (user interaction required)');
-                        }
-                    }).catch((err) => {
-                        console.warn('[Sound] Message notification error:', err);
-                    });
+                    // 🔥 FIX: Play sound only if enabled
+                    if (soundEnabled) {
+                        playNotificationSound().then((played) => {
+                            if (played) {
+                                console.log('[Sound] Message notification played');
+                            } else {
+                                console.log('[Sound] Message notification could not play (user interaction required)');
+                            }
+                        }).catch((err) => {
+                            console.warn('[Sound] Message notification error:', err);
+                        });
+                    } else {
+                        console.log('[Sound] Notifications disabled by user');
+                    }
 
                     requestNotificationPermission().then(() => {
                         showBrowserNotification({
@@ -6470,6 +6512,7 @@
 
             document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
             document.getElementById('logoutBtn')?.addEventListener('click', logout);
+            document.getElementById('soundBtn')?.addEventListener('click', toggleSoundNotifications);
             document.getElementById('notificationsBtn')?.addEventListener('click', togglePushNotifications);
             document.getElementById('sendBtn')?.addEventListener('click', sendMessage);
             document.getElementById('mobileBackBtn')?.addEventListener('click', closeMobileChat);
