@@ -4276,17 +4276,24 @@
         async function initPushNotifications() {
             // Check if push is supported
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-                console.log('Push notifications not supported');
+                console.log('[Push] Push notifications not supported');
                 return;
             }
 
             try {
                 // Register service worker
                 swRegistration = await navigator.serviceWorker.register('/sw.js');
-                console.log('Service Worker registered');
+                console.log('[Push] Service Worker registered');
 
                 // Check current subscription status
                 pushSubscription = await swRegistration.pushManager.getSubscription();
+
+                // 🔥 DEBUG: Log subscription status
+                console.log('[Push] Init - Subscription status:', {
+                    hasSubscription: !!pushSubscription,
+                    endpoint: pushSubscription?.endpoint?.substring(0, 50),
+                    permission: Notification.permission
+                });
 
                 // Update UI
                 updateNotificationButton();
@@ -4295,9 +4302,14 @@
                 const notifBtn = document.getElementById('notificationsBtn');
                 if (notifBtn) {
                     notifBtn.style.display = 'block';
+                    console.log('[Push] Button state after init:', {
+                        text: notifBtn.textContent,
+                        disabled: notifBtn.disabled,
+                        opacity: notifBtn.style.opacity
+                    });
                 }
             } catch (error) {
-                console.error('Push init error:', error);
+                console.error('[Push] Init error:', error);
             }
         }
 
@@ -4308,24 +4320,34 @@
             // 🔥 FIX: Add smooth transition for state changes
             btn.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
 
+            // 🔥 DEBUG: Log state before update
+            console.log('[Push] updateNotificationButton - State:', {
+                permission: Notification.permission,
+                hasSubscription: !!pushSubscription,
+                endpoint: pushSubscription?.endpoint?.substring(0, 50)
+            });
+
             if (Notification.permission === 'denied') {
                 btn.textContent = '🔕';
                 btn.title = 'Уведомления заблокированы';
                 btn.disabled = true;
                 btn.classList.remove('active');
                 btn.style.opacity = '0.5';
+                console.log('[Push] Button set to: DENIED (🔕 disabled)');
             } else if (pushSubscription) {
                 btn.textContent = '🔔';
                 btn.title = 'Уведомления включены (нажмите чтобы отключить)';
                 btn.classList.add('active');
                 btn.disabled = false;
                 btn.style.opacity = '1';
+                console.log('[Push] Button set to: ENABLED (🔔 active)');
             } else {
                 btn.textContent = '🔕';
                 btn.title = 'Включить уведомления';
                 btn.classList.remove('active');
                 btn.disabled = false;
                 btn.style.opacity = '1';
+                console.log('[Push] Button set to: DISABLED (🔕 clickable)');
             }
 
             // 🔥 FIX: Return the button state for use in finally block
@@ -4339,6 +4361,14 @@
         let isTogglingNotifications = false;
 
         async function togglePushNotifications() {
+            // 🔥 DEBUG: Log state at click
+            console.log('[Push] Toggle clicked - Current state:', {
+                hasSubscription: !!pushSubscription,
+                endpoint: pushSubscription?.endpoint?.substring(0, 50),
+                permission: Notification.permission,
+                buttonText: document.getElementById('notificationsBtn')?.textContent
+            });
+
             // 🔥 FIX: Prevent double clicks
             if (isTogglingNotifications) {
                 console.warn('[togglePushNotifications] Already processing...');
