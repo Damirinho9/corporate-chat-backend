@@ -5671,10 +5671,11 @@
             );
 
             const { sections: departmentSections, usedIds: usedDepartmentChatIds } = buildDepartmentSections(filteredDepartmentChats);
-            const remainingGroupChats = [
-                ...categorizedChats.groups,
-                ...categorizedChats.departments.filter(chat => !usedDepartmentChatIds.has(chat.id) && !assistantDepIds.has(chat.id))
-            ];
+            // 🔥 FIX: Separate department chats without linked department from group chats
+            const unmatchedDepartmentChats = categorizedChats.departments.filter(
+                chat => !usedDepartmentChatIds.has(chat.id) && !assistantDepIds.has(chat.id)
+            );
+            const remainingGroupChats = categorizedChats.groups;
             const directChats = categorizedChats.directs;
 
             // Функция отрисовки контакта (пользователя для создания чата)
@@ -5799,6 +5800,14 @@
                     });
 
                     html += `</div></div>`;
+                }
+
+                // 🔥 FIX: Show department chats without linked department in "ОТДЕЛЫ" section
+                if ((activeSectionFilter === 'all' || activeSectionFilter === 'Отделы') && unmatchedDepartmentChats.length > 0) {
+                    html += `<div class="chat-section">
+                                <h4>📂 Другие отделы</h4>
+                                <ul>${unmatchedDepartmentChats.map(chat => renderChatItem(chat)).join('')}</ul>
+                            </div>`;
                 }
 
                 if ((activeSectionFilter === 'all' || activeSectionFilter === 'Отделы') && remainingGroupChats.length > 0) {
