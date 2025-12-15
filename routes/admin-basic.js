@@ -325,6 +325,29 @@ router.post('/admin/chats', authenticateToken, async (req, res) => {
     }
 });
 
+// 🔧 TEMP: Fix chat type (admin only)
+router.post('/admin/fix-chat-type/:chatId', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin only' });
+        }
+
+        const { chatId } = req.params;
+        const { type } = req.body;
+
+        if (!['department', 'group', 'direct'].includes(type)) {
+            return res.status(400).json({ error: 'Invalid type. Must be: department, group, or direct' });
+        }
+
+        await query('UPDATE chats SET type = $1 WHERE id = $2', [type, chatId]);
+
+        res.json({ success: true, message: `Chat ${chatId} type changed to ${type}` });
+    } catch (err) {
+        console.error('Fix chat type error:', err);
+        res.status(500).json({ error: 'Failed to fix chat type' });
+    }
+});
+
 module.exports = router;
 
 // Update user (admin only)
