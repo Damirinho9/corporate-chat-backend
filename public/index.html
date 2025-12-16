@@ -6559,11 +6559,11 @@
             const container = document.getElementById('messagesContainer');
             if (!container) return;
 
-            const messages = container.querySelectorAll('.message-item');
+            const messages = container.querySelectorAll('.message');
             const searchLower = query.toLowerCase().trim();
 
             messages.forEach((msgEl) => {
-                const contentEl = msgEl.querySelector('.message-text');
+                const contentEl = msgEl.querySelector('.message-bubble');
                 if (!contentEl) return;
 
                 const originalText = contentEl.textContent || '';
