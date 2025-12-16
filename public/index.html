@@ -473,6 +473,99 @@
             background: rgba(255, 193, 7, 0.6);
         }
 
+        /* ==================== MENTIONS ==================== */
+        .mention {
+            background: rgba(var(--accent-rgb, 59, 130, 246), 0.1);
+            color: var(--accent);
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .mention:hover {
+            background: rgba(var(--accent-rgb, 59, 130, 246), 0.2);
+        }
+
+        .mentions-popup {
+            position: absolute;
+            bottom: 100%;
+            left: 20px;
+            right: 20px;
+            max-height: 300px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+            overflow-y: auto;
+            margin-bottom: 10px;
+            display: none;
+            z-index: 10;
+        }
+
+        .mentions-popup.active {
+            display: block;
+            animation: slideUp 0.2s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .mention-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: background 0.2s;
+        }
+
+        .mention-item:hover,
+        .mention-item.selected {
+            background: var(--bg-hover);
+        }
+
+        .mention-item-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .mention-item-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .mention-item-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .mention-item-role {
+            font-size: 12px;
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .chat-search {
             padding: 10px 15px;
             border-bottom: 1px solid var(--border);
@@ -2197,13 +2290,17 @@
                     </div>
                     <button class="reply-preview-close" onclick="cancelReply()">×</button>
                 </div>
-                
-                <div class="chat-input-container" id="chatInputContainer">
+
+                <div class="chat-input-container" id="chatInputContainer" style="position: relative;">
+                    <!-- Mentions Popup -->
+                    <div class="mentions-popup" id="mentionsPopup"></div>
+
                     <div class="chat-input-wrapper">
                         <div class="chat-input">
                             <button class="icon-btn" onclick="toggleFileUpload()" title="Прикрепить файл" id="attachBtn">📎</button>
                             <button class="icon-btn" onclick="toggleVoiceRecording()" title="Голосовое сообщение" id="voiceBtn" disabled>🎤</button>
                             <button class="icon-btn" onclick="openCreatePoll()" title="Создать опрос" id="pollBtn" disabled>📊</button>
+                            <button class="icon-btn" onclick="toggleMentions()" title="Упомянуть пользователя" id="mentionBtn" disabled>@</button>
                             <button class="icon-btn" onclick="startAudioCall()" title="Аудиозвонок" id="audioCallBtn" disabled>📞</button>
                             <button class="icon-btn" onclick="startVideoCall()" title="Видеозвонок" id="videoCallBtn" disabled>📹</button>
                             <textarea id="messageInput" placeholder="Выберите чат для начала общения..." rows="1" disabled></textarea>
@@ -3768,11 +3865,20 @@
             const audioHtml = renderAudioMessage(message);
             if (audioHtml) return audioHtml;
 
+            let content = '';
             if (message && message.content && typeof message.content === 'object' && typeof message.content.text === 'string') {
-                return escapeHtml(message.content.text);
+                content = message.content.text;
+            } else {
+                content = message?.content || '';
             }
 
-            return escapeHtml(message?.content || '');
+            // Escape HTML first
+            content = escapeHtml(content);
+
+            // Highlight @mentions (find @Username patterns and wrap in span)
+            content = content.replace(/@([\p{L}\p{M}\p{N}_]+(?:\s+[\p{L}\p{M}\p{N}_]+)*)/gu, '<span class="mention">@$1</span>');
+
+            return content;
         }
 
         function renderMessageFile(msg) {
@@ -6247,6 +6353,7 @@
                 const attachBtn = document.getElementById('attachBtn');
                 const voiceBtn = document.getElementById('voiceBtn');
                 const pollBtn = document.getElementById('pollBtn');
+                const mentionBtn = document.getElementById('mentionBtn');
                 const audioCallBtn = document.getElementById('audioCallBtn');
                 const videoCallBtn = document.getElementById('videoCallBtn');
 
@@ -6256,6 +6363,7 @@
                 attachBtn.disabled = false;
                 if (voiceBtn) voiceBtn.disabled = false;
                 if (pollBtn) pollBtn.disabled = false;
+                if (mentionBtn) mentionBtn.disabled = false;
                 if (audioCallBtn) audioCallBtn.disabled = false;
                 if (videoCallBtn) videoCallBtn.disabled = false;
 
@@ -6792,6 +6900,206 @@
             return colors[hash % colors.length];
         }
 
+        // ==================== MENTIONS (@) ====================
+        let mentionsState = {
+            isActive: false,
+            searchQuery: '',
+            mentionStartPos: -1,
+            selectedIndex: 0,
+            filteredUsers: [],
+            mentionedUsers: [] // Array of {id, name} for current message
+        };
+
+        function getChatParticipants() {
+            if (!currentChatId) return [];
+
+            const chat = chats.find(c => c.id === currentChatId);
+            const participants = [];
+
+            // Add chat participants
+            if (chat && chat.participants && Array.isArray(chat.participants)) {
+                chat.participants.forEach(p => {
+                    if (p.id && p.name && p.id !== currentUser.id) {
+                        participants.push({
+                            id: p.id,
+                            name: p.name,
+                            role: p.role || 'employee'
+                        });
+                    }
+                });
+            }
+
+            // Add all admins
+            if (contacts && contacts.admins && Array.isArray(contacts.admins)) {
+                contacts.admins.forEach(admin => {
+                    const alreadyAdded = participants.some(p => p.id === admin.id);
+                    if (!alreadyAdded && admin.id !== currentUser.id) {
+                        participants.push({
+                            id: admin.id,
+                            name: admin.name,
+                            role: 'admin'
+                        });
+                    }
+                });
+            }
+
+            return participants;
+        }
+
+        function showMentionsPopup(query = '') {
+            const popup = document.getElementById('mentionsPopup');
+            const allUsers = getChatParticipants();
+
+            // Filter users by query
+            mentionsState.searchQuery = query.toLowerCase();
+            mentionsState.filteredUsers = allUsers.filter(u =>
+                u.name.toLowerCase().includes(mentionsState.searchQuery)
+            );
+            mentionsState.selectedIndex = 0;
+
+            if (mentionsState.filteredUsers.length === 0) {
+                popup.classList.remove('active');
+                mentionsState.isActive = false;
+                return;
+            }
+
+            // Render users
+            popup.innerHTML = mentionsState.filteredUsers.map((user, index) => {
+                const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
+                const avatarColor = getAvatarColor(user.name);
+                const roleLabel = user.role === 'admin' ? 'Администратор' : 'Сотрудник';
+
+                return `
+                    <div class="mention-item ${index === mentionsState.selectedIndex ? 'selected' : ''}"
+                         data-user-id="${user.id}"
+                         data-user-name="${escapeHtml(user.name)}"
+                         onclick="insertMention(${user.id}, '${escapeHtml(user.name).replace(/'/g, "\\'")}')">
+                        <div class="mention-item-avatar" style="background: ${avatarColor};">
+                            ${initials}
+                        </div>
+                        <div class="mention-item-info">
+                            <div class="mention-item-name">${escapeHtml(user.name)}</div>
+                            <div class="mention-item-role">${roleLabel}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            popup.classList.add('active');
+            mentionsState.isActive = true;
+        }
+
+        function hideMentionsPopup() {
+            const popup = document.getElementById('mentionsPopup');
+            popup.classList.remove('active');
+            mentionsState.isActive = false;
+            mentionsState.mentionStartPos = -1;
+            mentionsState.searchQuery = '';
+        }
+
+        function insertMention(userId, userName) {
+            const input = document.getElementById('messageInput');
+            const text = input.value;
+            const start = mentionsState.mentionStartPos;
+
+            // Replace from @ to current cursor with mention
+            const before = text.substring(0, start);
+            const after = text.substring(input.selectionStart);
+            const mentionText = `@${userName} `;
+
+            input.value = before + mentionText + after;
+
+            // Set cursor after mention
+            const newPos = (before + mentionText).length;
+            input.selectionStart = input.selectionEnd = newPos;
+            input.focus();
+
+            // Add to mentioned users
+            if (!mentionsState.mentionedUsers.some(m => m.id === userId)) {
+                mentionsState.mentionedUsers.push({ id: userId, name: userName });
+            }
+
+            hideMentionsPopup();
+        }
+
+        function toggleMentions() {
+            const input = document.getElementById('messageInput');
+            const cursorPos = input.selectionStart;
+
+            // Insert @ at cursor position
+            const text = input.value;
+            const before = text.substring(0, cursorPos);
+            const after = text.substring(cursorPos);
+
+            input.value = before + '@' + after;
+            input.selectionStart = input.selectionEnd = cursorPos + 1;
+            input.focus();
+
+            // Trigger mention detection
+            mentionsState.mentionStartPos = cursorPos;
+            showMentionsPopup('');
+        }
+
+        function handleMentionKeydown(e) {
+            if (!mentionsState.isActive) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                mentionsState.selectedIndex = Math.min(
+                    mentionsState.selectedIndex + 1,
+                    mentionsState.filteredUsers.length - 1
+                );
+                showMentionsPopup(mentionsState.searchQuery);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                mentionsState.selectedIndex = Math.max(mentionsState.selectedIndex - 1, 0);
+                showMentionsPopup(mentionsState.searchQuery);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                const selected = mentionsState.filteredUsers[mentionsState.selectedIndex];
+                if (selected) {
+                    insertMention(selected.id, selected.name);
+                }
+            } else if (e.key === 'Escape') {
+                hideMentionsPopup();
+            }
+        }
+
+        function handleMentionInput(e) {
+            const input = e.target;
+            const text = input.value;
+            const cursorPos = input.selectionStart;
+
+            // Check if we're typing after @
+            const beforeCursor = text.substring(0, cursorPos);
+            const atMatch = beforeCursor.match(/@(\w*)$/);
+
+            if (atMatch) {
+                // Start or continue mention
+                mentionsState.mentionStartPos = cursorPos - atMatch[0].length;
+                const query = atMatch[1] || '';
+                showMentionsPopup(query);
+            } else if (mentionsState.isActive) {
+                // Stop mention if @ was deleted or space was typed
+                hideMentionsPopup();
+            }
+
+            // Extract mentioned user IDs from text
+            const mentions = text.match(/@(\w+(?:\s+\w+)*)/g);
+            if (mentions) {
+                const allUsers = getChatParticipants();
+                mentionsState.mentionedUsers = mentions
+                    .map(m => {
+                        const name = m.substring(1).trim();
+                        const user = allUsers.find(u => u.name === name);
+                        return user ? { id: user.id, name: user.name } : null;
+                    })
+                    .filter(m => m !== null);
+            } else {
+                mentionsState.mentionedUsers = [];
+            }
+        }
+
         // ==================== SEND MESSAGE ====================
         // 🔥 FIX: Prevent double message sending
         let isSending = false;
@@ -6855,7 +7163,8 @@
                         const requestBody = {
                             content: content || null,
                             fileId: fileId,
-                            replyToId: replyToMessage?.id || null
+                            replyToId: replyToMessage?.id || null,
+                            mentions: mentionsState.mentionedUsers.map(m => m.id)
                         };
                         console.log('[sendMessage] Sending with file:', requestBody);
 
@@ -6891,7 +7200,8 @@
                 } else {
                     const requestBody = {
                         content,
-                        replyToId: replyToMessage?.id || null
+                        replyToId: replyToMessage?.id || null,
+                        mentions: mentionsState.mentionedUsers.map(m => m.id)
                     };
                     console.log('[sendMessage] Request body:', requestBody);
 
@@ -6944,6 +7254,7 @@
 
                 input.value = '';
                 input.style.height = 'auto';
+                mentionsState.mentionedUsers = []; // Clear mentioned users after send
                 scheduleLayoutRefresh();
                 cancelReply();
             } catch (err) {
@@ -7064,8 +7375,9 @@
             });
 
             let resizeInputRaf = null;
-            messageInput?.addEventListener('input', () => {
+            messageInput?.addEventListener('input', (e) => {
                 handleTypingInput();
+                handleMentionInput(e); // Handle @ mentions
 
                 if (resizeInputRaf) cancelAnimationFrame(resizeInputRaf);
                 resizeInputRaf = requestAnimationFrame(() => {
@@ -7074,6 +7386,31 @@
                     messageInput.style.height = 'auto';
                     messageInput.style.height = `${messageInput.scrollHeight}px`;
                 });
+            });
+
+            // Handle mention navigation (arrow keys, enter, esc)
+            messageInput?.addEventListener('keydown', (e) => {
+                // Handle mentions popup first
+                if (mentionsState.isActive) {
+                    if (['ArrowDown', 'ArrowUp', 'Tab', 'Escape'].includes(e.key)) {
+                        handleMentionKeydown(e);
+                        return;
+                    }
+                    if (e.key === 'Enter') {
+                        const selected = mentionsState.filteredUsers[mentionsState.selectedIndex];
+                        if (selected) {
+                            e.preventDefault();
+                            insertMention(selected.id, selected.name);
+                            return;
+                        }
+                    }
+                }
+
+                // Normal Enter handling for sending message
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
             });
 
             // Восстановление пользователя из localStorage
