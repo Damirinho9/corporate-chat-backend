@@ -1,6 +1,7 @@
 const { query } = require('../config/database');
 const { pool } = require('../config/database');
 const { emitToChat } = require('../socket/socketHandler');
+const { sendPushNotification } = require('./pushController');
 
 // Get messages for chat
 const getMessages = async (req, res) => {
@@ -326,6 +327,51 @@ const sendMessage = async (req, res) => {
         });
 
         console.log(`[WebSocket] ✅ new_message emitted to chat_${chatId}`);
+
+        // 🔥 NEW: Send Push notifications to all chat participants except sender
+        try {
+            const participants = await query(
+                `SELECT cp.user_id, u.name as user_name
+                 FROM chat_participants cp
+                 JOIN users u ON cp.user_id = u.id
+                 WHERE cp.chat_id = $1 AND cp.user_id != $2`,
+                [chatId, userId]
+            );
+
+            const chatName = await query(
+                `SELECT name, type FROM chats WHERE id = $1`,
+                [chatId]
+            );
+
+            const senderName = payload.user_name || 'Пользователь';
+            const messagePreview = payload.content
+                ? (payload.content.length > 50 ? payload.content.substring(0, 50) + '...' : payload.content)
+                : (payload.file ? '📎 Файл' : 'Новое сообщение');
+
+            for (const participant of participants.rows) {
+                await sendPushNotification(
+                    participant.user_id,
+                    `${senderName}: ${messagePreview}`,
+                    {
+                        title: chatName.rows[0]?.name || 'Новое сообщение',
+                        body: `${senderName}: ${messagePreview}`,
+                        icon: '/icon-192.png',
+                        badge: '/badge-72.png',
+                        tag: `chat-${chatId}`,
+                        data: {
+                            chatId: Number(chatId),
+                            messageId: payload.id,
+                            url: `/?chat=${chatId}`
+                        }
+                    }
+                );
+            }
+
+            console.log(`[Push] 📤 Sent notifications to ${participants.rows.length} users in chat ${chatId}`);
+        } catch (pushError) {
+            // Don't fail the request if push notifications fail
+            console.error('[Push] Failed to send notifications:', pushError);
+        }
 
         res.status(201).json({
             message: 'Message sent successfully',
