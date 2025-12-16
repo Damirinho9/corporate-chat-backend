@@ -879,6 +879,20 @@
             background: rgba(0,0,0,0.08);
         }
 
+        /* 🔥 NEW: Highlight animation for scrolled-to messages (like WhatsApp) */
+        .message-highlight {
+            animation: messageHighlight 2s ease-in-out;
+        }
+
+        @keyframes messageHighlight {
+            0%, 100% {
+                background-color: transparent;
+            }
+            10%, 90% {
+                background-color: rgba(var(--accent-rgb, 59, 130, 246), 0.15);
+            }
+        }
+
         .message-forward-badge {
             font-size: 11px;
             color: var(--text-secondary);
@@ -6205,7 +6219,7 @@
 
             let replyHtml = '';
             if (message.reply_to) {
-                replyHtml = `<div class="message-reply-to">
+                replyHtml = `<div class="message-reply-to" data-reply-to-id="${message.reply_to.id}" onclick="scrollToMessage(${message.reply_to.id})" style="cursor: pointer;">
                     ↩️ ${message.reply_to.user_name}: ${message.reply_to.content || '📎'}
                 </div>`;
             }
@@ -6363,6 +6377,35 @@
                 }
                 scrollTimeout = null;
             });
+        }
+
+        // 🔥 NEW: Scroll to original message when clicking on reply (like WhatsApp)
+        function scrollToMessage(messageId) {
+            console.log('[scrollToMessage] Scrolling to message:', messageId);
+            const container = document.getElementById('messagesContainer');
+            if (!container) return;
+
+            // Find message element by data-real-message-id
+            const messageEl = container.querySelector(`[data-real-message-id="${messageId}"]`);
+            if (!messageEl) {
+                console.warn('[scrollToMessage] Message not found:', messageId);
+                showToast('Сообщение не найдено', 'warning');
+                return;
+            }
+
+            // Scroll to message with smooth animation
+            messageEl.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+
+            // Highlight message (like WhatsApp)
+            messageEl.classList.add('message-highlight');
+            setTimeout(() => {
+                messageEl.classList.remove('message-highlight');
+            }, 2000);
+
+            console.log('[scrollToMessage] Scrolled to message:', messageId);
         }
 
         function escapeHtml(text) {
