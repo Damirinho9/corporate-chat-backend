@@ -5,7 +5,10 @@
 const path = require('path');
 
 const FILE_LIMITS = {
-    MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024, // 10MB
+    // 🔥 FIX: Увеличен лимит до 100MB для поддержки длинных аудиозаписей разговоров
+    // MP3 320kbps: ~2.4MB/мин → до 40 минут
+    // WAV качество: ~10MB/мин → до 10 минут
+    MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE) || 100 * 1024 * 1024, // 100MB
     MAX_FILES_PER_MESSAGE: 5,
     MAX_IMAGE_SIZE: 5 * 1024 * 1024,
     MAX_DOCUMENT_SIZE: 20 * 1024 * 1024,

@@ -46,8 +46,9 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// 🔥 FIX: Увеличен лимит до 100mb для поддержки больших файлов (аудиозаписи разговоров)
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 минут
