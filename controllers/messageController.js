@@ -571,10 +571,22 @@ const addReaction = async (req, res) => {
         await query(
             `INSERT INTO reactions (message_id, user_id, emoji)
              VALUES ($1, $2, $3)
-             ON CONFLICT (message_id, user_id) 
+             ON CONFLICT (message_id, user_id)
              DO UPDATE SET emoji = $3, created_at = CURRENT_TIMESTAMP`,
             [messageId, userId, emoji]
         );
+
+        // 🔥 FIX: Emit WebSocket event for real-time reaction updates
+        const chatId = messageCheck.rows[0]?.chat_id;
+        if (chatId) {
+            emitToChat(chatId, 'reaction_added', {
+                messageId: Number(messageId),
+                userId: userId,
+                userName: req.user.name || req.user.username,
+                emoji: emoji
+            });
+            console.log(`[Reaction] Added ${emoji} to message ${messageId} in chat ${chatId}`);
+        }
 
         res.json({ message: 'Reaction added successfully' });
     } catch (error) {
@@ -592,10 +604,26 @@ const removeReaction = async (req, res) => {
         const { messageId } = req.params;
         const userId = req.user.id;
 
+        // Get chat_id before deleting reaction
+        const messageCheck = await query(
+            `SELECT m.chat_id FROM messages m WHERE m.id = $1`,
+            [messageId]
+        );
+
         await query(
             'DELETE FROM reactions WHERE message_id = $1 AND user_id = $2',
             [messageId, userId]
         );
+
+        // 🔥 FIX: Emit WebSocket event for real-time reaction updates
+        const chatId = messageCheck.rows[0]?.chat_id;
+        if (chatId) {
+            emitToChat(chatId, 'reaction_removed', {
+                messageId: Number(messageId),
+                userId: userId
+            });
+            console.log(`[Reaction] Removed from message ${messageId} in chat ${chatId}`);
+        }
 
         res.json({ message: 'Reaction removed successfully' });
     } catch (error) {

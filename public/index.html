@@ -4812,6 +4812,75 @@
                 }
             });
 
+            // 🔥 FIX: Real-time reactions
+            socket.on('reaction_added', (data) => {
+                console.log('[Socket] Reaction added:', data);
+                const messageEl = document.querySelector(`[data-real-message-id="${data.messageId}"]`);
+                if (messageEl) {
+                    // Find or create reactions container
+                    let reactionsContainer = messageEl.querySelector('.message-reactions');
+                    if (!reactionsContainer) {
+                        const messageContent = messageEl.querySelector('.message-content');
+                        reactionsContainer = document.createElement('div');
+                        reactionsContainer.className = 'message-reactions';
+                        messageContent.appendChild(reactionsContainer);
+                    }
+
+                    // Find existing reaction button for this emoji
+                    let reactionBtn = Array.from(reactionsContainer.querySelectorAll('.reaction-btn'))
+                        .find(btn => btn.querySelector('.reaction-emoji')?.textContent === data.emoji);
+
+                    if (reactionBtn) {
+                        // Update existing reaction count
+                        const countEl = reactionBtn.querySelector('.reaction-count');
+                        const currentCount = parseInt(countEl.textContent) || 0;
+                        countEl.textContent = currentCount + 1;
+
+                        // Add 'own' class if it's current user's reaction
+                        if (data.userId === currentUser.id) {
+                            reactionBtn.classList.add('own');
+                        }
+                    } else {
+                        // Create new reaction button
+                        reactionBtn = document.createElement('button');
+                        reactionBtn.className = `reaction-btn${data.userId === currentUser.id ? ' own' : ''}`;
+                        reactionBtn.innerHTML = `
+                            <span class="reaction-emoji">${data.emoji}</span>
+                            <span class="reaction-count">1</span>
+                        `;
+                        reactionBtn.onclick = () => toggleReaction(data.messageId, data.emoji);
+                        reactionsContainer.appendChild(reactionBtn);
+                    }
+                }
+            });
+
+            socket.on('reaction_removed', (data) => {
+                console.log('[Socket] Reaction removed:', data);
+                const messageEl = document.querySelector(`[data-real-message-id="${data.messageId}"]`);
+                if (messageEl) {
+                    const reactionsContainer = messageEl.querySelector('.message-reactions');
+                    if (reactionsContainer && data.userId === currentUser.id) {
+                        // Remove 'own' class from all reactions
+                        reactionsContainer.querySelectorAll('.reaction-btn.own').forEach(btn => {
+                            btn.classList.remove('own');
+                            // Decrement count
+                            const countEl = btn.querySelector('.reaction-count');
+                            const currentCount = parseInt(countEl.textContent) || 0;
+                            if (currentCount <= 1) {
+                                btn.remove();
+                            } else {
+                                countEl.textContent = currentCount - 1;
+                            }
+                        });
+
+                        // Remove container if empty
+                        if (reactionsContainer.children.length === 0) {
+                            reactionsContainer.remove();
+                        }
+                    }
+                }
+            });
+
             socket.on('error', (err) => {
                 // Phase 3: Enhanced error handling for calls
                 const message = err.message || 'Ошибка сокета';
@@ -6437,8 +6506,8 @@
                     }
 
                     if (data.message) {
-                        // 🔥 FIX: Remove temp message and append real message with full functionality
-                        // This ensures the message has all features (3-dot menu, edit, etc.)
+                        // 🔥 FIX: Don't append message here - WebSocket will handle it to avoid duplicates
+                        // Just remove temp message and let WebSocket add the real one
                         if (tempMessageId) {
                             const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                             if (tempEl) {
@@ -6447,10 +6516,11 @@
                             }
                         }
 
-                        // Add the real message with full functionality (menu, edit, etc.)
-                        appendMessage(data.message);
-                        scrollToBottom(true);
-                        console.log('[sendMessage] Added real message:', data.message.id);
+                        // WebSocket will handle:
+                        // 1. Adding the message with full functionality (menu, edit, etc.)
+                        // 2. Scrolling to bottom
+                        // 3. Incrementing unread count for other users
+                        console.log('[sendMessage] Waiting for WebSocket to add message:', data.message.id);
                     } else {
                         // Remove temp message on error
                         if (tempMessageId) {
