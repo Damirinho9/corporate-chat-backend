@@ -4442,6 +4442,7 @@
             const isOpera = navigator.userAgent.includes('OPR/') || navigator.userAgent.includes('Opera/');
             if (isOpera) {
                 console.log('[Push] Opera detected - Push notifications not supported, using sound notifications only');
+                showToast('⚠️ Opera не поддерживает Push-уведомления. Используйте Chrome, Firefox или Edge', 'warning');
                 return;
             }
 
@@ -4466,6 +4467,28 @@
                     permission: Notification.permission
                 });
 
+                // 🔥 NEW: Auto-request permission and subscribe if not already
+                if (Notification.permission === 'default') {
+                    console.log('[Push] Auto-requesting notification permission...');
+                    const permission = await Notification.requestPermission();
+
+                    if (permission === 'granted') {
+                        console.log('[Push] Permission granted! Auto-subscribing...');
+                        await autoSubscribeToPush();
+                    } else if (permission === 'denied') {
+                        console.log('[Push] Permission denied by user');
+                        showToast('❌ Вы заблокировали уведомления. Разрешите в настройках браузера', 'error');
+                    } else {
+                        console.log('[Push] Permission dismissed');
+                    }
+                } else if (Notification.permission === 'granted' && !pushSubscription) {
+                    // Permission already granted but no subscription - auto-subscribe
+                    console.log('[Push] Permission granted but not subscribed. Auto-subscribing...');
+                    await autoSubscribeToPush();
+                } else if (Notification.permission === 'denied') {
+                    console.log('[Push] Notifications blocked by user');
+                }
+
                 // Update UI
                 updateNotificationButton();
 
@@ -4481,6 +4504,62 @@
                 }
             } catch (error) {
                 console.error('[Push] Init error:', error);
+            }
+        }
+
+        // 🔥 NEW: Auto-subscribe to push notifications
+        async function autoSubscribeToPush() {
+            try {
+                if (!swRegistration) {
+                    console.error('[autoSubscribeToPush] Service Worker not registered');
+                    return;
+                }
+
+                // Get VAPID public key
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    console.log('[autoSubscribeToPush] No auth token - skipping');
+                    return;
+                }
+
+                const vapidResponse = await fetch(`${API_URL}/push/vapid-public-key`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!vapidResponse.ok) {
+                    throw new Error('Failed to get VAPID key');
+                }
+
+                const { publicKey } = await vapidResponse.json();
+
+                // Subscribe to push
+                pushSubscription = await swRegistration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(publicKey)
+                });
+
+                console.log('[autoSubscribeToPush] Subscription created');
+
+                // Send subscription to server
+                const response = await fetch(`${API_URL}/push/subscribe`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ subscription: pushSubscription })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to register subscription on server');
+                }
+
+                updateNotificationButton();
+                console.log('[autoSubscribeToPush] ✅ Successfully subscribed to Push notifications');
+                showToast('✅ Уведомления включены', 'success');
+            } catch (error) {
+                console.error('[autoSubscribeToPush] Error:', error);
+                // Don't show error toast - user hasn't explicitly clicked anything
             }
         }
 
