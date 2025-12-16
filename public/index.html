@@ -5042,6 +5042,19 @@
                     updateChatLastMessage(incomingChatId, data.message);
                 }
 
+                // 🔊 ALWAYS play sound for incoming messages (not own), regardless of active chat or tab
+                if (!isOwn && soundEnabled) {
+                    playNotificationSound().then((played) => {
+                        if (played) {
+                            console.log('[Sound] Message notification played');
+                        } else {
+                            console.log('[Sound] Message notification could not play (user interaction required)');
+                        }
+                    }).catch((err) => {
+                        console.warn('[Sound] Message notification error:', err);
+                    });
+                }
+
                 if (inActiveChat) {
                     appendMessage(data.message);
                     scrollToBottom();
@@ -5055,21 +5068,6 @@
                     const preview = (typeof rawPreview === 'string' ? rawPreview : '') || 'Новое сообщение';
                     const limitedPreview = preview.slice(0, 120);
                     showToast(`${sender}: ${limitedPreview}`, 'info', { duration: 4500 });
-
-                    // 🔥 FIX: Play sound only if enabled
-                    if (soundEnabled) {
-                        playNotificationSound().then((played) => {
-                            if (played) {
-                                console.log('[Sound] Message notification played');
-                            } else {
-                                console.log('[Sound] Message notification could not play (user interaction required)');
-                            }
-                        }).catch((err) => {
-                            console.warn('[Sound] Message notification error:', err);
-                        });
-                    } else {
-                        console.log('[Sound] Notifications disabled by user');
-                    }
 
                     requestNotificationPermission().then(() => {
                         showBrowserNotification({
