@@ -564,12 +564,17 @@ const markAsRead = async (req, res) => {
         const { chatId } = req.params;
         const userId = req.user.id;
 
+        // 🔥 FIX: Use UPSERT to handle admins who are not chat participants
+        // INSERT if no record exists, UPDATE if it does
         await query(
-            `UPDATE chat_participants 
-             SET last_read_at = CURRENT_TIMESTAMP
-             WHERE chat_id = $1 AND user_id = $2`,
+            `INSERT INTO chat_participants (chat_id, user_id, last_read_at, joined_at)
+             VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+             ON CONFLICT (chat_id, user_id)
+             DO UPDATE SET last_read_at = CURRENT_TIMESTAMP`,
             [chatId, userId]
         );
+
+        console.log(`[markAsRead] Chat ${chatId} marked as read for user ${userId}`);
 
         res.json({ message: 'Chat marked as read' });
     } catch (error) {
