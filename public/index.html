@@ -386,6 +386,93 @@
             background: transparent;
         }
 
+        .icon-btn-small {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 4px 8px;
+            border-radius: 5px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-btn-small:hover {
+            background: var(--bg-hover);
+        }
+
+        .icon-btn-small:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Message Search Panel */
+        .message-search-panel {
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideDown 0.2s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-search-input-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 8px 12px;
+        }
+
+        .message-search-input-wrapper input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .message-search-controls {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .message-search-controls span {
+            font-size: 13px;
+            color: var(--text-secondary);
+            min-width: 60px;
+            text-align: center;
+        }
+
+        /* Message Search Highlight */
+        .message-search-highlight {
+            background: rgba(255, 235, 59, 0.4);
+            padding: 2px 0;
+            border-radius: 2px;
+        }
+
+        .message-search-highlight.active {
+            background: rgba(255, 193, 7, 0.6);
+        }
+
         .chat-search {
             padding: 10px 15px;
             border-bottom: 1px solid var(--border);
@@ -2066,6 +2153,22 @@
                         <button class="active-call-join-btn" id="activeCallJoinBtn" onclick="joinActiveCall()">
                             Присоединиться
                         </button>
+                    </div>
+
+                    <!-- Search in Messages Button -->
+                    <button class="icon-btn" id="searchInMessagesBtn" title="Поиск по сообщениям" style="display: none;">🔍</button>
+                </div>
+
+                <!-- Message Search Panel -->
+                <div class="message-search-panel" id="messageSearchPanel" style="display: none;">
+                    <div class="message-search-input-wrapper">
+                        <input type="text" id="messageSearchInput" placeholder="Поиск по сообщениям...">
+                        <button class="icon-btn-small" id="closeMessageSearchBtn" title="Закрыть">✕</button>
+                    </div>
+                    <div class="message-search-controls">
+                        <span id="messageSearchCounter">0 из 0</span>
+                        <button class="icon-btn-small" id="prevSearchResultBtn" title="Предыдущее">↑</button>
+                        <button class="icon-btn-small" id="nextSearchResultBtn" title="Следующее">↓</button>
                     </div>
                 </div>
                 
@@ -5988,6 +6091,10 @@
         // ==================== OPEN CHAT ====================
         async function openChat(chatId) {
             console.log('[openChat] Открытие чата:', chatId);
+
+            // Close message search panel if open
+            closeMessageSearch();
+
             // Mobile: hide sidebar, show chat
             if (window.innerWidth <= 768) {
                 document.querySelector('.sidebar')?.classList.add('hidden');
@@ -6025,6 +6132,11 @@
                 if (pollBtn) pollBtn.disabled = false;
                 if (audioCallBtn) audioCallBtn.disabled = false;
                 if (videoCallBtn) videoCallBtn.disabled = false;
+
+                // Show search in messages button
+                const searchInMessagesBtn = document.getElementById('searchInMessagesBtn');
+                if (searchInMessagesBtn) searchInMessagesBtn.style.display = 'flex';
+
                 messageInput.focus();
 
             const chat = chats.find(c => c.id === chatId);
@@ -6408,6 +6520,136 @@
             console.log('[scrollToMessage] Scrolled to message:', messageId);
         }
 
+        // ==================== MESSAGE SEARCH ====================
+        let messageSearchResults = [];
+        let currentSearchIndex = -1;
+
+        function toggleMessageSearch() {
+            const panel = document.getElementById('messageSearchPanel');
+            const input = document.getElementById('messageSearchInput');
+            const isVisible = panel.style.display !== 'none';
+
+            if (isVisible) {
+                closeMessageSearch();
+            } else {
+                panel.style.display = 'flex';
+                input.focus();
+            }
+        }
+
+        function closeMessageSearch() {
+            document.getElementById('messageSearchPanel').style.display = 'none';
+            document.getElementById('messageSearchInput').value = '';
+            clearSearchHighlights();
+            messageSearchResults = [];
+            currentSearchIndex = -1;
+        }
+
+        function searchInMessages(query) {
+            console.log('[searchInMessages] Searching for:', query);
+            clearSearchHighlights();
+            messageSearchResults = [];
+            currentSearchIndex = -1;
+
+            if (!query || query.trim().length < 2) {
+                updateSearchCounter();
+                return;
+            }
+
+            const container = document.getElementById('messagesContainer');
+            if (!container) return;
+
+            const messages = container.querySelectorAll('.message-item');
+            const searchLower = query.toLowerCase().trim();
+
+            messages.forEach((msgEl) => {
+                const contentEl = msgEl.querySelector('.message-text');
+                if (!contentEl) return;
+
+                const originalText = contentEl.textContent || '';
+                if (originalText.toLowerCase().includes(searchLower)) {
+                    messageSearchResults.push({
+                        element: msgEl,
+                        contentElement: contentEl,
+                        originalHTML: contentEl.innerHTML
+                    });
+
+                    // Highlight the search term
+                    const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+                    const highlightedHTML = originalText.replace(regex, '<span class="message-search-highlight">$1</span>');
+                    contentEl.innerHTML = highlightedHTML;
+                }
+            });
+
+            console.log('[searchInMessages] Found', messageSearchResults.length, 'matches');
+            updateSearchCounter();
+
+            if (messageSearchResults.length > 0) {
+                currentSearchIndex = 0;
+                scrollToSearchResult(0);
+            }
+        }
+
+        function clearSearchHighlights() {
+            messageSearchResults.forEach(result => {
+                if (result.contentElement && result.originalHTML) {
+                    result.contentElement.innerHTML = result.originalHTML;
+                }
+            });
+        }
+
+        function scrollToSearchResult(index) {
+            if (index < 0 || index >= messageSearchResults.length) return;
+
+            // Remove active class from previous
+            document.querySelectorAll('.message-search-highlight.active').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            const result = messageSearchResults[index];
+            const messageEl = result.element;
+
+            // Scroll to message
+            messageEl.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+
+            // Highlight active result
+            const highlights = result.contentElement.querySelectorAll('.message-search-highlight');
+            if (highlights.length > 0) {
+                highlights[0].classList.add('active');
+            }
+
+            currentSearchIndex = index;
+            updateSearchCounter();
+        }
+
+        function nextSearchResult() {
+            if (messageSearchResults.length === 0) return;
+            const nextIndex = (currentSearchIndex + 1) % messageSearchResults.length;
+            scrollToSearchResult(nextIndex);
+        }
+
+        function prevSearchResult() {
+            if (messageSearchResults.length === 0) return;
+            const prevIndex = (currentSearchIndex - 1 + messageSearchResults.length) % messageSearchResults.length;
+            scrollToSearchResult(prevIndex);
+        }
+
+        function updateSearchCounter() {
+            const counter = document.getElementById('messageSearchCounter');
+            if (messageSearchResults.length === 0) {
+                counter.textContent = '0 из 0';
+            } else {
+                counter.textContent = `${currentSearchIndex + 1} из ${messageSearchResults.length}`;
+            }
+        }
+
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
@@ -6655,6 +6897,24 @@
             document.getElementById('notificationsBtn')?.addEventListener('click', togglePushNotifications);
             document.getElementById('sendBtn')?.addEventListener('click', sendMessage);
             document.getElementById('mobileBackBtn')?.addEventListener('click', closeMobileChat);
+
+            // Message search
+            document.getElementById('searchInMessagesBtn')?.addEventListener('click', toggleMessageSearch);
+            document.getElementById('closeMessageSearchBtn')?.addEventListener('click', closeMessageSearch);
+            document.getElementById('nextSearchResultBtn')?.addEventListener('click', nextSearchResult);
+            document.getElementById('prevSearchResultBtn')?.addEventListener('click', prevSearchResult);
+
+            const messageSearchInput = document.getElementById('messageSearchInput');
+            messageSearchInput?.addEventListener('input', (e) => {
+                searchInMessages(e.target.value);
+            });
+
+            // Close message search on Escape
+            messageSearchInput?.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeMessageSearch();
+                }
+            });
 
             // Chat search
             const chatSearchInput = document.getElementById('chatSearchInput');
