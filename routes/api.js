@@ -680,6 +680,17 @@ router.get('/chats/:chatId/messages/search',
     messageController.searchMessages
 );
 
+// Global search across all user's chats
+router.get('/messages/search',
+    authenticateToken,
+    [
+        queryValidator('query').trim().isLength({ min: 2 }),
+        queryValidator('limit').optional().isInt({ min: 1, max: 50 })
+    ],
+    validate,
+    messageController.searchMessagesGlobal
+);
+
 router.get('/messages/all',
     authenticateToken,
     requireAdmin,

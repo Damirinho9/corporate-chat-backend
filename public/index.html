@@ -5341,10 +5341,52 @@
         // ==================== CHAT SEARCH ====================
         let chatSearchQuery = '';
         let activeSectionFilter = 'all';
+        let chatSearchResultIds = new Set(); // Chat IDs that match global search
+        let chatSearchDebounceTimer = null;
 
-        function filterChats(query) {
+        async function filterChats(query) {
             chatSearchQuery = query.toLowerCase();
-            renderChats();
+
+            // Clear debounce timer
+            if (chatSearchDebounceTimer) {
+                clearTimeout(chatSearchDebounceTimer);
+            }
+
+            // If query is too short, just do client-side filtering
+            if (!query || query.trim().length < 2) {
+                chatSearchResultIds.clear();
+                renderChats();
+                return;
+            }
+
+            // Debounce API call (wait 300ms after last keystroke)
+            chatSearchDebounceTimer = setTimeout(async () => {
+                try {
+                    console.log('[filterChats] Searching globally for:', query);
+                    const response = await fetch(`/api/messages/search?query=${encodeURIComponent(query.trim())}`, {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log('[filterChats] Global search results:', data);
+
+                        // Store IDs of chats that have matching messages
+                        chatSearchResultIds = new Set(data.chats.map(c => Number(c.chat_id)));
+                    } else {
+                        console.error('[filterChats] Search failed:', response.statusText);
+                        chatSearchResultIds.clear();
+                    }
+                } catch (error) {
+                    console.error('[filterChats] Search error:', error);
+                    chatSearchResultIds.clear();
+                }
+
+                // Re-render with results
+                renderChats();
+            }, 300);
         }
 
         function filterBySection(section) {
@@ -5539,7 +5581,12 @@
                         }
                     }
 
-                    return name.includes(chatSearchQuery) || lastMsg.includes(chatSearchQuery);
+                    // Match by name, last message, OR global search results (from API)
+                    const matchesName = name.includes(chatSearchQuery);
+                    const matchesLastMsg = lastMsg.includes(chatSearchQuery);
+                    const matchesGlobalSearch = chatSearchResultIds.size > 0 && chatSearchResultIds.has(Number(chat.id));
+
+                    return matchesName || matchesLastMsg || matchesGlobalSearch;
                 })
                 : cleanedChats;
 

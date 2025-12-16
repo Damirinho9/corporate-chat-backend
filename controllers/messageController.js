@@ -1158,6 +1158,53 @@ const addToFavorites = async (req, res) => {
     }
 };
 
+// Search messages across all user's chats
+const searchMessagesGlobal = async (req, res) => {
+    try {
+        const { query: searchQuery, limit = 20 } = req.query;
+        const userId = req.user.id;
+        const isAdmin = req.user.role === 'admin';
+
+        if (!searchQuery || searchQuery.trim().length < 2) {
+            return res.status(400).json({
+                error: 'Search query must be at least 2 characters',
+                code: 'INVALID_QUERY'
+            });
+        }
+
+        // Get chats where user has messages matching the query
+        // For admins: search in all chats
+        // For regular users: search only in their chats (where they are participants)
+        const result = await query(
+            `SELECT DISTINCT
+                c.id as chat_id,
+                c.name as chat_name,
+                c.type as chat_type,
+                COUNT(m.id) as match_count,
+                MAX(m.created_at) as last_match_at
+             FROM messages m
+             JOIN chats c ON m.chat_id = c.id
+             ${!isAdmin ? 'JOIN chat_participants cp ON c.id = cp.chat_id AND cp.user_id = $2' : ''}
+             WHERE m.content ILIKE $1
+             GROUP BY c.id, c.name, c.type
+             ORDER BY last_match_at DESC
+             LIMIT $${isAdmin ? '2' : '3'}`,
+            isAdmin ? [`%${searchQuery}%`, limit] : [`%${searchQuery}%`, userId, limit]
+        );
+
+        res.json({
+            chats: result.rows,
+            total: result.rows.length
+        });
+    } catch (error) {
+        console.error('Global search messages error:', error);
+        res.status(500).json({
+            error: 'Failed to search messages globally',
+            code: 'GLOBAL_SEARCH_ERROR'
+        });
+    }
+};
+
 module.exports = {
     getMessages,
     sendMessage,
@@ -1168,6 +1215,7 @@ module.exports = {
     forwardMessage,
     getDeletionHistory,
     searchMessages,
+    searchMessagesGlobal,
     getAllMessages,
     getMessageStats,
     pinMessage,
