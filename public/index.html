@@ -5540,6 +5540,7 @@
         let chatSearchQuery = '';
         let activeSectionFilter = 'all';
         let chatSearchResultIds = new Set(); // Chat IDs that match global search
+        let chatSearchMessageIds = new Map(); // Map: chatId -> messageId (first match)
         let chatSearchDebounceTimer = null;
 
         async function filterChats(query) {
@@ -5553,6 +5554,7 @@
             // If query is too short, just do client-side filtering
             if (!query || query.trim().length < 2) {
                 chatSearchResultIds.clear();
+                chatSearchMessageIds.clear();
                 renderChats();
                 return;
             }
@@ -5573,13 +5575,23 @@
 
                         // Store IDs of chats that have matching messages
                         chatSearchResultIds = new Set(data.chats.map(c => Number(c.chat_id)));
+
+                        // Store message IDs to scroll to when chat is opened
+                        chatSearchMessageIds.clear();
+                        data.chats.forEach(c => {
+                            if (c.first_match_message_id) {
+                                chatSearchMessageIds.set(Number(c.chat_id), Number(c.first_match_message_id));
+                            }
+                        });
                     } else {
                         console.error('[filterChats] Search failed:', response.statusText);
                         chatSearchResultIds.clear();
+                        chatSearchMessageIds.clear();
                     }
                 } catch (error) {
                     console.error('[filterChats] Search error:', error);
                     chatSearchResultIds.clear();
+                    chatSearchMessageIds.clear();
                 }
 
                 // Re-render with results
@@ -6425,6 +6437,17 @@
 
             // Check for active call in this chat (Phase 2: Group Calls)
             await checkActiveCallInChat(chatId);
+
+            // Scroll to message from search results if available
+            if (chatSearchMessageIds.has(chatId)) {
+                const messageId = chatSearchMessageIds.get(chatId);
+                console.log('[openChat] Scrolling to search result message:', messageId);
+                setTimeout(() => {
+                    scrollToMessage(messageId);
+                    // Clear the stored messageId after scrolling
+                    chatSearchMessageIds.delete(chatId);
+                }, 300);
+            }
 
             console.log('[openChat] Чат успешно открыт:', chatId);
 

@@ -1219,21 +1219,22 @@ const searchMessagesGlobal = async (req, res) => {
         }
 
         // Get chats where user has messages matching the query
+        // Also return the first matching message ID for each chat
         // For admins: search in all chats
         // For regular users: search only in their chats (where they are participants)
         const result = await query(
-            `SELECT DISTINCT
+            `SELECT DISTINCT ON (c.id)
                 c.id as chat_id,
                 c.name as chat_name,
                 c.type as chat_type,
-                COUNT(m.id) as match_count,
-                MAX(m.created_at) as last_match_at
+                m.id as first_match_message_id,
+                m.created_at as first_match_at,
+                (SELECT COUNT(*) FROM messages WHERE chat_id = c.id AND content ILIKE $1) as match_count
              FROM messages m
              JOIN chats c ON m.chat_id = c.id
              ${!isAdmin ? 'JOIN chat_participants cp ON c.id = cp.chat_id AND cp.user_id = $2' : ''}
              WHERE m.content ILIKE $1
-             GROUP BY c.id, c.name, c.type
-             ORDER BY last_match_at DESC
+             ORDER BY c.id, m.created_at DESC
              LIMIT $${isAdmin ? '2' : '3'}`,
             isAdmin ? [`%${searchQuery}%`, limit] : [`%${searchQuery}%`, userId, limit]
         );
