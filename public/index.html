@@ -7411,6 +7411,36 @@
                 }
             });
 
+            // 📋 Handle paste event for images from clipboard (Ctrl+V)
+            messageInput?.addEventListener('paste', (e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+
+                const imageFiles = [];
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    // Check if item is an image
+                    if (item.type.startsWith('image/')) {
+                        const file = item.getAsFile();
+                        if (file) {
+                            imageFiles.push(file);
+                        }
+                    }
+                }
+
+                if (imageFiles.length > 0) {
+                    // Show upload container if hidden
+                    if (!uploadContainer.classList.contains('active')) {
+                        uploadContainer.classList.add('active');
+                        scheduleLayoutRefresh();
+                    }
+
+                    // Process pasted images
+                    handleFiles(imageFiles);
+                    showToast(`Добавлено изображений: ${imageFiles.length}`, 'success');
+                }
+            });
+
             // Восстановление пользователя из localStorage
             const savedUser = JSON.parse(localStorage.getItem('user') || 'null');
             if (savedUser) updateUserUI(savedUser);
