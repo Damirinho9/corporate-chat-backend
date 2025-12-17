@@ -3875,8 +3875,23 @@
             // Escape HTML first
             content = escapeHtml(content);
 
-            // Highlight @mentions (find @Username patterns and wrap in span)
-            content = content.replace(/@([\p{L}\p{M}\p{N}_]+(?:\s+[\p{L}\p{M}\p{N}_]+)*)/gu, '<span class="mention">@$1</span>');
+            // Highlight @mentions using exact user names from message.mentions
+            if (message.mentions && Array.isArray(message.mentions) && message.mentions.length > 0) {
+                // Sort by name length (longest first) to avoid partial replacements
+                const sortedMentions = [...message.mentions].sort((a, b) =>
+                    (b.user_name?.length || 0) - (a.user_name?.length || 0)
+                );
+
+                sortedMentions.forEach(mention => {
+                    if (mention.user_name) {
+                        // Escape special regex characters in user name
+                        const escapedName = mention.user_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        // Replace @UserName with exact match (word boundary after)
+                        const regex = new RegExp(`@${escapedName}(?=\\s|$|[.,!?;:)])`, 'g');
+                        content = content.replace(regex, `<span class="mention">@${mention.user_name}</span>`);
+                    }
+                });
+            }
 
             return content;
         }
