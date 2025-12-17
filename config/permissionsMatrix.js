@@ -81,6 +81,19 @@ const PERMISSIONS_MATRIX = [
 
     // === КАТЕГОРИЯ: Управление чатами ===
     {
+        id: 'write_to_user',
+        label: 'Написать пользователю в личные сообщения',
+        category: 'chats',
+        roles: {
+            admin: true,
+            assistant: true,
+            rop: true,
+            operator: true,
+            employee: true
+        },
+        hint: 'Администраторы и ассистенты могут писать всем. Для остальных ролей проверяется таблица role_permissions.'
+    },
+    {
         id: 'createGroupChats',
         label: 'Создавать групповые чаты',
         category: 'chats',
