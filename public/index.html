@@ -4990,6 +4990,8 @@
                 setConnectionStatus(true);
                 showToast('Подключено', 'success');
                 console.log('[Socket] Connected');
+                console.log('[Socket] Transport:', socket.io.engine.transport.name);
+                console.log('[Socket] Socket ID:', socket.id);
 
                 // Reload chats on reconnect to sync state
                 if (currentUser) {
@@ -5002,6 +5004,11 @@
                         console.error('[Socket] Failed to check active call:', err);
                     });
                 }
+
+                // Log transport upgrades
+                socket.io.engine.on('upgrade', (transport) => {
+                    console.log('[Socket] Transport upgraded to:', transport.name);
+                });
             });
 
             socket.on('disconnect', (reason) => {
@@ -5031,6 +5038,10 @@
             socket.on('server:shutdown', (data) => {
                 console.log('[Socket] Server shutdown notification:', data);
                 showToast('⚙️ Сервер обновляется. Подключение будет восстановлено автоматически...', 'info', { duration: 5000 });
+            });
+
+            socket.on('joined_chat', (data) => {
+                console.log('[Socket] ✅ Successfully joined chat room:', data.chatId);
             });
 
             socket.on('new_message', (data) => {
@@ -6451,8 +6462,11 @@
 
             console.log('[openChat] Чат успешно открыт:', chatId);
 
-            if (socket) {
+            if (socket && socket.connected) {
+                console.log('[openChat] Joining Socket.IO room for chat:', chatId);
                 socket.emit('join_chat', { chatId });
+            } else {
+                console.warn('[openChat] Socket not connected, cannot join room');
             }
         }
 
