@@ -536,7 +536,6 @@ router.post('/permissions/reset',
 // Get all general permissions
 router.get('/permissions/general',
     authenticateToken,
-    requireAdmin,
     generalPermissionsController.getGeneralPermissions
 );
 
