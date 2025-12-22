@@ -4977,6 +4977,9 @@
                 return;
             }
 
+            // 🔥 HEARTBEAT: Track last activity time
+            let lastActivityTime = Date.now();
+
             socket.on('connect', () => {
                 socketConnected = true;
                 setConnectionStatus(true);
@@ -4984,6 +4987,7 @@
                 console.log('[Socket] Connected');
                 console.log('[Socket] Transport:', socket.io.engine.transport.name);
                 console.log('[Socket] Socket ID:', socket.id);
+                lastActivityTime = Date.now(); // Reset activity timer on connect
 
                 // Reload chats on reconnect to sync state
                 if (currentUser) {
@@ -5024,6 +5028,32 @@
             socket.on('reconnect', (attemptNumber) => {
                 console.log(`[Socket] Reconnected after ${attemptNumber} attempts`);
                 showToast('Переподключено', 'success');
+            });
+
+            // 🔥 HEARTBEAT MONITOR: Detect silent disconnects
+            const HEARTBEAT_INTERVAL = 30000; // Check every 30 seconds
+            const MAX_INACTIVITY = 60000; // 60 seconds without any activity = dead connection
+
+            // Update activity time on any socket event
+            const updateActivity = () => {
+                lastActivityTime = Date.now();
+            };
+
+            // Monitor connection health
+            setInterval(() => {
+                const timeSinceLastActivity = Date.now() - lastActivityTime;
+
+                if (socket.connected && timeSinceLastActivity > MAX_INACTIVITY) {
+                    console.warn(`[Socket] ⚠️ No activity for ${timeSinceLastActivity}ms - connection may be dead`);
+                    console.log('[Socket] Forcing reconnect...');
+                    socket.disconnect();
+                    setTimeout(() => socket.connect(), 1000);
+                }
+            }, HEARTBEAT_INTERVAL);
+
+            // Track activity on all events
+            socket.onAny(() => {
+                updateActivity();
             });
 
             // 🔥 FIX: Handle graceful server shutdown
