@@ -4963,7 +4963,19 @@
             if (!dot) return;
             dot.classList.toggle('offline', !isOnline);
             dot.setAttribute('aria-label', isOnline ? 'Онлайн' : 'Оффлайн');
-            dot.title = isOnline ? 'Онлайн' : 'Оффлайн';
+
+            // Update title with last activity time
+            if (isOnline && window.lastSocketActivity) {
+                const secondsAgo = Math.floor((Date.now() - window.lastSocketActivity) / 1000);
+                if (secondsAgo < 60) {
+                    dot.title = `Онлайн (активность ${secondsAgo} сек назад)`;
+                } else {
+                    const minutesAgo = Math.floor(secondsAgo / 60);
+                    dot.title = `Онлайн (активность ${minutesAgo} мин назад)`;
+                }
+            } else {
+                dot.title = isOnline ? 'Онлайн' : 'Оффлайн';
+            }
         }
 
         // ==================== SOCKET ====================
@@ -4979,6 +4991,7 @@
 
             // 🔥 HEARTBEAT: Track last activity time
             let lastActivityTime = Date.now();
+            window.lastSocketActivity = lastActivityTime; // Global for status indicator
 
             socket.on('connect', () => {
                 socketConnected = true;
@@ -4988,6 +5001,7 @@
                 console.log('[Socket] Transport:', socket.io.engine.transport.name);
                 console.log('[Socket] Socket ID:', socket.id);
                 lastActivityTime = Date.now(); // Reset activity timer on connect
+                window.lastSocketActivity = lastActivityTime;
 
                 // Reload chats on reconnect to sync state
                 if (currentUser) {
@@ -5037,6 +5051,7 @@
             // Update activity time on any socket event
             const updateActivity = () => {
                 lastActivityTime = Date.now();
+                window.lastSocketActivity = lastActivityTime;
             };
 
             // Monitor connection health
@@ -5046,6 +5061,7 @@
                 if (socket.connected && timeSinceLastActivity > MAX_INACTIVITY) {
                     console.warn(`[Socket] ⚠️ No activity for ${timeSinceLastActivity}ms - connection may be dead`);
                     console.log('[Socket] Forcing reconnect...');
+                    showToast('⚠️ Обнаружен разрыв соединения. Переподключение...', 'warning');
                     socket.disconnect();
                     setTimeout(() => socket.connect(), 1000);
                 }
@@ -5055,6 +5071,13 @@
             socket.onAny(() => {
                 updateActivity();
             });
+
+            // 🔥 UPDATE STATUS INDICATOR: Refresh every 10 seconds
+            setInterval(() => {
+                if (socketConnected) {
+                    setConnectionStatus(true);
+                }
+            }, 10000);
 
             // 🔥 FIX: Handle graceful server shutdown
             socket.on('server:shutdown', (data) => {
