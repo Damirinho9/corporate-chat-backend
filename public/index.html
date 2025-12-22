@@ -332,11 +332,14 @@
             position: absolute;
             bottom: 0;
             right: 0;
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
             background: var(--success);
-            border: 2px solid var(--bg-primary);
+            border: 3px solid var(--bg-primary);
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            cursor: help;
         }
 
         .online-status.offline {
