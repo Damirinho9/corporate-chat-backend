@@ -4559,14 +4559,6 @@
         let swRegistration = null;
 
         async function initPushNotifications() {
-            // 🔥 FIX: Hide Push button for Opera (not supported)
-            const isOpera = navigator.userAgent.includes('OPR/') || navigator.userAgent.includes('Opera/');
-            if (isOpera) {
-                console.log('[Push] Opera detected - Push notifications not supported, using sound notifications only');
-                showToast('⚠️ Opera не поддерживает Push-уведомления. Используйте Chrome, Firefox или Edge', 'warning');
-                return;
-            }
-
             // Check if push is supported
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
                 console.log('[Push] Push notifications not supported');
