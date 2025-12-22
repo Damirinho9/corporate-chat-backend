@@ -4948,10 +4948,14 @@
                 .toUpperCase();
 
             // Preserve online status indicator
-            userAvatar.innerHTML = `${initials}<span class="online-status offline" id="onlineStatusDot" aria-label="Статус подключения"></span>`;
+            const statusClass = socketConnected ? '' : 'offline';
+            userAvatar.innerHTML = `${initials}<span class="online-status ${statusClass}" id="onlineStatusDot" aria-label="Статус подключения"></span>`;
 
             // Set avatar color
             userAvatar.style.background = getAvatarColor(userName);
+
+            // Update status immediately
+            setConnectionStatus(socketConnected);
 
             const adminBtn = document.getElementById('adminBtn');
             // Show admin panel button for admins and ROPs
