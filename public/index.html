@@ -4940,12 +4940,15 @@
             document.getElementById('userRole').textContent = user.role;
 
             const userAvatar = document.getElementById('userAvatar');
-            userAvatar.textContent = userName
+            const initials = userName
                 .split(' ')
                 .map(w => w[0])
                 .join('')
                 .slice(0, 2)
                 .toUpperCase();
+
+            // Preserve online status indicator
+            userAvatar.innerHTML = `${initials}<span class="online-status offline" id="onlineStatusDot" aria-label="Статус подключения"></span>`;
 
             // Set avatar color
             userAvatar.style.background = getAvatarColor(userName);
