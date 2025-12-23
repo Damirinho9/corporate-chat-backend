@@ -3984,7 +3984,7 @@
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    userPermissions = data.permissions[currentUser.role] || {};
+                    userPermissions = data.permissions[currentUser?.role] || {};
                     applyPermissionVisibility();
                 }
             } catch (err) {
@@ -6361,7 +6361,7 @@
             // Admins section (visible to all except operators)
             if (activeSectionFilter === 'all' || activeSectionFilter === 'Администраторы') {
                 const adminContacts = contacts.admins?.users || [];
-                const isOperator = currentUser.role === 'operator';
+                const isOperator = currentUser?.role === 'operator';
                 if (adminContacts.length > 0 && !isOperator) {
                     html += `<div class="chat-section">
                                 <h4>Администраторы</h4>
@@ -6757,7 +6757,7 @@
                             <span>↩️</span>
                             <span>Ответить</span>
                         </div>
-                        ${(isOwn || currentUser.role === 'admin') && message.content ? `
+                        ${(isOwn || currentUser?.role === 'admin') && message.content ? `
                         <div class="dropdown-item" data-permission="edit_own_messages" onclick="editMessage(${message.id}, '${escapeHtml(message.content || '').replace(/'/g, "\\'")}', '${message.created_at}'); closeAllMenus();">
                             <span>✏️</span>
                             <span>Редактировать</span>
