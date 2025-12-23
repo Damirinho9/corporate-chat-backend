@@ -6082,7 +6082,6 @@
             const buildDepartmentSections = (departmentChats) => {
                 const departmentContacts = Array.isArray(contacts.departments) ? contacts.departments : [];
                 const assistantsContacts = Array.isArray(contacts.assistants?.users) ? contacts.assistants.users : [];
-                const adminsContacts = Array.isArray(contacts.admins?.users) ? contacts.admins.users : [];
 
                 const normalizeName = (name) => normalizeDeptName(name);
                 const deptByName = new Map();
@@ -6117,22 +6116,7 @@
                     }
                 }
 
-                // Add admins section (not visible to operators)
-                const isOperator = currentUser?.role === 'operator';
-                if (adminsContacts.length > 0 && !isOperator) {
-                    const adminNorm = normalizeName('Администраторы');
-                    const adminKey = `name:${adminNorm}`;
-                    const existing = deptByName.get(adminKey);
-                    const adminDept = existing ? { ...existing, department: existing.department || 'Администраторы', users: adminsContacts } : { department: 'Администраторы', users: adminsContacts };
-                    deptByName.set(adminKey, adminDept);
-
-                    console.log('[renderChats] 👨‍💼 Рендерим администраторов:', adminsContacts.map(u => ({
-                        id: u.id,
-                        name: u.name,
-                        role: u.role
-                    })));
-                }
-
+                // Note: Admins are rendered separately as a contact section, not as a department
                 const departmentsWithAssistants = Array.from(deptByName.values());
 
                 const usedIds = new Set();
@@ -6367,10 +6351,11 @@
                 }
             }
 
-            // Admins section (only visible to admins)
+            // Admins section (visible to all except operators)
             if (activeSectionFilter === 'all' || activeSectionFilter === 'Администраторы') {
                 const adminContacts = contacts.admins?.users || [];
-                if (adminContacts.length > 0 && currentUser.role === 'admin') {
+                const isOperator = currentUser.role === 'operator';
+                if (adminContacts.length > 0 && !isOperator) {
                     html += `<div class="chat-section">
                                 <h4>Администраторы</h4>
                                 <ul>${adminContacts.map(user => renderContactItem(user, { nested: false })).join('')}</ul>
