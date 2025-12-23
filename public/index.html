@@ -5068,12 +5068,15 @@
             setInterval(() => {
                 const timeSinceLastActivity = Date.now() - lastActivityTime;
 
-                if (socket.connected && timeSinceLastActivity > MAX_INACTIVITY) {
+                if (socket && socket.connected && timeSinceLastActivity > MAX_INACTIVITY) {
                     console.warn(`[Socket] ⚠️ No activity for ${timeSinceLastActivity}ms - connection may be dead`);
                     console.log('[Socket] Forcing reconnect...');
                     showToast('⚠️ Обнаружен разрыв соединения. Переподключение...', 'warning');
+                    lastActivityTime = Date.now(); // Reset to prevent multiple reconnects
                     socket.disconnect();
-                    setTimeout(() => socket.connect(), 1000);
+                    setTimeout(() => {
+                        if (socket) socket.connect();
+                    }, 1000);
                 }
             }, HEARTBEAT_INTERVAL);
 
