@@ -6082,6 +6082,7 @@
             const buildDepartmentSections = (departmentChats) => {
                 const departmentContacts = Array.isArray(contacts.departments) ? contacts.departments : [];
                 const assistantsContacts = Array.isArray(contacts.assistants?.users) ? contacts.assistants.users : [];
+                const adminsContacts = Array.isArray(contacts.admins?.users) ? contacts.admins.users : [];
 
                 const normalizeName = (name) => normalizeDeptName(name);
                 const deptByName = new Map();
@@ -6114,6 +6115,21 @@
                             role: u.role
                         })));
                     }
+                }
+
+                // Add admins section
+                if (adminsContacts.length > 0) {
+                    const adminNorm = normalizeName('Администраторы');
+                    const adminKey = `name:${adminNorm}`;
+                    const existing = deptByName.get(adminKey);
+                    const adminDept = existing ? { ...existing, department: existing.department || 'Администраторы', users: adminsContacts } : { department: 'Администраторы', users: adminsContacts };
+                    deptByName.set(adminKey, adminDept);
+
+                    console.log('[renderChats] 👨‍💼 Рендерим администраторов:', adminsContacts.map(u => ({
+                        id: u.id,
+                        name: u.name,
+                        role: u.role
+                    })));
                 }
 
                 const departmentsWithAssistants = Array.from(deptByName.values());
