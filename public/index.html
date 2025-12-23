@@ -5051,7 +5051,14 @@
 
             socket.on('reconnect', (attemptNumber) => {
                 console.log(`[Socket] Reconnected after ${attemptNumber} attempts`);
+                socketConnected = true;
+                setConnectionStatus(true);
                 showToast('Переподключено', 'success');
+
+                // Reload chats to sync state after reconnect
+                if (currentUser) {
+                    loadChats().catch(err => console.error('[Socket] Failed to reload chats after reconnect:', err));
+                }
             });
 
             // 🔥 HEARTBEAT MONITOR: Detect silent disconnects
