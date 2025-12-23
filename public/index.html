@@ -6117,8 +6117,9 @@
                     }
                 }
 
-                // Add admins section
-                if (adminsContacts.length > 0) {
+                // Add admins section (not visible to operators)
+                const isOperator = currentUser?.role === 'operator';
+                if (adminsContacts.length > 0 && !isOperator) {
                     const adminNorm = normalizeName('Администраторы');
                     const adminKey = `name:${adminNorm}`;
                     const existing = deptByName.get(adminKey);
