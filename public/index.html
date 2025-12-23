@@ -6145,8 +6145,12 @@
 
                     const contactsList = Array.isArray(dept?.users) ? dept.users : [];
 
-                    if (!isAdmin && hasAllowedDepartments) {
-                        const normDeptName = normalizeName(deptName);
+                    // Always show Assistants and Administrators sections
+                    const normDeptName = normalizeName(deptName);
+                    const isAssistants = normDeptName === normalizeName('Ассистенты');
+                    const isAdministrators = normDeptName === normalizeName('Администраторы');
+
+                    if (!isAdmin && hasAllowedDepartments && !isAssistants && !isAdministrators) {
                         if (normDeptName && !allowedDepartments.has(normDeptName)) {
                             return;
                         }
