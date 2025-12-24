@@ -2554,6 +2554,13 @@
                         localStorage.setItem('token', data.token);
                         localStorage.setItem('refreshToken', data.refreshToken);
                         token = data.token;
+                        if (socket) {
+                            socket.auth = { token };
+                            if (socket.connected) {
+                                socket.disconnect();
+                            }
+                            socket.connect();
+                        }
                         console.log('[Token Refresh] ✅ Token refreshed successfully');
                         return true;
                     }
