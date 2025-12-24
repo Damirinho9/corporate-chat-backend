@@ -943,6 +943,25 @@
             background: var(--text-secondary);
         }
 
+        /* Date separator (like WhatsApp) */
+        .date-separator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0 10px 0;
+            text-align: center;
+        }
+
+        .date-separator span {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            padding: 5px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
         .message {
             display: flex;
             gap: 10px;
@@ -6561,6 +6580,9 @@
 
             currentLoadingChatId = chatId;
 
+            // Reset date separator tracking when loading new chat
+            lastMessageDate = null;
+
             const messagesContainer = document.getElementById('messagesContainer');
             messagesContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;"><div style="text-align:center;color:var(--text-secondary);"><div style="font-size:32px;margin-bottom:10px;">⏳</div><div>Загрузка сообщений...</div></div></div>';
 
@@ -6610,7 +6632,7 @@
 
                 if (messageList.length > 0) {
                     messageList.forEach(msg => appendMessage(msg));
-                    scrollToBottom(true);
+                    scrollToBottom(false); // false = instant scroll, no animation
                 } else {
                     messagesContainer.innerHTML = `
                         <div class="empty-state">
@@ -6636,6 +6658,38 @@
                 // Reset loading flag to allow future loads
                 currentLoadingChatId = null;
             }
+        }
+
+        // Track last message date for date separators
+        let lastMessageDate = null;
+
+        // Format date for separator (Today, Yesterday, or DD.MM.YYYY)
+        function formatMessageDate(date) {
+            const msgDate = new Date(date);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            // Reset time to compare dates only
+            msgDate.setHours(0, 0, 0, 0);
+            today.setHours(0, 0, 0, 0);
+            yesterday.setHours(0, 0, 0, 0);
+
+            if (msgDate.getTime() === today.getTime()) {
+                return 'Сегодня';
+            } else if (msgDate.getTime() === yesterday.getTime()) {
+                return 'Вчера';
+            } else {
+                return msgDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            }
+        }
+
+        // Create date separator element
+        function createDateSeparator(dateStr) {
+            const separator = document.createElement('div');
+            separator.className = 'date-separator';
+            separator.innerHTML = `<span>${dateStr}</span>`;
+            return separator;
         }
 
         function appendMessage(message, isTempSending = false) {
@@ -6673,6 +6727,18 @@
                         return;
                     }
                 }
+            }
+
+            // Insert date separator if date changed
+            const messageDate = new Date(message.created_at);
+            messageDate.setHours(0, 0, 0, 0);
+            const messageDateStr = messageDate.toDateString();
+
+            if (!lastMessageDate || lastMessageDate !== messageDateStr) {
+                const dateStr = formatMessageDate(message.created_at);
+                const separator = createDateSeparator(dateStr);
+                messagesContainer.appendChild(separator);
+                lastMessageDate = messageDateStr;
             }
 
             const isOwn = message.user_id === currentUser.id;
@@ -6836,10 +6902,10 @@
 
                 // Auto-scroll only if user is near bottom or force is true
                 if (force || isNearBottom) {
-                    // Use smooth scroll for better UX
+                    // Use smooth scroll for better UX, instant if force=false
                     container.scrollTo({
                         top: container.scrollHeight,
-                        behavior: 'smooth'
+                        behavior: force ? 'smooth' : 'instant'
                     });
                 }
                 scrollTimeout = null;
