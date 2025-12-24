@@ -4210,7 +4210,7 @@
                         await loadChats();
                         showToast(`Открыт чат с ${userName}`, 'success');
                     }
-                    openChat(data.chatId);
+                    selectChat(data.chatId);
                 } else {
                     showToast('Нет прав для создания чата', 'error');
                 }
@@ -5042,6 +5042,12 @@
                     loadChats().catch(err => console.error('[Socket] Failed to reload chats:', err));
                 }
 
+                // Rejoin current chat room if chat is open
+                if (currentChatId && socket && socket.connected) {
+                    console.log('[Socket] Rejoining chat room after connect:', currentChatId);
+                    socket.emit('join_chat', { chatId: currentChatId });
+                }
+
                 // Phase 3: Check active call status on reconnect
                 if (currentChatId) {
                     checkActiveCallInChat(currentChatId).catch(err => {
@@ -5082,6 +5088,12 @@
                 // Reload chats to sync state after reconnect
                 if (currentUser) {
                     loadChats().catch(err => console.error('[Socket] Failed to reload chats after reconnect:', err));
+                }
+
+                // Rejoin current chat room to continue receiving messages
+                if (currentChatId && socket && socket.connected) {
+                    console.log('[Socket] Rejoining chat room after reconnect:', currentChatId);
+                    socket.emit('join_chat', { chatId: currentChatId });
                 }
             });
 
@@ -5372,6 +5384,74 @@
             setupMainSocketHandlers();
             setupCallSocketHandlers();
             setupGroupCallSocketHandlers();
+
+            // Setup auto-update checker
+            setupAutoUpdate();
+        }
+
+        // ==================== AUTO-UPDATE ====================
+        let currentAppVersion = null;
+        let autoUpdateCheckInterval = null;
+
+        async function checkForUpdates() {
+            try {
+                const response = await fetch('/api/version', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (!response.ok) {
+                    console.warn('[AutoUpdate] Failed to check version:', response.status);
+                    return;
+                }
+
+                const data = await response.json();
+                const serverTimestamp = data.timestamp;
+
+                // First time - just save the version
+                if (!currentAppVersion) {
+                    currentAppVersion = serverTimestamp;
+                    console.log('[AutoUpdate] Initial version:', data.version, 'Build:', data.buildDate);
+                    return;
+                }
+
+                // Check if version changed
+                if (serverTimestamp !== currentAppVersion) {
+                    console.log('[AutoUpdate] New version detected!');
+                    console.log('[AutoUpdate] Current:', currentAppVersion, 'New:', serverTimestamp);
+
+                    // Clear the interval to prevent multiple reloads
+                    if (autoUpdateCheckInterval) {
+                        clearInterval(autoUpdateCheckInterval);
+                        autoUpdateCheckInterval = null;
+                    }
+
+                    // Show toast notification
+                    showToast('Доступна новая версия! Обновляем...', 'info');
+
+                    // Wait 2 seconds to let user see the message
+                    setTimeout(() => {
+                        console.log('[AutoUpdate] Reloading page...');
+                        // Force reload from server, bypass cache
+                        window.location.reload(true);
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('[AutoUpdate] Error checking version:', error);
+            }
+        }
+
+        function setupAutoUpdate() {
+            // Check immediately on startup
+            checkForUpdates();
+
+            // Check every 5 minutes
+            autoUpdateCheckInterval = setInterval(() => {
+                console.log('[AutoUpdate] Performing periodic version check...');
+                checkForUpdates();
+            }, 5 * 60 * 1000); // 5 minutes
+
+            console.log('[AutoUpdate] Auto-update checker initialized (check every 5 min)');
         }
 
         // ==================== LOAD CHATS ====================
@@ -6567,8 +6647,15 @@
 
         // ==================== RESTORE LAST CHAT ====================
         function restoreLastActiveChat() {
+            // If a chat is already open, don't reload it (prevents message loss on reconnect)
+            if (currentChatId) {
+                console.log('[restoreLastActiveChat] Chat already open:', currentChatId, '- skipping restore');
+                return;
+            }
+
             const lastChatId = localStorage.getItem('lastActiveChatId');
             if (lastChatId && chats.some(c => c.id == lastChatId)) {
+                console.log('[restoreLastActiveChat] Opening last active chat:', lastChatId);
                 setTimeout(() => openChat(parseInt(lastChatId)), 500);
             }
         }
@@ -6650,6 +6737,9 @@
                         }
                     });
                     console.log(`[loadMessages] Отрендерено сообщений: ${renderedCount} из ${messageList.length}`);
+
+                    // Rebuild date separators to ensure correct positioning
+                    rebuildDateSeparators(messagesContainer);
 
                     // Track pagination: save oldest message date
                     if (messageList.length > 0) {
@@ -6746,33 +6836,8 @@
                     }
                 });
 
-                // Clean up duplicate date separators
-                removeDuplicateDateSeparators(messagesContainer);
-
-                // Ensure first message has a date separator before it
-                const firstMessage = messagesContainer.querySelector('.message');
-                if (firstMessage) {
-                    // Check if there's already a separator before the first message
-                    let hasSeparatorBefore = false;
-                    let prevSibling = firstMessage.previousElementSibling;
-                    while (prevSibling) {
-                        if (prevSibling.classList.contains('date-separator')) {
-                            hasSeparatorBefore = true;
-                            break;
-                        }
-                        prevSibling = prevSibling.previousElementSibling;
-                    }
-
-                    if (!hasSeparatorBefore) {
-                        const firstDateStr = firstMessage.getAttribute('data-message-date');
-                        if (firstDateStr) {
-                            const dateFormatted = formatMessageDate(new Date(firstDateStr + 'T00:00:00'));
-                            const separator = createDateSeparator(dateFormatted);
-                            firstMessage.before(separator);
-                            console.log(`[loadOlderMessages] Added date separator before first message: ${dateFormatted}`);
-                        }
-                    }
-                }
+                // Rebuild all date separators from scratch (ensures correct positioning)
+                rebuildDateSeparators(messagesContainer);
 
                 // Update oldest message date and hasMore
                 oldestMessageDate = messageList[messageList.length - 1].created_at;
@@ -6809,27 +6874,36 @@
                 .replace(/\v/g, '\\v');    // Vertical tab
         }
 
-        // Remove duplicate date separators (keep only one per date group)
-        function removeDuplicateDateSeparators(container) {
-            const separators = container.querySelectorAll('.date-separator');
-            let lastSeparatorText = null;
-            let removedCount = 0;
+        // Rebuild all date separators from scratch
+        function rebuildDateSeparators(container) {
+            // Remove all existing separators
+            const oldSeparators = container.querySelectorAll('.date-separator');
+            oldSeparators.forEach(sep => sep.remove());
+            console.log(`[rebuildDateSeparators] Removed ${oldSeparators.length} old separators`);
 
-            separators.forEach(sep => {
-                const currentText = sep.textContent.trim();
+            // Get all messages in order (top to bottom)
+            const messages = Array.from(container.querySelectorAll('.message'));
+            if (messages.length === 0) return;
 
-                // If this separator has the same text as the previous one, remove it
-                if (currentText === lastSeparatorText) {
-                    sep.remove();
-                    removedCount++;
-                } else {
-                    lastSeparatorText = currentText;
+            let lastDate = null;
+            let addedCount = 0;
+
+            messages.forEach((messageEl, index) => {
+                const messageDateStr = messageEl.getAttribute('data-message-date');
+                if (!messageDateStr) return;
+
+                // If this is a new date, add separator BEFORE this message
+                if (lastDate !== messageDateStr) {
+                    const dateFormatted = formatMessageDate(new Date(messageDateStr + 'T00:00:00'));
+                    const separator = createDateSeparator(dateFormatted);
+                    messageEl.before(separator);
+                    addedCount++;
+                    lastDate = messageDateStr;
+                    console.log(`[rebuildDateSeparators] Added separator "${dateFormatted}" before message ${index}`);
                 }
             });
 
-            if (removedCount > 0) {
-                console.log(`[removeDuplicateDateSeparators] Removed ${removedCount} duplicate separators`);
-            }
+            console.log(`[rebuildDateSeparators] Added ${addedCount} new separators for ${messages.length} messages`);
         }
 
         // Prepend message at the top of the messages container (for pagination)
@@ -6987,43 +7061,7 @@
 
             // Insert message at the top
             messagesContainer.prepend(messageEl);
-
-            // Find the next message element (skip non-message elements)
-            let nextMessageEl = messageEl.nextElementSibling;
-            while (nextMessageEl && !nextMessageEl.classList.contains('message')) {
-                nextMessageEl = nextMessageEl.nextElementSibling;
-            }
-
-            // Check if we need a separator BEFORE the next message (after current)
-            if (nextMessageEl) {
-                const nextDateStr = nextMessageEl.getAttribute('data-message-date');
-
-                // If dates are different, we need a separator between them
-                // But the separator should be BEFORE the next message's date group
-                if (nextDateStr && messageDateStr !== nextDateStr) {
-                    // Check if there's already a separator before nextMessageEl
-                    let hasSeparatorBeforeNext = false;
-                    let prevSibling = nextMessageEl.previousElementSibling;
-                    while (prevSibling && !prevSibling.classList.contains('message')) {
-                        if (prevSibling.classList.contains('date-separator')) {
-                            hasSeparatorBeforeNext = true;
-                            break;
-                        }
-                        prevSibling = prevSibling.previousElementSibling;
-                    }
-
-                    if (!hasSeparatorBeforeNext) {
-                        // Add separator BEFORE the next message (for its date group)
-                        const nextDateFormatted = formatMessageDate(
-                            // We need to create a date from nextDateStr
-                            new Date(nextDateStr + 'T00:00:00')
-                        );
-                        const separator = createDateSeparator(nextDateFormatted);
-                        nextMessageEl.before(separator);
-                        console.log(`[prependMessage] Added date separator: ${nextDateFormatted} before next message (${nextDateStr})`);
-                    }
-                }
-            }
+            // Note: Date separators will be rebuilt after batch insertion by rebuildDateSeparators()
         }
 
         // Track last message date for date separators
@@ -7089,8 +7127,18 @@
                         return textContent.includes(message.content.trim());
                     });
                     if (duplicate) {
-                        console.log('[appendMessage] Skipping duplicate own message by content');
-                        return;
+                        // Check if the duplicate is a temporary message
+                        const isTempMessage = duplicate.hasAttribute('data-message-id') && !duplicate.hasAttribute('data-real-message-id');
+                        if (isTempMessage) {
+                            // Replace temp message with real one
+                            console.log('[appendMessage] Replacing temporary message with real one:', message.id);
+                            duplicate.remove();
+                            // Continue to add the real message below
+                        } else {
+                            // It's a real message, skip this one
+                            console.log('[appendMessage] Skipping duplicate own message by content');
+                            return;
+                        }
                     }
                 }
             }
@@ -7816,8 +7864,14 @@
                     }
 
                     if (data.message) {
-                        // 🔥 FIX: Don't append message here - WebSocket will handle it to avoid duplicates
-                        // Just remove temp message and let WebSocket add the real one
+                        const realMessageId = data.message.id;
+
+                        // Check if WebSocket already added the message
+                        const checkExisting = () => {
+                            return document.querySelector(`[data-real-message-id="${realMessageId}"]`);
+                        };
+
+                        // Remove temp message
                         if (tempMessageId) {
                             const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                             if (tempEl) {
@@ -7826,11 +7880,29 @@
                             }
                         }
 
-                        // WebSocket will handle:
-                        // 1. Adding the message with full functionality (menu, edit, etc.)
-                        // 2. Scrolling to bottom
-                        // 3. Incrementing unread count for other users
-                        console.log('[sendMessage] Waiting for WebSocket to add message:', data.message.id);
+                        // Check if WebSocket already added it
+                        if (checkExisting()) {
+                            console.log('[sendMessage] Message already added by WebSocket:', realMessageId);
+                            scrollToBottom(true);
+                        } else {
+                            console.log('[sendMessage] Waiting for WebSocket to add message:', realMessageId);
+                            // Wait up to 1 second for WebSocket
+                            let attempts = 0;
+                            const waitForWebSocket = setInterval(() => {
+                                attempts++;
+                                if (checkExisting()) {
+                                    console.log('[sendMessage] WebSocket added message after', attempts * 100, 'ms');
+                                    clearInterval(waitForWebSocket);
+                                    scrollToBottom(true);
+                                } else if (attempts >= 10) {
+                                    // Timeout: add message ourselves as fallback
+                                    console.warn('[sendMessage] WebSocket timeout, adding message manually');
+                                    clearInterval(waitForWebSocket);
+                                    appendMessage(data.message);
+                                    scrollToBottom(true);
+                                }
+                            }, 100);
+                        }
                     } else {
                         // Remove temp message on error
                         if (tempMessageId) {
