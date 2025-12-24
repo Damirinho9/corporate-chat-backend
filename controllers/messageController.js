@@ -773,7 +773,8 @@ const searchMessages = async (req, res) => {
                 m.content,
                 m.created_at,
                 m.user_id,
-                u.name as user_name
+                u.name as user_name,
+                COUNT(*) OVER() as total_count
              FROM messages m
              JOIN users u ON m.user_id = u.id
              WHERE m.chat_id = $1 AND m.content ILIKE $2
@@ -782,9 +783,13 @@ const searchMessages = async (req, res) => {
             [chatId, `%${searchQuery}%`, limit]
         );
 
+        const totalCount = result.rows[0]?.total_count ? parseInt(result.rows[0].total_count, 10) : 0;
+        const messages = result.rows.map(({ total_count, ...row }) => row);
+
         res.json({ 
-            messages: result.rows,
-            count: result.rows.length 
+            messages,
+            count: messages.length,
+            total: totalCount
         });
     } catch (error) {
         console.error('Search messages error:', error);
