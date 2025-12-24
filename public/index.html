@@ -5042,6 +5042,12 @@
                     loadChats().catch(err => console.error('[Socket] Failed to reload chats:', err));
                 }
 
+                // Rejoin current chat room if chat is open
+                if (currentChatId && socket && socket.connected) {
+                    console.log('[Socket] Rejoining chat room after connect:', currentChatId);
+                    socket.emit('join_chat', { chatId: currentChatId });
+                }
+
                 // Phase 3: Check active call status on reconnect
                 if (currentChatId) {
                     checkActiveCallInChat(currentChatId).catch(err => {
@@ -5082,6 +5088,12 @@
                 // Reload chats to sync state after reconnect
                 if (currentUser) {
                     loadChats().catch(err => console.error('[Socket] Failed to reload chats after reconnect:', err));
+                }
+
+                // Rejoin current chat room to continue receiving messages
+                if (currentChatId && socket && socket.connected) {
+                    console.log('[Socket] Rejoining chat room after reconnect:', currentChatId);
+                    socket.emit('join_chat', { chatId: currentChatId });
                 }
             });
 
@@ -6567,8 +6579,15 @@
 
         // ==================== RESTORE LAST CHAT ====================
         function restoreLastActiveChat() {
+            // If a chat is already open, don't reload it (prevents message loss on reconnect)
+            if (currentChatId) {
+                console.log('[restoreLastActiveChat] Chat already open:', currentChatId, '- skipping restore');
+                return;
+            }
+
             const lastChatId = localStorage.getItem('lastActiveChatId');
             if (lastChatId && chats.some(c => c.id == lastChatId)) {
+                console.log('[restoreLastActiveChat] Opening last active chat:', lastChatId);
                 setTimeout(() => openChat(parseInt(lastChatId)), 500);
             }
         }
