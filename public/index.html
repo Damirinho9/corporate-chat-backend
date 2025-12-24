@@ -5022,6 +5022,7 @@
         // ==================== SOCKET ====================
         let socketConnected = false;
         let mainSocketHandlersInitialized = false; // Prevent duplicate main handlers
+        let isRefreshingSocketToken = false;
 
         function setupMainSocketHandlers() {
             // Prevent duplicate registration
@@ -5079,6 +5080,29 @@
             socket.on('connect_error', (error) => {
                 console.error('[Socket] Connection error:', error);
                 setConnectionStatus(false);
+                const message = error?.message || '';
+                const isAuthError = message.includes('Authentication failed')
+                    || message.includes('jwt')
+                    || message.includes('token');
+                if (isAuthError && !isRefreshingSocketToken) {
+                    isRefreshingSocketToken = true;
+                    refreshAccessToken()
+                        .then((refreshed) => {
+                            if (refreshed && socket) {
+                                socket.auth = { token };
+                                socket.connect();
+                            } else if (!refreshed) {
+                                showToast('Сессия истекла. Пожалуйста, войдите снова.', 'error');
+                                setTimeout(() => logout(), 2000);
+                            }
+                        })
+                        .catch((err) => {
+                            console.error('[Socket] Token refresh error:', err);
+                        })
+                        .finally(() => {
+                            isRefreshingSocketToken = false;
+                        });
+                }
                 // Don't show toast on every retry to avoid spam
             });
 
