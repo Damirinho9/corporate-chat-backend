@@ -4973,7 +4973,7 @@
 
             // Preserve online status indicator
             const statusClass = socketConnected ? '' : 'offline';
-            userAvatar.innerHTML = `${initials}<span class="online-status ${statusClass}" id="onlineStatusDot" aria-label="Статус подключения"></span>`;
+            userAvatar.innerHTML = `${initials}<span class="online-status ${statusClass}" aria-label="Статус подключения"></span>`;
 
             // Set avatar color
             userAvatar.style.background = getAvatarColor(userName);
