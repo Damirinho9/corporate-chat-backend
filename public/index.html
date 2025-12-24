@@ -4210,7 +4210,7 @@
                         await loadChats();
                         showToast(`Открыт чат с ${userName}`, 'success');
                     }
-                    selectChat(data.chatId);
+                    openChat(data.chatId);
                 } else {
                     showToast('Нет прав для создания чата', 'error');
                 }
