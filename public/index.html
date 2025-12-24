@@ -356,6 +356,11 @@
             color: var(--text-secondary);
         }
 
+        .user-connection-status {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
         .header-actions {
             display: flex;
             gap: 10px;
@@ -2197,6 +2202,7 @@
                         <div class="user-details">
                             <h3 id="userName">User</h3>
                             <p id="userRole">Role</p>
+                            <p id="userConnectionStatus" class="user-connection-status">Оффлайн</p>
                         </div>
                     </div>
                     <div class="header-actions">
@@ -5004,6 +5010,11 @@
             if (!dot) return;
             dot.classList.toggle('offline', !isOnline);
             dot.setAttribute('aria-label', isOnline ? 'Онлайн' : 'Оффлайн');
+
+            const statusText = document.getElementById('userConnectionStatus');
+            if (statusText) {
+                statusText.textContent = isOnline ? 'Онлайн' : 'Оффлайн';
+            }
 
             // Update title with last activity time
             if (isOnline && window.lastSocketActivity) {
