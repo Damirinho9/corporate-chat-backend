@@ -6749,6 +6749,31 @@
                 // Clean up duplicate date separators
                 removeDuplicateDateSeparators(messagesContainer);
 
+                // Ensure first message has a date separator before it
+                const firstMessage = messagesContainer.querySelector('.message');
+                if (firstMessage) {
+                    // Check if there's already a separator before the first message
+                    let hasSeparatorBefore = false;
+                    let prevSibling = firstMessage.previousElementSibling;
+                    while (prevSibling) {
+                        if (prevSibling.classList.contains('date-separator')) {
+                            hasSeparatorBefore = true;
+                            break;
+                        }
+                        prevSibling = prevSibling.previousElementSibling;
+                    }
+
+                    if (!hasSeparatorBefore) {
+                        const firstDateStr = firstMessage.getAttribute('data-message-date');
+                        if (firstDateStr) {
+                            const dateFormatted = formatMessageDate(new Date(firstDateStr + 'T00:00:00'));
+                            const separator = createDateSeparator(dateFormatted);
+                            firstMessage.before(separator);
+                            console.log(`[loadOlderMessages] Added date separator before first message: ${dateFormatted}`);
+                        }
+                    }
+                }
+
                 // Update oldest message date and hasMore
                 oldestMessageDate = messageList[messageList.length - 1].created_at;
                 hasMoreMessages = messageList.length >= 50;
