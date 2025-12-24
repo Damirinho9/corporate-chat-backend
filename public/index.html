@@ -6632,7 +6632,12 @@
 
                 if (messageList.length > 0) {
                     messageList.forEach(msg => appendMessage(msg));
-                    scrollToBottom(false); // false = instant scroll, no animation
+                    // Wait for all messages to render before scrolling
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            scrollToBottom(false, true); // instant scroll to bottom when opening chat
+                        });
+                    });
                 } else {
                     messagesContainer.innerHTML = `
                         <div class="empty-state">
@@ -6886,7 +6891,7 @@
 
         // 🔥 FIX: Debounced scroll to avoid triple jumps
         let scrollTimeout = null;
-        function scrollToBottom(force = false) {
+        function scrollToBottom(force = false, instant = false) {
             const container = document.getElementById('messagesContainer');
             if (!container) return;
 
@@ -6900,12 +6905,11 @@
                 const scrollThreshold = 150; // More forgiving threshold
                 const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < scrollThreshold;
 
-                // Auto-scroll only if user is near bottom or force is true
-                if (force || isNearBottom) {
-                    // Use smooth scroll for better UX, instant if force=false
+                // Auto-scroll if: instant mode, force, or user is near bottom
+                if (instant || force || isNearBottom) {
                     container.scrollTo({
                         top: container.scrollHeight,
-                        behavior: force ? 'smooth' : 'instant'
+                        behavior: instant ? 'instant' : (force ? 'smooth' : 'smooth')
                     });
                 }
                 scrollTimeout = null;
