@@ -1,7 +1,7 @@
 const { query } = require('../config/database');
 const { pool } = require('../config/database');
 const { emitToChat } = require('../socket/socketHandler');
-const { sendPushNotification } = require('./pushController');
+const { sendNewMessageNotification } = require('./pushController');
 
 // Get messages for chat
 const getMessages = async (req, res) => {
@@ -349,21 +349,12 @@ const sendMessage = async (req, res) => {
                 : (payload.file ? '📎 Файл' : 'Новое сообщение');
 
             for (const participant of participants.rows) {
-                await sendPushNotification(
+                await sendNewMessageNotification(
                     participant.user_id,
-                    `${senderName}: ${messagePreview}`,
-                    {
-                        title: chatName.rows[0]?.name || 'Новое сообщение',
-                        body: `${senderName}: ${messagePreview}`,
-                        icon: '/icon-192.png',
-                        badge: '/badge-72.png',
-                        tag: `chat-${chatId}`,
-                        data: {
-                            chatId: Number(chatId),
-                            messageId: payload.id,
-                            url: `/?chat=${chatId}`
-                        }
-                    }
+                    senderName,
+                    messagePreview,
+                    Number(chatId),
+                    chatName.rows[0]?.name || 'Новое сообщение'
                 );
             }
 

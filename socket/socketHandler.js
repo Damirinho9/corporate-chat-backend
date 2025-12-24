@@ -450,7 +450,7 @@ const initializeSocket = (server) => {
                 // 3. Create call in database
                 const roomName = `corporate-chat-${chatId}-${Date.now()}`;
                 const callResult = await query(`
-                    INSERT INTO calls (chat_id, room_name, type, initiated_by, status, started_at)
+                    INSERT INTO calls (chat_id, room_name, call_type, initiated_by, status, started_at)
                     VALUES ($1, $2, $3, $4, 'ringing', NOW())
                     RETURNING *
                 `, [chatId, roomName, type || 'video', userId]);
