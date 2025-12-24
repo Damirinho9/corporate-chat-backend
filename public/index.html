@@ -6788,7 +6788,8 @@
         }
 
         // Load older messages (pagination - scroll up)
-        async function loadOlderMessages() {
+        async function loadOlderMessages(options = {}) {
+            const { silent = false } = options;
             if (!currentChatId || !hasMoreMessages || isLoadingOlderMessages) {
                 return false;
             }
@@ -6809,7 +6810,9 @@
 
                 if (!response.ok) {
                     console.error('[loadOlderMessages] Failed:', response.status);
-                    showToast('Не удалось загрузить старые сообщения', 'error');
+                    if (!silent) {
+                        showToast('Не удалось загрузить старые сообщения', 'error');
+                    }
                     return false;
                 }
 
@@ -6819,7 +6822,9 @@
 
                 if (messageList.length === 0) {
                     hasMoreMessages = false;
-                    showToast('Это все сообщения', 'info');
+                    if (!silent) {
+                        showToast('Это все сообщения', 'info');
+                    }
                     return false;
                 }
 
@@ -6855,7 +6860,9 @@
                 return true;
             } catch (err) {
                 console.error('[loadOlderMessages] Error:', err);
-                showToast('Ошибка загрузки старых сообщений', 'error');
+                if (!silent) {
+                    showToast('Ошибка загрузки старых сообщений', 'error');
+                }
                 return false;
             } finally {
                 isLoadingOlderMessages = false;
@@ -7391,7 +7398,12 @@
         let totalSearchResultsInDB = 0; // Total results from database
 
         async function searchInMessages(query, options = {}) {
-            const { skipDbCount = false, skipAutoScroll = false, suppressToast = false } = options;
+            const {
+                skipDbCount = false,
+                skipAutoScroll = false,
+                suppressToast = false,
+                autoLoadOlder = true
+            } = options;
             console.log('[searchInMessages] Searching for:', query);
             activeMessageSearchQuery = query;
             clearSearchHighlights();
@@ -7457,6 +7469,23 @@
                 if (!skipAutoScroll) {
                     scrollToSearchResult(0);
                 }
+            } else if (totalSearchResultsInDB > 0 && autoLoadOlder && hasMoreMessages) {
+                const loaded = await loadOlderMessages({ silent: true });
+                if (loaded) {
+                    await searchInMessages(activeMessageSearchQuery, {
+                        skipDbCount: true,
+                        skipAutoScroll: true,
+                        suppressToast: true,
+                        autoLoadOlder: false
+                    });
+                    if (messageSearchResults.length > 0 && !skipAutoScroll) {
+                        scrollToSearchResult(0);
+                    }
+                    return;
+                }
+                if (!suppressToast) {
+                    showToast(`Найдено ${totalSearchResultsInDB} результатов. Прокрутите вверх для загрузки старых сообщений.`, 'info');
+                }
             } else if (totalSearchResultsInDB > 0 && !suppressToast) {
                 // Results exist in DB but not loaded yet
                 showToast(`Найдено ${totalSearchResultsInDB} результатов. Прокрутите вверх для загрузки старых сообщений.`, 'info');
@@ -7498,6 +7527,14 @@
             updateSearchCounter();
         }
 
+        function findSearchResultIndexByMessageId(messageId) {
+            if (!messageId) return -1;
+            return messageSearchResults.findIndex(result => {
+                const idAttr = result.element?.getAttribute('data-real-message-id');
+                return Number(idAttr) === Number(messageId);
+            });
+        }
+
         function nextSearchResult() {
             if (messageSearchResults.length === 0) return;
             const nextIndex = currentSearchIndex + 1;
@@ -7507,7 +7544,28 @@
             }
 
             if (totalSearchResultsInDB > messageSearchResults.length && hasMoreMessages) {
-                showToast('Есть более ранние результаты. Нажмите ↑ для загрузки.', 'info');
+                const currentMessageId = messageSearchResults[currentSearchIndex]?.element?.getAttribute('data-real-message-id');
+                loadOlderMessages({ silent: true }).then(async (loaded) => {
+                    if (!loaded) {
+                        showToast('Нет более ранних сообщений', 'info');
+                        return;
+                    }
+                    await searchInMessages(activeMessageSearchQuery, {
+                        skipDbCount: true,
+                        skipAutoScroll: true,
+                        suppressToast: true,
+                        autoLoadOlder: false
+                    });
+                    if (messageSearchResults.length === 0) {
+                        showToast('Совпадений больше нет', 'info');
+                        return;
+                    }
+                    const currentIndex = findSearchResultIndexByMessageId(currentMessageId);
+                    const targetIndex = currentIndex >= 0 && currentIndex + 1 < messageSearchResults.length
+                        ? currentIndex + 1
+                        : messageSearchResults.length - 1;
+                    scrollToSearchResult(targetIndex);
+                });
                 return;
             }
 
@@ -7523,7 +7581,8 @@
             }
 
             if (totalSearchResultsInDB > messageSearchResults.length && hasMoreMessages) {
-                const loaded = await loadOlderMessages();
+                const currentMessageId = messageSearchResults[currentSearchIndex]?.element?.getAttribute('data-real-message-id');
+                const loaded = await loadOlderMessages({ silent: true });
                 if (loaded) {
                     await searchInMessages(activeMessageSearchQuery, {
                         skipDbCount: true,
@@ -7531,7 +7590,9 @@
                         suppressToast: true
                     });
                     if (messageSearchResults.length > 0) {
-                        scrollToSearchResult(0);
+                        const currentIndex = findSearchResultIndexByMessageId(currentMessageId);
+                        const targetIndex = currentIndex > 0 ? currentIndex - 1 : 0;
+                        scrollToSearchResult(targetIndex);
                     }
                     return;
                 }
