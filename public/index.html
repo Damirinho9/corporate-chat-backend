@@ -7040,8 +7040,18 @@
                         return textContent.includes(message.content.trim());
                     });
                     if (duplicate) {
-                        console.log('[appendMessage] Skipping duplicate own message by content');
-                        return;
+                        // Check if the duplicate is a temporary message
+                        const isTempMessage = duplicate.hasAttribute('data-message-id') && !duplicate.hasAttribute('data-real-message-id');
+                        if (isTempMessage) {
+                            // Replace temp message with real one
+                            console.log('[appendMessage] Replacing temporary message with real one:', message.id);
+                            duplicate.remove();
+                            // Continue to add the real message below
+                        } else {
+                            // It's a real message, skip this one
+                            console.log('[appendMessage] Skipping duplicate own message by content');
+                            return;
+                        }
                     }
                 }
             }
@@ -7767,8 +7777,14 @@
                     }
 
                     if (data.message) {
-                        // 🔥 FIX: Don't append message here - WebSocket will handle it to avoid duplicates
-                        // Just remove temp message and let WebSocket add the real one
+                        const realMessageId = data.message.id;
+
+                        // Check if WebSocket already added the message
+                        const checkExisting = () => {
+                            return document.querySelector(`[data-real-message-id="${realMessageId}"]`);
+                        };
+
+                        // Remove temp message
                         if (tempMessageId) {
                             const tempEl = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                             if (tempEl) {
@@ -7777,11 +7793,29 @@
                             }
                         }
 
-                        // WebSocket will handle:
-                        // 1. Adding the message with full functionality (menu, edit, etc.)
-                        // 2. Scrolling to bottom
-                        // 3. Incrementing unread count for other users
-                        console.log('[sendMessage] Waiting for WebSocket to add message:', data.message.id);
+                        // Check if WebSocket already added it
+                        if (checkExisting()) {
+                            console.log('[sendMessage] Message already added by WebSocket:', realMessageId);
+                            scrollToBottom(true);
+                        } else {
+                            console.log('[sendMessage] Waiting for WebSocket to add message:', realMessageId);
+                            // Wait up to 1 second for WebSocket
+                            let attempts = 0;
+                            const waitForWebSocket = setInterval(() => {
+                                attempts++;
+                                if (checkExisting()) {
+                                    console.log('[sendMessage] WebSocket added message after', attempts * 100, 'ms');
+                                    clearInterval(waitForWebSocket);
+                                    scrollToBottom(true);
+                                } else if (attempts >= 10) {
+                                    // Timeout: add message ourselves as fallback
+                                    console.warn('[sendMessage] WebSocket timeout, adding message manually');
+                                    clearInterval(waitForWebSocket);
+                                    appendMessage(data.message);
+                                    scrollToBottom(true);
+                                }
+                            }, 100);
+                        }
                     } else {
                         // Remove temp message on error
                         if (tempMessageId) {
