@@ -6746,6 +6746,9 @@
                     }
                 });
 
+                // Clean up duplicate date separators
+                removeDuplicateDateSeparators(messagesContainer);
+
                 // Update oldest message date and hasMore
                 oldestMessageDate = messageList[messageList.length - 1].created_at;
                 hasMoreMessages = messageList.length >= 50;
@@ -6779,6 +6782,29 @@
                 .replace(/\t/g, '\\t')     // Tab
                 .replace(/\f/g, '\\f')     // Form feed
                 .replace(/\v/g, '\\v');    // Vertical tab
+        }
+
+        // Remove duplicate date separators (keep only one per date group)
+        function removeDuplicateDateSeparators(container) {
+            const separators = container.querySelectorAll('.date-separator');
+            let lastSeparatorText = null;
+            let removedCount = 0;
+
+            separators.forEach(sep => {
+                const currentText = sep.textContent.trim();
+
+                // If this separator has the same text as the previous one, remove it
+                if (currentText === lastSeparatorText) {
+                    sep.remove();
+                    removedCount++;
+                } else {
+                    lastSeparatorText = currentText;
+                }
+            });
+
+            if (removedCount > 0) {
+                console.log(`[removeDuplicateDateSeparators] Removed ${removedCount} duplicate separators`);
+            }
         }
 
         // Prepend message at the top of the messages container (for pagination)
@@ -6853,6 +6879,11 @@
             if (message.id) {
                 messageEl.setAttribute('data-real-message-id', message.id);
             }
+            // Store message date for separator logic
+            const messageDate = new Date(message.created_at);
+            const messageDateStr = `${messageDate.getFullYear()}-${String(messageDate.getMonth() + 1).padStart(2, '0')}-${String(messageDate.getDate()).padStart(2, '0')}`;
+            messageEl.setAttribute('data-message-date', messageDateStr);
+
             messageEl.innerHTML = `
                 <div class="message-avatar" style="background: ${avatarColor};">${initials}</div>
                 <div class="message-content">
@@ -6932,43 +6963,41 @@
             // Insert message at the top
             messagesContainer.prepend(messageEl);
 
-            // Check if we need to add a date separator AFTER this message
-            // Look for the next message element (skip date separators)
+            // Find the next message element (skip non-message elements)
             let nextMessageEl = messageEl.nextElementSibling;
-            while (nextMessageEl && nextMessageEl.classList.contains('date-separator')) {
+            while (nextMessageEl && !nextMessageEl.classList.contains('message')) {
                 nextMessageEl = nextMessageEl.nextElementSibling;
             }
 
-            if (nextMessageEl && nextMessageEl.classList.contains('message')) {
-                // Get date of prepended message
-                const messageDate = new Date(message.created_at);
-                const messageDateStr = `${messageDate.getFullYear()}-${String(messageDate.getMonth() + 1).padStart(2, '0')}-${String(messageDate.getDate()).padStart(2, '0')}`;
+            // Check if we need a separator BEFORE the next message (after current)
+            if (nextMessageEl) {
+                const nextDateStr = nextMessageEl.getAttribute('data-message-date');
 
-                // Get date of next message - we need to extract it from the data
-                // Simple approach: check if there's already a separator between messages
-                const separatorBetween = messageEl.nextElementSibling;
-                if (!separatorBetween || !separatorBetween.classList.contains('date-separator')) {
-                    // No separator yet. We need to determine if dates are different
-                    // For now, always add a separator when prepending (will be cleaned up in future optimization)
-                    const dateStr = formatMessageDate(message.created_at);
+                // If dates are different, we need a separator between them
+                // But the separator should be BEFORE the next message's date group
+                if (nextDateStr && messageDateStr !== nextDateStr) {
+                    // Check if there's already a separator before nextMessageEl
+                    let hasSeparatorBeforeNext = false;
+                    let prevSibling = nextMessageEl.previousElementSibling;
+                    while (prevSibling && !prevSibling.classList.contains('message')) {
+                        if (prevSibling.classList.contains('date-separator')) {
+                            hasSeparatorBeforeNext = true;
+                            break;
+                        }
+                        prevSibling = prevSibling.previousElementSibling;
+                    }
 
-                    // Check if the existing date separator (if any) has same text
-                    const existingSep = messageEl.nextElementSibling;
-                    const needsSeparator = !existingSep || !existingSep.classList.contains('date-separator') ||
-                                          existingSep.textContent.trim() !== dateStr;
-
-                    if (needsSeparator) {
-                        const separator = createDateSeparator(dateStr);
-                        messageEl.after(separator);
-                        console.log(`[prependMessage] Added date separator: ${dateStr}`);
+                    if (!hasSeparatorBeforeNext) {
+                        // Add separator BEFORE the next message (for its date group)
+                        const nextDateFormatted = formatMessageDate(
+                            // We need to create a date from nextDateStr
+                            new Date(nextDateStr + 'T00:00:00')
+                        );
+                        const separator = createDateSeparator(nextDateFormatted);
+                        nextMessageEl.before(separator);
+                        console.log(`[prependMessage] Added date separator: ${nextDateFormatted} before next message (${nextDateStr})`);
                     }
                 }
-            } else if (!nextMessageEl) {
-                // This is the only message, add a date separator
-                const dateStr = formatMessageDate(message.created_at);
-                const separator = createDateSeparator(dateStr);
-                messageEl.after(separator);
-                console.log(`[prependMessage] Added date separator: ${dateStr} (only message)`);
             }
         }
 
@@ -7112,6 +7141,11 @@
                 // Real message - add deduplication attribute
                 messageEl.setAttribute('data-real-message-id', message.id);
             }
+            // Store message date for separator logic
+            const msgDate = new Date(message.created_at);
+            const msgDateStr = `${msgDate.getFullYear()}-${String(msgDate.getMonth() + 1).padStart(2, '0')}-${String(msgDate.getDate()).padStart(2, '0')}`;
+            messageEl.setAttribute('data-message-date', msgDateStr);
+
             messageEl.innerHTML = `
                 <div class="message-avatar" style="background: ${avatarColor};">${initials}</div>
                 <div class="message-content">
