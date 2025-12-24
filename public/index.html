@@ -2389,6 +2389,11 @@
         const directChatByUser = new Map();
         const notificationUI = window.notificationUI || {};
 
+        // Pagination variables
+        let hasMoreMessages = true;
+        let isLoadingOlderMessages = false;
+        let oldestMessageDate = null;
+
         const {
             ensureToastContainer = () => {},
             showToast = () => {},
@@ -6583,6 +6588,10 @@
             // Reset date separator tracking when loading new chat
             lastMessageDate = null;
 
+            // Reset pagination tracking
+            hasMoreMessages = true;
+            oldestMessageDate = null;
+
             const messagesContainer = document.getElementById('messagesContainer');
             messagesContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;"><div style="text-align:center;color:var(--text-secondary);"><div style="font-size:32px;margin-bottom:10px;">⏳</div><div>Загрузка сообщений...</div></div></div>';
 
@@ -6642,6 +6651,16 @@
                     });
                     console.log(`[loadMessages] Отрендерено сообщений: ${renderedCount} из ${messageList.length}`);
 
+                    // Track pagination: save oldest message date
+                    if (messageList.length > 0) {
+                        oldestMessageDate = messageList[0].created_at; // First message is oldest
+                        // If we got less than 100 messages, there are no more older messages
+                        hasMoreMessages = messageList.length >= 100;
+                        console.log(`[loadMessages] Pagination: oldest=${oldestMessageDate}, hasMore=${hasMoreMessages}`);
+                    } else {
+                        hasMoreMessages = false;
+                    }
+
                     // Wait for all messages to render before scrolling
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
@@ -6675,6 +6694,267 @@
             } finally {
                 // Reset loading flag to allow future loads
                 currentLoadingChatId = null;
+            }
+        }
+
+        // Load older messages (pagination - scroll up)
+        async function loadOlderMessages() {
+            if (!currentChatId || !hasMoreMessages || isLoadingOlderMessages) {
+                return;
+            }
+
+            if (!oldestMessageDate) {
+                console.warn('[loadOlderMessages] No oldest message date available');
+                return;
+            }
+
+            isLoadingOlderMessages = true;
+            console.log(`[loadOlderMessages] Loading messages before ${oldestMessageDate}`);
+
+            try {
+                const response = await fetch(
+                    `${API_URL}/chats/${currentChatId}/messages?before=${encodeURIComponent(oldestMessageDate)}&limit=50`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+
+                if (!response.ok) {
+                    console.error('[loadOlderMessages] Failed:', response.status);
+                    showToast('Не удалось загрузить старые сообщения', 'error');
+                    return;
+                }
+
+                const data = await response.json();
+                const messageList = Array.isArray(data.messages) ? data.messages : [];
+                console.log(`[loadOlderMessages] Loaded ${messageList.length} older messages`);
+
+                if (messageList.length === 0) {
+                    hasMoreMessages = false;
+                    showToast('Это все сообщения', 'info');
+                    return;
+                }
+
+                const messagesContainer = document.getElementById('messagesContainer');
+                const scrollHeightBefore = messagesContainer.scrollHeight;
+                const scrollTopBefore = messagesContainer.scrollTop;
+
+                // Insert older messages at the top (reverse order since they come oldest-first)
+                messageList.reverse().forEach(msg => {
+                    try {
+                        prependMessage(msg);
+                    } catch (err) {
+                        console.error('[loadOlderMessages] Error rendering message:', err, msg);
+                    }
+                });
+
+                // Update oldest message date and hasMore
+                oldestMessageDate = messageList[messageList.length - 1].created_at;
+                hasMoreMessages = messageList.length >= 50;
+                console.log(`[loadOlderMessages] New oldest=${oldestMessageDate}, hasMore=${hasMoreMessages}`);
+
+                // Restore scroll position (maintain user's view)
+                requestAnimationFrame(() => {
+                    const scrollHeightAfter = messagesContainer.scrollHeight;
+                    const scrollDiff = scrollHeightAfter - scrollHeightBefore;
+                    messagesContainer.scrollTop = scrollTopBefore + scrollDiff;
+                    console.log(`[loadOlderMessages] Scroll restored: ${scrollTopBefore} + ${scrollDiff} = ${messagesContainer.scrollTop}`);
+                });
+
+            } catch (err) {
+                console.error('[loadOlderMessages] Error:', err);
+                showToast('Ошибка загрузки старых сообщений', 'error');
+            } finally {
+                isLoadingOlderMessages = false;
+            }
+        }
+
+        // Prepend message at the top of the messages container (for pagination)
+        function prependMessage(message) {
+            const messagesContainer = document.getElementById('messagesContainer');
+
+            const emptyState = messagesContainer.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            // Deduplication: check if message already exists
+            if (message.id) {
+                const existing = messagesContainer.querySelector(`[data-real-message-id="${message.id}"]`);
+                if (existing) {
+                    console.log('[prependMessage] Skipping duplicate message by ID:', message.id);
+                    return;
+                }
+            }
+
+            const isOwn = message.user_id === currentUser?.id;
+            const userName = message.user_name || 'Unknown';
+            const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
+            const avatarColor = getAvatarColor(userName);
+            const time = new Date(message.created_at).toLocaleTimeString('ru-RU', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            let replyHtml = '';
+            if (message.reply_to) {
+                replyHtml = `<div class="message-reply-to" data-reply-to-id="${message.reply_to.id}" onclick="scrollToMessage(${message.reply_to.id})" style="cursor: pointer;">
+                    ↩️ ${message.reply_to.user_name}: ${message.reply_to.content || '📎'}
+                </div>`;
+            }
+
+            let forwardHtml = '';
+            if (message.forwarded_from) {
+                forwardHtml = `<div class="message-forward-badge">
+                    ➡️ Переслано от ${message.forwarded_from.user_name}
+                </div>`;
+            }
+
+            let reactionsHtml = '';
+            if (message.reactions && message.reactions.length > 0) {
+                const reactionCounts = {};
+                message.reactions.forEach(r => {
+                    if (!reactionCounts[r.emoji]) {
+                        reactionCounts[r.emoji] = { count: 0, users: [], hasOwn: false };
+                    }
+                    reactionCounts[r.emoji].count++;
+                    reactionCounts[r.emoji].users.push(r.user_name);
+                    if (r.user_id === currentUser.id) {
+                        reactionCounts[r.emoji].hasOwn = true;
+                    }
+                });
+
+                reactionsHtml = '<div class="message-reactions">' +
+                    Object.entries(reactionCounts).map(([emoji, data]) =>
+                        `<div class="reaction-item ${data.hasOwn ? 'own' : ''}"
+                              onclick="${data.hasOwn ? `removeReaction(${message.id})` : `addReaction(${message.id}, '${emoji}')`}"
+                              title="${data.users.join(', ')}">
+                            ${emoji} ${data.count}
+                        </div>`
+                    ).join('') + '</div>';
+            }
+
+            const emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${isOwn ? 'own' : ''}`;
+            if (message.id) {
+                messageEl.setAttribute('data-real-message-id', message.id);
+            }
+            messageEl.innerHTML = `
+                <div class="message-avatar" style="background: ${avatarColor};">${initials}</div>
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-author">${message.user_name || 'Unknown'}</span>
+                        <span class="message-time">${time}</span>
+                    </div>
+                    ${forwardHtml}
+                    ${replyHtml}
+                    <div class="message-bubble">
+                        ${renderMessageContent(message)}
+                        ${renderMessageFile(message)}
+                    </div>
+                    ${reactionsHtml}
+                </div>
+                <div class="message-actions">
+                    <button class="action-btn" onclick="toggleMessageMenu(${message.id})" title="Меню">⋮</button>
+                    <div class="message-dropdown" id="message-menu-${message.id}">
+                        <div class="dropdown-item" onclick="setReplyTo({id: ${message.id}, content: '${escapeJs(message.content || '📎')}'}); closeAllMenus();">
+                            <span>↩️</span>
+                            <span>Ответить</span>
+                        </div>
+                        ${(isOwn || currentUser?.role === 'admin') && message.content ? `
+                        <div class="dropdown-item" data-permission="edit_own_messages" onclick="editMessage(${message.id}, '${escapeJs(message.content || '')}', '${message.created_at}'); closeAllMenus();">
+                            <span>✏️</span>
+                            <span>Редактировать</span>
+                        </div>
+                        ` : ''}
+                        <div class="dropdown-item" onclick="showEmojiPickerInMenu(${message.id}, event)">
+                            <span>😊</span>
+                            <span>Реакция</span>
+                        </div>
+                        <div class="emoji-picker-inline" id="emoji-picker-${message.id}" style="display: none;">
+                            ${emojis.map(e => `<span class="emoji-btn" onclick="addReaction(${message.id}, '${e}'); closeAllMenus();">${e}</span>`).join('')}
+                        </div>
+                        <div class="dropdown-separator"></div>
+                        <div class="dropdown-item" onclick="copyMessage('${escapeJs(message.content || '')}'); closeAllMenus();">
+                            <span>📋</span>
+                            <span>Копировать</span>
+                        </div>
+                        ${message.file_url ? `
+                        <div class="dropdown-item" onclick="downloadFile('${escapeJs(message.file_url)}', '${escapeJs(message.file_name || 'file')}'); closeAllMenus();">
+                            <span>📥</span>
+                            <span>Скачать</span>
+                        </div>
+                        ` : ''}
+                        <div class="dropdown-item" data-permission="forward_message" onclick="forwardMessage(${message.id}); closeAllMenus();">
+                            <span>➡️</span>
+                            <span>Переслать</span>
+                        </div>
+                        <div class="dropdown-item" data-permission="pin_message" onclick="pinMessage(${message.id}); closeAllMenus();">
+                            <span>📌</span>
+                            <span>Закрепить</span>
+                        </div>
+                        <div class="dropdown-item" data-permission="add_to_favorites" onclick="addToFavorites(${message.id}); closeAllMenus();">
+                            <span>⭐</span>
+                            <span>В избранное</span>
+                        </div>
+                        ${!isOwn ? `
+                        <div class="dropdown-separator"></div>
+                        <div class="dropdown-item" data-permission="write_to_user" onclick="writeToUser(${message.user_id}, '${message.user_name}'); closeAllMenus();">
+                            <span>💬</span>
+                            <span>Написать автору</span>
+                        </div>
+                        ` : ''}
+                        ${isOwn ? `
+                        <div class="dropdown-separator"></div>
+                        <div class="dropdown-item danger" data-permission="delete_own_messages" onclick="deleteMessage(${message.id}); closeAllMenus();">
+                            <span>🗑️</span>
+                            <span>Удалить</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Insert message at the top
+            messagesContainer.prepend(messageEl);
+
+            // Check if we need to add a date separator AFTER this message
+            // Look for the next message element (skip date separators)
+            let nextMessageEl = messageEl.nextElementSibling;
+            while (nextMessageEl && nextMessageEl.classList.contains('date-separator')) {
+                nextMessageEl = nextMessageEl.nextElementSibling;
+            }
+
+            if (nextMessageEl && nextMessageEl.classList.contains('message')) {
+                // Get date of prepended message
+                const messageDate = new Date(message.created_at);
+                const messageDateStr = `${messageDate.getFullYear()}-${String(messageDate.getMonth() + 1).padStart(2, '0')}-${String(messageDate.getDate()).padStart(2, '0')}`;
+
+                // Get date of next message - we need to extract it from the data
+                // Simple approach: check if there's already a separator between messages
+                const separatorBetween = messageEl.nextElementSibling;
+                if (!separatorBetween || !separatorBetween.classList.contains('date-separator')) {
+                    // No separator yet. We need to determine if dates are different
+                    // For now, always add a separator when prepending (will be cleaned up in future optimization)
+                    const dateStr = formatMessageDate(message.created_at);
+
+                    // Check if the existing date separator (if any) has same text
+                    const existingSep = messageEl.nextElementSibling;
+                    const needsSeparator = !existingSep || !existingSep.classList.contains('date-separator') ||
+                                          existingSep.textContent.trim() !== dateStr;
+
+                    if (needsSeparator) {
+                        const separator = createDateSeparator(dateStr);
+                        messageEl.after(separator);
+                        console.log(`[prependMessage] Added date separator: ${dateStr}`);
+                    }
+                }
+            } else if (!nextMessageEl) {
+                // This is the only message, add a date separator
+                const dateStr = formatMessageDate(message.created_at);
+                const separator = createDateSeparator(dateStr);
+                messageEl.after(separator);
+                console.log(`[prependMessage] Added date separator: ${dateStr} (only message)`);
             }
         }
 
@@ -6983,17 +7263,38 @@
             currentSearchIndex = -1;
         }
 
-        function searchInMessages(query) {
+        let totalSearchResultsInDB = 0; // Total results from database
+
+        async function searchInMessages(query) {
             console.log('[searchInMessages] Searching for:', query);
             clearSearchHighlights();
             messageSearchResults = [];
             currentSearchIndex = -1;
+            totalSearchResultsInDB = 0;
 
             if (!query || query.trim().length < 2) {
                 updateSearchCounter();
                 return;
             }
 
+            // First, query the API to get total count from database
+            if (currentChatId) {
+                try {
+                    const response = await fetch(
+                        `${API_URL}/chats/${currentChatId}/messages/search?query=${encodeURIComponent(query)}&limit=50`,
+                        { headers: { 'Authorization': `Bearer ${token}` } }
+                    );
+                    if (response.ok) {
+                        const data = await response.json();
+                        totalSearchResultsInDB = data.count || 0;
+                        console.log('[searchInMessages] Database has', totalSearchResultsInDB, 'total matches');
+                    }
+                } catch (err) {
+                    console.error('[searchInMessages] API search failed:', err);
+                }
+            }
+
+            // Then search in currently loaded DOM messages
             const container = document.getElementById('messagesContainer');
             if (!container) return;
 
@@ -7019,12 +7320,15 @@
                 }
             });
 
-            console.log('[searchInMessages] Found', messageSearchResults.length, 'matches');
+            console.log('[searchInMessages] Found', messageSearchResults.length, 'loaded matches,', totalSearchResultsInDB, 'total in DB');
             updateSearchCounter();
 
             if (messageSearchResults.length > 0) {
                 currentSearchIndex = 0;
                 scrollToSearchResult(0);
+            } else if (totalSearchResultsInDB > 0) {
+                // Results exist in DB but not loaded yet
+                showToast(`Найдено ${totalSearchResultsInDB} результатов. Прокрутите вверх для загрузки старых сообщений.`, 'info');
             }
         }
 
@@ -7078,9 +7382,17 @@
         function updateSearchCounter() {
             const counter = document.getElementById('messageSearchCounter');
             if (messageSearchResults.length === 0) {
-                counter.textContent = '0 из 0';
+                if (totalSearchResultsInDB > 0) {
+                    counter.textContent = `0 показано (${totalSearchResultsInDB} в истории)`;
+                } else {
+                    counter.textContent = '0 из 0';
+                }
             } else {
-                counter.textContent = `${currentSearchIndex + 1} из ${messageSearchResults.length}`;
+                if (totalSearchResultsInDB > messageSearchResults.length) {
+                    counter.textContent = `${currentSearchIndex + 1} из ${messageSearchResults.length} (всего ${totalSearchResultsInDB})`;
+                } else {
+                    counter.textContent = `${currentSearchIndex + 1} из ${messageSearchResults.length}`;
+                }
             }
         }
 
@@ -7554,6 +7866,16 @@
             messageSearchInput?.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') {
                     closeMessageSearch();
+                }
+            });
+
+            // Infinite scroll - load older messages when scrolling to top
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer?.addEventListener('scroll', () => {
+                // Check if user scrolled near the top (within 100px)
+                if (messagesContainer.scrollTop < 100 && hasMoreMessages && !isLoadingOlderMessages) {
+                    console.log('[scroll] Near top, loading older messages...');
+                    loadOlderMessages();
                 }
             });
 
