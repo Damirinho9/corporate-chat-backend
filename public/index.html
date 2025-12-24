@@ -2554,6 +2554,13 @@
                         localStorage.setItem('token', data.token);
                         localStorage.setItem('refreshToken', data.refreshToken);
                         token = data.token;
+                        if (socket) {
+                            socket.auth = { token };
+                            if (socket.connected) {
+                                socket.disconnect();
+                            }
+                            socket.connect();
+                        }
                         console.log('[Token Refresh] ✅ Token refreshed successfully');
                         return true;
                     }
@@ -5015,6 +5022,7 @@
         // ==================== SOCKET ====================
         let socketConnected = false;
         let mainSocketHandlersInitialized = false; // Prevent duplicate main handlers
+        let isRefreshingSocketToken = false;
 
         function setupMainSocketHandlers() {
             // Prevent duplicate registration
@@ -5072,6 +5080,29 @@
             socket.on('connect_error', (error) => {
                 console.error('[Socket] Connection error:', error);
                 setConnectionStatus(false);
+                const message = error?.message || '';
+                const isAuthError = message.includes('Authentication failed')
+                    || message.includes('jwt')
+                    || message.includes('token');
+                if (isAuthError && !isRefreshingSocketToken) {
+                    isRefreshingSocketToken = true;
+                    refreshAccessToken()
+                        .then((refreshed) => {
+                            if (refreshed && socket) {
+                                socket.auth = { token };
+                                socket.connect();
+                            } else if (!refreshed) {
+                                showToast('Сессия истекла. Пожалуйста, войдите снова.', 'error');
+                                setTimeout(() => logout(), 2000);
+                            }
+                        })
+                        .catch((err) => {
+                            console.error('[Socket] Token refresh error:', err);
+                        })
+                        .finally(() => {
+                            isRefreshingSocketToken = false;
+                        });
+                }
                 // Don't show toast on every retry to avoid spam
             });
 
@@ -6788,14 +6819,15 @@
         }
 
         // Load older messages (pagination - scroll up)
-        async function loadOlderMessages() {
+        async function loadOlderMessages(options = {}) {
+            const { silent = false } = options;
             if (!currentChatId || !hasMoreMessages || isLoadingOlderMessages) {
-                return;
+                return false;
             }
 
             if (!oldestMessageDate) {
                 console.warn('[loadOlderMessages] No oldest message date available');
-                return;
+                return false;
             }
 
             isLoadingOlderMessages = true;
@@ -6809,8 +6841,10 @@
 
                 if (!response.ok) {
                     console.error('[loadOlderMessages] Failed:', response.status);
-                    showToast('Не удалось загрузить старые сообщения', 'error');
-                    return;
+                    if (!silent) {
+                        showToast('Не удалось загрузить старые сообщения', 'error');
+                    }
+                    return false;
                 }
 
                 const data = await response.json();
@@ -6819,8 +6853,10 @@
 
                 if (messageList.length === 0) {
                     hasMoreMessages = false;
-                    showToast('Это все сообщения', 'info');
-                    return;
+                    if (!silent) {
+                        showToast('Это все сообщения', 'info');
+                    }
+                    return false;
                 }
 
                 const messagesContainer = document.getElementById('messagesContainer');
@@ -6852,9 +6888,13 @@
                     console.log(`[loadOlderMessages] Scroll restored: ${scrollTopBefore} + ${scrollDiff} = ${messagesContainer.scrollTop}`);
                 });
 
+                return true;
             } catch (err) {
                 console.error('[loadOlderMessages] Error:', err);
-                showToast('Ошибка загрузки старых сообщений', 'error');
+                if (!silent) {
+                    showToast('Ошибка загрузки старых сообщений', 'error');
+                }
+                return false;
             } finally {
                 isLoadingOlderMessages = false;
             }
@@ -7362,6 +7402,7 @@
         // ==================== MESSAGE SEARCH ====================
         let messageSearchResults = [];
         let currentSearchIndex = -1;
+        let activeMessageSearchQuery = '';
 
         function toggleMessageSearch() {
             const panel = document.getElementById('messageSearchPanel');
@@ -7382,16 +7423,26 @@
             clearSearchHighlights();
             messageSearchResults = [];
             currentSearchIndex = -1;
+            activeMessageSearchQuery = '';
         }
 
         let totalSearchResultsInDB = 0; // Total results from database
 
-        async function searchInMessages(query) {
+        async function searchInMessages(query, options = {}) {
+            const {
+                skipDbCount = false,
+                skipAutoScroll = false,
+                suppressToast = false,
+                autoLoadOlder = true
+            } = options;
             console.log('[searchInMessages] Searching for:', query);
+            activeMessageSearchQuery = query;
             clearSearchHighlights();
             messageSearchResults = [];
             currentSearchIndex = -1;
-            totalSearchResultsInDB = 0;
+            if (!skipDbCount) {
+                totalSearchResultsInDB = 0;
+            }
 
             if (!query || query.trim().length < 2) {
                 updateSearchCounter();
@@ -7399,7 +7450,7 @@
             }
 
             // First, query the API to get total count from database
-            if (currentChatId) {
+            if (currentChatId && !skipDbCount) {
                 try {
                     const response = await fetch(
                         `${API_URL}/chats/${currentChatId}/messages/search?query=${encodeURIComponent(query)}&limit=50`,
@@ -7407,7 +7458,7 @@
                     );
                     if (response.ok) {
                         const data = await response.json();
-                        totalSearchResultsInDB = data.count || 0;
+                        totalSearchResultsInDB = data.total ?? data.count ?? 0;
                         console.log('[searchInMessages] Database has', totalSearchResultsInDB, 'total matches');
                     }
                 } catch (err) {
@@ -7446,8 +7497,27 @@
 
             if (messageSearchResults.length > 0) {
                 currentSearchIndex = 0;
-                scrollToSearchResult(0);
-            } else if (totalSearchResultsInDB > 0) {
+                if (!skipAutoScroll) {
+                    scrollToSearchResult(0);
+                }
+            } else if (totalSearchResultsInDB > 0 && autoLoadOlder && hasMoreMessages) {
+                const loaded = await loadOlderMessages({ silent: true });
+                if (loaded) {
+                    await searchInMessages(activeMessageSearchQuery, {
+                        skipDbCount: true,
+                        skipAutoScroll: true,
+                        suppressToast: true,
+                        autoLoadOlder: false
+                    });
+                    if (messageSearchResults.length > 0 && !skipAutoScroll) {
+                        scrollToSearchResult(0);
+                    }
+                    return;
+                }
+                if (!suppressToast) {
+                    showToast(`Найдено ${totalSearchResultsInDB} результатов. Прокрутите вверх для загрузки старых сообщений.`, 'info');
+                }
+            } else if (totalSearchResultsInDB > 0 && !suppressToast) {
                 // Results exist in DB but not loaded yet
                 showToast(`Найдено ${totalSearchResultsInDB} результатов. Прокрутите вверх для загрузки старых сообщений.`, 'info');
             }
@@ -7488,16 +7558,78 @@
             updateSearchCounter();
         }
 
-        function nextSearchResult() {
-            if (messageSearchResults.length === 0) return;
-            const nextIndex = (currentSearchIndex + 1) % messageSearchResults.length;
-            scrollToSearchResult(nextIndex);
+        function findSearchResultIndexByMessageId(messageId) {
+            if (!messageId) return -1;
+            return messageSearchResults.findIndex(result => {
+                const idAttr = result.element?.getAttribute('data-real-message-id');
+                return Number(idAttr) === Number(messageId);
+            });
         }
 
-        function prevSearchResult() {
+        function nextSearchResult() {
             if (messageSearchResults.length === 0) return;
-            const prevIndex = (currentSearchIndex - 1 + messageSearchResults.length) % messageSearchResults.length;
-            scrollToSearchResult(prevIndex);
+            const nextIndex = currentSearchIndex + 1;
+            if (nextIndex < messageSearchResults.length) {
+                scrollToSearchResult(nextIndex);
+                return;
+            }
+
+            if (totalSearchResultsInDB > messageSearchResults.length && hasMoreMessages) {
+                const currentMessageId = messageSearchResults[currentSearchIndex]?.element?.getAttribute('data-real-message-id');
+                loadOlderMessages({ silent: true }).then(async (loaded) => {
+                    if (!loaded) {
+                        showToast('Нет более ранних сообщений', 'info');
+                        return;
+                    }
+                    await searchInMessages(activeMessageSearchQuery, {
+                        skipDbCount: true,
+                        skipAutoScroll: true,
+                        suppressToast: true,
+                        autoLoadOlder: false
+                    });
+                    if (messageSearchResults.length === 0) {
+                        showToast('Совпадений больше нет', 'info');
+                        return;
+                    }
+                    const currentIndex = findSearchResultIndexByMessageId(currentMessageId);
+                    const targetIndex = currentIndex >= 0 && currentIndex + 1 < messageSearchResults.length
+                        ? currentIndex + 1
+                        : messageSearchResults.length - 1;
+                    scrollToSearchResult(targetIndex);
+                });
+                return;
+            }
+
+            scrollToSearchResult(messageSearchResults.length - 1);
+        }
+
+        async function prevSearchResult() {
+            if (messageSearchResults.length === 0) return;
+            const prevIndex = currentSearchIndex - 1;
+            if (prevIndex >= 0) {
+                scrollToSearchResult(prevIndex);
+                return;
+            }
+
+            if (totalSearchResultsInDB > messageSearchResults.length && hasMoreMessages) {
+                const currentMessageId = messageSearchResults[currentSearchIndex]?.element?.getAttribute('data-real-message-id');
+                const loaded = await loadOlderMessages({ silent: true });
+                if (loaded) {
+                    await searchInMessages(activeMessageSearchQuery, {
+                        skipDbCount: true,
+                        skipAutoScroll: true,
+                        suppressToast: true
+                    });
+                    if (messageSearchResults.length > 0) {
+                        const currentIndex = findSearchResultIndexByMessageId(currentMessageId);
+                        const targetIndex = currentIndex > 0 ? currentIndex - 1 : 0;
+                        scrollToSearchResult(targetIndex);
+                    }
+                    return;
+                }
+            }
+
+            scrollToSearchResult(0);
         }
 
         function updateSearchCounter() {
