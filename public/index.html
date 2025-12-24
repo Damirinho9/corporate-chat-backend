@@ -6767,6 +6767,20 @@
             }
         }
 
+        // Escape JavaScript string for use in onclick attributes
+        function escapeJs(text) {
+            if (!text) return '';
+            return text
+                .replace(/\\/g, '\\\\')   // Backslash
+                .replace(/'/g, "\\'")      // Single quote
+                .replace(/"/g, '\\"')      // Double quote
+                .replace(/\n/g, '\\n')     // Newline
+                .replace(/\r/g, '\\r')     // Carriage return
+                .replace(/\t/g, '\\t')     // Tab
+                .replace(/\f/g, '\\f')     // Form feed
+                .replace(/\v/g, '\\v');    // Vertical tab
+        }
+
         // Prepend message at the top of the messages container (for pagination)
         function prependMessage(message) {
             const messagesContainer = document.getElementById('messagesContainer');
