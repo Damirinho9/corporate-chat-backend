@@ -6651,6 +6651,9 @@
                     });
                     console.log(`[loadMessages] Отрендерено сообщений: ${renderedCount} из ${messageList.length}`);
 
+                    // Rebuild date separators to ensure correct positioning
+                    rebuildDateSeparators(messagesContainer);
+
                     // Track pagination: save oldest message date
                     if (messageList.length > 0) {
                         oldestMessageDate = messageList[0].created_at; // First message is oldest
@@ -6746,33 +6749,8 @@
                     }
                 });
 
-                // Clean up duplicate date separators
-                removeDuplicateDateSeparators(messagesContainer);
-
-                // Ensure first message has a date separator before it
-                const firstMessage = messagesContainer.querySelector('.message');
-                if (firstMessage) {
-                    // Check if there's already a separator before the first message
-                    let hasSeparatorBefore = false;
-                    let prevSibling = firstMessage.previousElementSibling;
-                    while (prevSibling) {
-                        if (prevSibling.classList.contains('date-separator')) {
-                            hasSeparatorBefore = true;
-                            break;
-                        }
-                        prevSibling = prevSibling.previousElementSibling;
-                    }
-
-                    if (!hasSeparatorBefore) {
-                        const firstDateStr = firstMessage.getAttribute('data-message-date');
-                        if (firstDateStr) {
-                            const dateFormatted = formatMessageDate(new Date(firstDateStr + 'T00:00:00'));
-                            const separator = createDateSeparator(dateFormatted);
-                            firstMessage.before(separator);
-                            console.log(`[loadOlderMessages] Added date separator before first message: ${dateFormatted}`);
-                        }
-                    }
-                }
+                // Rebuild all date separators from scratch (ensures correct positioning)
+                rebuildDateSeparators(messagesContainer);
 
                 // Update oldest message date and hasMore
                 oldestMessageDate = messageList[messageList.length - 1].created_at;
@@ -6809,27 +6787,36 @@
                 .replace(/\v/g, '\\v');    // Vertical tab
         }
 
-        // Remove duplicate date separators (keep only one per date group)
-        function removeDuplicateDateSeparators(container) {
-            const separators = container.querySelectorAll('.date-separator');
-            let lastSeparatorText = null;
-            let removedCount = 0;
+        // Rebuild all date separators from scratch
+        function rebuildDateSeparators(container) {
+            // Remove all existing separators
+            const oldSeparators = container.querySelectorAll('.date-separator');
+            oldSeparators.forEach(sep => sep.remove());
+            console.log(`[rebuildDateSeparators] Removed ${oldSeparators.length} old separators`);
 
-            separators.forEach(sep => {
-                const currentText = sep.textContent.trim();
+            // Get all messages in order (top to bottom)
+            const messages = Array.from(container.querySelectorAll('.message'));
+            if (messages.length === 0) return;
 
-                // If this separator has the same text as the previous one, remove it
-                if (currentText === lastSeparatorText) {
-                    sep.remove();
-                    removedCount++;
-                } else {
-                    lastSeparatorText = currentText;
+            let lastDate = null;
+            let addedCount = 0;
+
+            messages.forEach((messageEl, index) => {
+                const messageDateStr = messageEl.getAttribute('data-message-date');
+                if (!messageDateStr) return;
+
+                // If this is a new date, add separator BEFORE this message
+                if (lastDate !== messageDateStr) {
+                    const dateFormatted = formatMessageDate(new Date(messageDateStr + 'T00:00:00'));
+                    const separator = createDateSeparator(dateFormatted);
+                    messageEl.before(separator);
+                    addedCount++;
+                    lastDate = messageDateStr;
+                    console.log(`[rebuildDateSeparators] Added separator "${dateFormatted}" before message ${index}`);
                 }
             });
 
-            if (removedCount > 0) {
-                console.log(`[removeDuplicateDateSeparators] Removed ${removedCount} duplicate separators`);
-            }
+            console.log(`[rebuildDateSeparators] Added ${addedCount} new separators for ${messages.length} messages`);
         }
 
         // Prepend message at the top of the messages container (for pagination)
@@ -6987,43 +6974,7 @@
 
             // Insert message at the top
             messagesContainer.prepend(messageEl);
-
-            // Find the next message element (skip non-message elements)
-            let nextMessageEl = messageEl.nextElementSibling;
-            while (nextMessageEl && !nextMessageEl.classList.contains('message')) {
-                nextMessageEl = nextMessageEl.nextElementSibling;
-            }
-
-            // Check if we need a separator BEFORE the next message (after current)
-            if (nextMessageEl) {
-                const nextDateStr = nextMessageEl.getAttribute('data-message-date');
-
-                // If dates are different, we need a separator between them
-                // But the separator should be BEFORE the next message's date group
-                if (nextDateStr && messageDateStr !== nextDateStr) {
-                    // Check if there's already a separator before nextMessageEl
-                    let hasSeparatorBeforeNext = false;
-                    let prevSibling = nextMessageEl.previousElementSibling;
-                    while (prevSibling && !prevSibling.classList.contains('message')) {
-                        if (prevSibling.classList.contains('date-separator')) {
-                            hasSeparatorBeforeNext = true;
-                            break;
-                        }
-                        prevSibling = prevSibling.previousElementSibling;
-                    }
-
-                    if (!hasSeparatorBeforeNext) {
-                        // Add separator BEFORE the next message (for its date group)
-                        const nextDateFormatted = formatMessageDate(
-                            // We need to create a date from nextDateStr
-                            new Date(nextDateStr + 'T00:00:00')
-                        );
-                        const separator = createDateSeparator(nextDateFormatted);
-                        nextMessageEl.before(separator);
-                        console.log(`[prependMessage] Added date separator: ${nextDateFormatted} before next message (${nextDateStr})`);
-                    }
-                }
-            }
+            // Note: Date separators will be rebuilt after batch insertion by rebuildDateSeparators()
         }
 
         // Track last message date for date separators
