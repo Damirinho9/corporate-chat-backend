@@ -6631,10 +6631,23 @@
                 console.log('[loadMessages] Получено сообщений:', messageList.length);
 
                 if (messageList.length > 0) {
-                    messageList.forEach(msg => appendMessage(msg));
+                    let renderedCount = 0;
+                    messageList.forEach((msg, index) => {
+                        try {
+                            appendMessage(msg);
+                            renderedCount++;
+                        } catch (err) {
+                            console.error('[loadMessages] Error rendering message', index, err, msg);
+                        }
+                    });
+                    console.log(`[loadMessages] Отрендерено сообщений: ${renderedCount} из ${messageList.length}`);
+
                     // Wait for all messages to render before scrolling
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
+                            const actualMessages = messagesContainer.querySelectorAll('.message').length;
+                            const separators = messagesContainer.querySelectorAll('.date-separator').length;
+                            console.log(`[loadMessages] В DOM: ${actualMessages} сообщений, ${separators} разделителей`);
                             scrollToBottom(false, true); // instant scroll to bottom when opening chat
                         });
                     });
@@ -6736,17 +6749,17 @@
 
             // Insert date separator if date changed
             const messageDate = new Date(message.created_at);
-            messageDate.setHours(0, 0, 0, 0);
-            const messageDateStr = messageDate.toDateString();
+            const messageDateStr = `${messageDate.getFullYear()}-${String(messageDate.getMonth() + 1).padStart(2, '0')}-${String(messageDate.getDate()).padStart(2, '0')}`;
 
             if (!lastMessageDate || lastMessageDate !== messageDateStr) {
                 const dateStr = formatMessageDate(message.created_at);
                 const separator = createDateSeparator(dateStr);
                 messagesContainer.appendChild(separator);
+                console.log(`[appendMessage] Date separator: ${dateStr} (${messageDateStr}, last: ${lastMessageDate})`);
                 lastMessageDate = messageDateStr;
             }
 
-            const isOwn = message.user_id === currentUser.id;
+            const isOwn = message.user_id === currentUser?.id;
             const userName = message.user_name || 'Unknown';
             const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
             const avatarColor = getAvatarColor(userName);
