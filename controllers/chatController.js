@@ -289,13 +289,16 @@ const createDirectChat = async (req, res) => {
             await client.query('BEGIN');
             await client.query('SELECT pg_advisory_lock(hashtext($1))', [pairKey]);
 
-            // Debug: Check all potential direct chats
+            // Debug: Check all potential direct chats with participant names
             const debugChats = await client.query(
-                `SELECT c.id, c.type, c.updated_at, COUNT(DISTINCT cp.user_id) as participant_count,
+                `SELECT c.id, c.type, c.updated_at,
+                        COUNT(DISTINCT cp.user_id) as participant_count,
                         STRING_AGG(cp.user_id::text, ', ' ORDER BY cp.user_id) as participant_ids,
+                        STRING_AGG(DISTINCT u.name, ', ' ORDER BY u.name) as participant_names,
                         (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count
                    FROM chats c
                    JOIN chat_participants cp ON c.id = cp.chat_id
+                   LEFT JOIN users u ON cp.user_id = u.id
                   WHERE c.type = 'direct'
                     AND c.id IN (
                         SELECT cp1.chat_id FROM chat_participants cp1 WHERE cp1.user_id = $1
@@ -303,10 +306,24 @@ const createDirectChat = async (req, res) => {
                         SELECT cp2.chat_id FROM chat_participants cp2 WHERE cp2.user_id = $2
                     )
                   GROUP BY c.id, c.type, c.updated_at
-                  ORDER BY c.updated_at DESC`,
+                  ORDER BY message_count DESC, c.updated_at DESC`,
                 [senderId, receiverId]
             );
             console.log('[createDirectChat] DEBUG - All matching chats:', debugChats.rows);
+
+            // Debug: If any chat has participant IDs containing anything other than sender/receiver, identify those users
+            const allParticipantIds = new Set();
+            debugChats.rows.forEach(chat => {
+                chat.participant_ids.split(', ').forEach(id => allParticipantIds.add(parseInt(id)));
+            });
+            const extraParticipants = [...allParticipantIds].filter(id => id !== senderId && id !== receiverId);
+            if (extraParticipants.length > 0) {
+                const extraUsers = await client.query(
+                    `SELECT id, name, role FROM users WHERE id = ANY($1::int[])`,
+                    [extraParticipants]
+                );
+                console.log('[createDirectChat] DEBUG - Extra participants found in direct chats:', extraUsers.rows);
+            }
 
             // FIX: Prioritize chat with message history over empty chats
             // This handles legacy chats where someone accidentally added a 3rd participant
