@@ -5139,8 +5139,9 @@
                 }
             });
 
-            // 🔥 HEARTBEAT MONITOR: Detect silent disconnects
-            const HEARTBEAT_INTERVAL = 30000; // Check every 30 seconds
+            // 🔥 HEARTBEAT MONITOR: COMPLETELY DISABLED
+            // Service Worker handles caching, Socket.IO has built-in heartbeat
+// DISABLED:             const HEARTBEAT_INTERVAL = 30000; // Check every 30 seconds
 // DISABLED:             const MAX_INACTIVITY = 60000; // 60 seconds without any activity = dead connection
 // DISABLED: 
 // DISABLED:             // Update activity time on any socket event

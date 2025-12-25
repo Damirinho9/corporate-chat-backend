@@ -1,6 +1,6 @@
 // Service Worker for Corporate Chat Push Notifications
-const CACHE_NAME = 'corporate-chat-v1';
-const SW_VERSION = '1.0.0';
+const CACHE_NAME = 'corporate-chat-v2';
+const SW_VERSION = '2.0.0';
 
 // Install event
 self.addEventListener('install', (event) => {
@@ -11,7 +11,20 @@ self.addEventListener('install', (event) => {
 // Activate event
 self.addEventListener('activate', (event) => {
     console.log('[SW] Activating Service Worker v' + SW_VERSION);
-    event.waitUntil(clients.claim());
+
+    // Clear all old caches
+    event.waitUntil(
+        caches.keys().then(cacheNames => {
+            return Promise.all(
+                cacheNames.map(cacheName => {
+                    if (cacheName !== CACHE_NAME) {
+                        console.log('[SW] Deleting old cache:', cacheName);
+                        return caches.delete(cacheName);
+                    }
+                })
+            );
+        }).then(() => clients.claim())
+    );
 });
 
 // Push event - handle incoming push notifications
