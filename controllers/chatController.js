@@ -291,8 +291,9 @@ const createDirectChat = async (req, res) => {
 
             // Debug: Check all potential direct chats
             const debugChats = await client.query(
-                `SELECT c.id, c.type, COUNT(DISTINCT cp.user_id) as participant_count,
-                        STRING_AGG(cp.user_id::text, ', ' ORDER BY cp.user_id) as participant_ids
+                `SELECT c.id, c.type, c.updated_at, COUNT(DISTINCT cp.user_id) as participant_count,
+                        STRING_AGG(cp.user_id::text, ', ' ORDER BY cp.user_id) as participant_ids,
+                        (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count
                    FROM chats c
                    JOIN chat_participants cp ON c.id = cp.chat_id
                   WHERE c.type = 'direct'
@@ -301,12 +302,14 @@ const createDirectChat = async (req, res) => {
                         INTERSECT
                         SELECT cp2.chat_id FROM chat_participants cp2 WHERE cp2.user_id = $2
                     )
-                  GROUP BY c.id, c.type
+                  GROUP BY c.id, c.type, c.updated_at
                   ORDER BY c.updated_at DESC`,
                 [senderId, receiverId]
             );
             console.log('[createDirectChat] DEBUG - All matching chats:', debugChats.rows);
 
+            // FIX: Return most recent direct chat between two users, even if it has >2 participants
+            // This handles legacy chats where someone accidentally added a 3rd participant
             const existingChat = await client.query(
                 `SELECT c.id
                    FROM chats c
@@ -317,9 +320,6 @@ const createDirectChat = async (req, res) => {
                     AND EXISTS (
                       SELECT 1 FROM chat_participants cp WHERE cp.chat_id = c.id AND cp.user_id = $2
                     )
-                    AND (
-                      SELECT COUNT(DISTINCT cp.user_id) FROM chat_participants cp WHERE cp.chat_id = c.id
-                    ) = 2
                   ORDER BY c.updated_at DESC, c.id ASC
                   LIMIT 1
                   FOR UPDATE`,
