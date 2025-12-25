@@ -289,6 +289,24 @@ const createDirectChat = async (req, res) => {
             await client.query('BEGIN');
             await client.query('SELECT pg_advisory_lock(hashtext($1))', [pairKey]);
 
+            // Debug: Check all potential direct chats
+            const debugChats = await client.query(
+                `SELECT c.id, c.type, COUNT(DISTINCT cp.user_id) as participant_count,
+                        STRING_AGG(cp.user_id::text, ', ' ORDER BY cp.user_id) as participant_ids
+                   FROM chats c
+                   JOIN chat_participants cp ON c.id = cp.chat_id
+                  WHERE c.type = 'direct'
+                    AND c.id IN (
+                        SELECT cp1.chat_id FROM chat_participants cp1 WHERE cp1.user_id = $1
+                        INTERSECT
+                        SELECT cp2.chat_id FROM chat_participants cp2 WHERE cp2.user_id = $2
+                    )
+                  GROUP BY c.id, c.type
+                  ORDER BY c.updated_at DESC`,
+                [senderId, receiverId]
+            );
+            console.log('[createDirectChat] DEBUG - All matching chats:', debugChats.rows);
+
             const existingChat = await client.query(
                 `SELECT c.id
                    FROM chats c
@@ -307,6 +325,13 @@ const createDirectChat = async (req, res) => {
                   FOR UPDATE`,
                 [senderId, receiverId]
             );
+
+            console.log('[createDirectChat] Existing chat query result:', {
+                found: existingChat.rows.length > 0,
+                chatId: existingChat.rows[0]?.id,
+                senderId,
+                receiverId
+            });
 
             if (existingChat.rows.length > 0) {
                 result = existingChat.rows[0].id;
