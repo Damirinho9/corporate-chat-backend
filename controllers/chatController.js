@@ -308,10 +308,12 @@ const createDirectChat = async (req, res) => {
             );
             console.log('[createDirectChat] DEBUG - All matching chats:', debugChats.rows);
 
-            // FIX: Return most recent direct chat between two users, even if it has >2 participants
+            // FIX: Prioritize chat with message history over empty chats
             // This handles legacy chats where someone accidentally added a 3rd participant
+            // Strategy: Return chat with most messages, then most recent if counts are equal
             const existingChat = await client.query(
-                `SELECT c.id
+                `SELECT c.id,
+                        (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count
                    FROM chats c
                   WHERE c.type = 'direct'
                     AND EXISTS (
@@ -320,7 +322,10 @@ const createDirectChat = async (req, res) => {
                     AND EXISTS (
                       SELECT 1 FROM chat_participants cp WHERE cp.chat_id = c.id AND cp.user_id = $2
                     )
-                  ORDER BY c.updated_at DESC, c.id ASC
+                  ORDER BY
+                    (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) DESC,
+                    c.updated_at DESC,
+                    c.id ASC
                   LIMIT 1
                   FOR UPDATE`,
                 [senderId, receiverId]
@@ -329,6 +334,7 @@ const createDirectChat = async (req, res) => {
             console.log('[createDirectChat] Existing chat query result:', {
                 found: existingChat.rows.length > 0,
                 chatId: existingChat.rows[0]?.id,
+                messageCount: existingChat.rows[0]?.message_count,
                 senderId,
                 receiverId
             });
