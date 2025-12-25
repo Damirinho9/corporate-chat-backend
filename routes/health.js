@@ -3,12 +3,16 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 
-// Cache for version info to avoid reading files on every request
+// Cache for version info with 30-second TTL
 let cachedVersion = null;
 let cachedTimestamp = null;
+let cacheExpiry = 0;
 
 function getVersionInfo() {
-    if (cachedVersion && cachedTimestamp) {
+    const now = Date.now();
+
+    // Return cached value if still valid (30 seconds)
+    if (cachedVersion && cachedTimestamp && now < cacheExpiry) {
         return { version: cachedVersion, timestamp: cachedTimestamp };
     }
 
@@ -22,9 +26,10 @@ function getVersionInfo() {
         const stats = fs.statSync(indexPath);
         const timestamp = stats.mtime.getTime();
 
-        // Cache the values
+        // Cache the values for 30 seconds
         cachedVersion = version;
         cachedTimestamp = timestamp;
+        cacheExpiry = now + 30000; // 30 seconds from now
 
         return { version, timestamp };
     } catch (error) {
