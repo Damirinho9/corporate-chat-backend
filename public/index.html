@@ -5141,32 +5141,32 @@
 
             // 🔥 HEARTBEAT MONITOR: Detect silent disconnects
             const HEARTBEAT_INTERVAL = 30000; // Check every 30 seconds
-            const MAX_INACTIVITY = 60000; // 60 seconds without any activity = dead connection
-
-            // Update activity time on any socket event
-            const updateActivity = () => {
-                lastActivityTime = Date.now();
-                window.lastSocketActivity = lastActivityTime;
-            };
-
-            // Monitor connection health
-            setInterval(() => {
-                const timeSinceLastActivity = Date.now() - lastActivityTime;
-
-                if (socket && socket.connected && timeSinceLastActivity > MAX_INACTIVITY) {
-                    console.warn(`[Socket] ⚠️ No activity for ${timeSinceLastActivity}ms - connection may be dead`);
-                    console.log('[Socket] Forcing reconnect...');
-                    showToast('⚠️ Обнаружен разрыв соединения. Переподключение...', 'warning');
-                    lastActivityTime = Date.now(); // Reset to prevent multiple reconnects
-                    socket.disconnect();
-                    setTimeout(() => {
-                        if (socket) socket.connect();
-                    }, 1000);
-                }
-            }, HEARTBEAT_INTERVAL);
-
-            // Track activity on all events
-            socket.onAny(() => {
+// DISABLED:             const MAX_INACTIVITY = 60000; // 60 seconds without any activity = dead connection
+// DISABLED: 
+// DISABLED:             // Update activity time on any socket event
+// DISABLED:             const updateActivity = () => {
+// DISABLED:                 lastActivityTime = Date.now();
+// DISABLED:                 window.lastSocketActivity = lastActivityTime;
+// DISABLED:             };
+// DISABLED: 
+// DISABLED:             // Monitor connection health
+// DISABLED:             setInterval(() => {
+// DISABLED:                 const timeSinceLastActivity = Date.now() - lastActivityTime;
+// DISABLED: 
+// DISABLED:                 if (socket && socket.connected && timeSinceLastActivity > MAX_INACTIVITY) {
+// DISABLED:                     console.warn(`[Socket] ⚠️ No activity for ${timeSinceLastActivity}ms - connection may be dead`);
+// DISABLED:                     console.log('[Socket] Forcing reconnect...');
+// DISABLED:                     showToast('⚠️ Обнаружен разрыв соединения. Переподключение...', 'warning');
+// DISABLED:                     lastActivityTime = Date.now(); // Reset to prevent multiple reconnects
+// DISABLED:                     socket.disconnect();
+// DISABLED:                     setTimeout(() => {
+// DISABLED:                         if (socket) socket.connect();
+// DISABLED:                     }, 1000);
+// DISABLED:                 }
+// DISABLED:             }, HEARTBEAT_INTERVAL);
+// DISABLED: 
+// DISABLED:             // Track activity on all events
+// DISABLED:             socket.onAny(() => {
                 updateActivity();
             });
 
