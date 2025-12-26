@@ -359,6 +359,46 @@ const createDirectChat = async (req, res) => {
             if (existingChat.rows.length > 0) {
                 result = existingChat.rows[0].id;
                 usedExisting = true;
+
+                // CRITICAL FIX: Ensure direct chat has EXACTLY 2 participants
+                // Remove any extra participants that were incorrectly added
+                const participantCheck = await client.query(
+                    `SELECT user_id, joined_at
+                     FROM chat_participants
+                     WHERE chat_id = $1
+                     ORDER BY joined_at ASC`,
+                    [result]
+                );
+
+                if (participantCheck.rows.length > 2) {
+                    console.log(`[createDirectChat] WARNING: Chat ${result} has ${participantCheck.rows.length} participants, removing extras`);
+
+                    // Keep only the original 2 participants (sender and receiver)
+                    const validParticipants = [senderId, receiverId];
+                    await client.query(
+                        `DELETE FROM chat_participants
+                         WHERE chat_id = $1
+                           AND user_id NOT IN ($2, $3)`,
+                        [result, senderId, receiverId]
+                    );
+
+                    console.log(`[createDirectChat] Removed ${participantCheck.rows.length - 2} extra participants from chat ${result}`);
+                } else if (participantCheck.rows.length < 2) {
+                    console.log(`[createDirectChat] WARNING: Chat ${result} has only ${participantCheck.rows.length} participants, adding missing ones`);
+
+                    // Add missing participants
+                    const existingIds = participantCheck.rows.map(r => r.user_id);
+                    const missingIds = [senderId, receiverId].filter(id => !existingIds.includes(id));
+
+                    for (const userId of missingIds) {
+                        await client.query(
+                            `INSERT INTO chat_participants (chat_id, user_id)
+                             VALUES ($1, $2)
+                             ON CONFLICT (chat_id, user_id) DO NOTHING`,
+                            [result, userId]
+                        );
+                    }
+                }
             } else {
                 const chatResult = await client.query(
                     `INSERT INTO chats (type, created_by)
@@ -376,6 +416,18 @@ const createDirectChat = async (req, res) => {
                 );
 
                 result = chatId;
+
+                // VALIDATION: Ensure exactly 2 participants were added
+                const validateResult = await client.query(
+                    `SELECT COUNT(*) as count FROM chat_participants WHERE chat_id = $1`,
+                    [result]
+                );
+
+                if (parseInt(validateResult.rows[0].count) !== 2) {
+                    throw new Error(`Direct chat validation failed: expected 2 participants, got ${validateResult.rows[0].count}`);
+                }
+
+                console.log(`[createDirectChat] Created new direct chat ${result} with exactly 2 participants`);
             }
 
             await client.query('COMMIT');
