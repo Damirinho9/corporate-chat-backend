@@ -161,23 +161,29 @@ BEGIN
 
     -- Find all user pairs that have multiple direct chats
     FOR v_pair IN
-        WITH user_pairs AS (
+        WITH chat_message_counts AS (
             SELECT
+                c.id,
+                c.created_at,
                 LEAST(cp1.user_id, cp2.user_id) as user1,
                 GREATEST(cp1.user_id, cp2.user_id) as user2,
-                ARRAY_AGG(DISTINCT c.id ORDER BY
-                    (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) DESC,
-                    c.created_at ASC
-                ) as chat_ids,
-                SUM((SELECT COUNT(*) FROM messages WHERE chat_id = c.id)) as total_messages
+                (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count
             FROM chats c
             JOIN chat_participants cp1 ON c.id = cp1.chat_id
             JOIN chat_participants cp2 ON c.id = cp2.chat_id
             WHERE c.type = 'direct'
               AND cp1.user_id < cp2.user_id
               AND (SELECT COUNT(*) FROM chat_participants WHERE chat_id = c.id) = 2
+        ),
+        user_pairs AS (
+            SELECT
+                user1,
+                user2,
+                ARRAY_AGG(id ORDER BY message_count DESC, created_at ASC) as chat_ids,
+                SUM(message_count) as total_messages
+            FROM chat_message_counts
             GROUP BY user1, user2
-            HAVING COUNT(DISTINCT c.id) > 1
+            HAVING COUNT(id) > 1
         )
         SELECT * FROM user_pairs
     LOOP
