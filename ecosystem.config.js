@@ -3,20 +3,20 @@ module.exports = {
     {
       name: 'corporate-chat',
       script: 'server.js',
-      cwd: '/root/corporate-chat-backend',
+      cwd: '/home/damir/corporate-chat-backend',
       watch: false,
       env: {
         NODE_ENV: 'development',
         PORT: 3000,
         DB_HOST: 'localhost',
         DB_USER: 'postgres',
-        DB_PASS: '12345',
-        DB_NAME: 'chat_db',
-        DB_PORT: 5432,
+        DB_PASSWORD: '12345',
+        DB_NAME: 'corporate_chat',
+        DB_PORT: 5433,
         DB_SSL: false,
         CORS_ORIGIN: '*',
         JWT_SECRET: 'supersecretkey123',
-        TOKEN_EXPIRES_IN: '7d',
+        TOKEN_EXPIRES_IN: '30d',
         INIT_DB_ON_BOOT: false
       },
       env_production: {
@@ -24,13 +24,13 @@ module.exports = {
         PORT: 3000,
         DB_HOST: 'localhost',
         DB_USER: 'postgres',
-        DB_PASS: '12345',
-        DB_NAME: 'chat_db',
-        DB_PORT: 5432,
+        DB_PASSWORD: '12345',
+        DB_NAME: 'corporate_chat',
+        DB_PORT: 5433,
         DB_SSL: false,
         CORS_ORIGIN: '*',
         JWT_SECRET: 'supersecretkey123',
-        TOKEN_EXPIRES_IN: '7d',
+        TOKEN_EXPIRES_IN: '30d',
         INIT_DB_ON_BOOT: false
       }
     }
