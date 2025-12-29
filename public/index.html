@@ -2618,8 +2618,8 @@
                                 } else {
                                     // Refresh failed, logout user
                                     console.error('[fetchWithRetry] Token refresh failed, logging out...');
-                                    showToast('Сессия истекла. Пожалуйста, войдите снова.', 'error');
-                                    setTimeout(() => logout(), 2000);
+                                    showToast('⏰ Ваша сессия истекла (прошло 30 дней). Сейчас переведём вас на страницу входа...', 'info');
+                                    setTimeout(() => logout(), 3000);
                                     return response;
                                 }
                             }
@@ -4025,8 +4025,8 @@
                     applyPermissionVisibility();
                 } else if (response.status === 401) {
                     console.error('[loadUserPermissions] Unauthorized - token likely expired');
-                    showToast('Сессия истекла. Войдите заново.', 'error');
-                    setTimeout(() => logout(), 2000);
+                    showToast('⏰ Ваша сессия истекла (прошло 30 дней). Сейчас переведём вас на страницу входа...', 'info');
+                    setTimeout(() => logout(), 3000);
                 }
             } catch (err) {
                 console.error('Error loading permissions:', err);
