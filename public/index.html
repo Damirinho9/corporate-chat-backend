@@ -4016,13 +4016,17 @@
 
         async function loadUserPermissions() {
             try {
-                const response = await fetch(`${API_URL}/permissions/general`, {
+                const response = await fetchWithRetry(`${API_URL}/permissions/general`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (response.ok) {
                     const data = await response.json();
                     userPermissions = data.permissions[currentUser?.role] || {};
                     applyPermissionVisibility();
+                } else if (response.status === 401) {
+                    console.error('[loadUserPermissions] Unauthorized - token likely expired');
+                    showToast('Сессия истекла. Войдите заново.', 'error');
+                    setTimeout(() => logout(), 2000);
                 }
             } catch (err) {
                 console.error('Error loading permissions:', err);
