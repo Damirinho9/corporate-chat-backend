@@ -342,13 +342,15 @@ router.get('/chats/:chatId/active-call',
             const chatId = parseInt(req.params.chatId);
             const userId = req.user.id;
 
-            // Verify user has access to this chat
-            const accessCheck = await query(`
-                SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2
-            `, [chatId, userId]);
+            // Verify user has access to this chat (participants or admin)
+            if (req.user.role !== 'admin') {
+                const accessCheck = await query(`
+                    SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2
+                `, [chatId, userId]);
 
-            if (accessCheck.rowCount === 0) {
-                return res.status(403).json({ error: 'Access denied to this chat' });
+                if (accessCheck.rowCount === 0) {
+                    return res.status(403).json({ error: 'Access denied to this chat' });
+                }
             }
 
             // Check for active call (status = 'ongoing')

@@ -664,22 +664,36 @@ const markAsRead = async (req, res) => {
         const { chatId } = req.params;
         const userId = req.user.id;
 
-        // 🔥 FIX: Use UPSERT to handle admins who are not chat participants
-        // INSERT if no record exists, UPDATE if it does
-        await query(
-            `INSERT INTO chat_participants (chat_id, user_id, last_read_at, joined_at)
-             VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-             ON CONFLICT (chat_id, user_id)
-             DO UPDATE SET last_read_at = CURRENT_TIMESTAMP`,
+        // Check if user is a participant
+        const participantCheck = await query(
+            'SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
             [chatId, userId]
         );
 
-        console.log(`[markAsRead] Chat ${chatId} marked as read for user ${userId}`);
+        if (participantCheck.rows.length > 0) {
+            // User is participant - update last_read_at
+            await query(
+                `UPDATE chat_participants
+                 SET last_read_at = CURRENT_TIMESTAMP
+                 WHERE chat_id = $1 AND user_id = $2`,
+                [chatId, userId]
+            );
+            console.log(`[markAsRead] Chat ${chatId} marked as read for participant ${userId}`);
+        } else if (req.user.role === 'admin') {
+            // Admin viewing chat but not a participant - don't add them, just return success
+            console.log(`[markAsRead] Admin ${userId} viewing chat ${chatId} (not a participant, not adding)`);
+        } else {
+            // Non-admin trying to mark non-participant chat as read
+            return res.status(403).json({
+                error: 'Access denied to this chat',
+                code: 'NOT_PARTICIPANT'
+            });
+        }
 
         res.json({ message: 'Chat marked as read' });
     } catch (error) {
         console.error('Mark as read error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to mark chat as read',
             code: 'MARK_READ_ERROR'
         });
