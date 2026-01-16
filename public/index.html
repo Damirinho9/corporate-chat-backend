@@ -2648,10 +2648,14 @@
             });
 
             socket.on('new_message', (data) => {
+                console.log('[Socket] 🆕 new_message event received:', data);
+                console.log('[Socket] Current chat:', currentChatId, 'Message chat:', data.chatId);
+
                 const isCurrentChat = data.chatId === currentChatId;
                 const isOwnMessage = data.message.user_id === currentUser.id;
 
                 if (isCurrentChat) {
+                    console.log('[Socket] Message is for current chat - appending');
                     appendMessage(data.message);
                     scrollToBottom();
                     // 🔥 FIX: Auto-mark as read when viewing the chat
@@ -2659,6 +2663,7 @@
                         socket.emit('mark_as_read', { chatId: data.chatId });
                     }
                 } else if (!isOwnMessage) {
+                    console.log('[Socket] Message is for another chat - updating unread');
                     // 🔥 FIX: Increment unread counter for other chats
                     const chat = chats.find(c => c.id === data.chatId);
                     if (chat) {
@@ -2692,7 +2697,12 @@
                 }
             });
 
+            socket.on('joined_chat', (data) => {
+                console.log('[Socket] ✅ Successfully joined chat room:', data.chatId);
+            });
+
             socket.on('error', (err) => {
+                console.error('[Socket] ❌ Socket error:', err);
                 showToast(err.message || 'Ошибка сокета', 'error');
             });
         }
@@ -3487,7 +3497,13 @@
         }
 
         function appendMessage(message, isTempSending = false) {
+            console.log('[appendMessage] 📝 Adding message:', message);
             const messagesContainer = document.getElementById('messagesContainer');
+
+            if (!messagesContainer) {
+                console.error('[appendMessage] ❌ messagesContainer not found!');
+                return;
+            }
 
             const emptyState = messagesContainer.querySelector('.empty-state');
             if (emptyState) {
@@ -3498,10 +3514,11 @@
             if (!isTempSending && message.id) {
                 const existing = messagesContainer.querySelector(`[data-real-message-id="${message.id}"]`);
                 if (existing) {
-                    console.log('[appendMessage] Skipping duplicate message:', message.id);
+                    console.log('[appendMessage] ⚠️ Skipping duplicate message:', message.id);
                     return;
                 }
             }
+            console.log('[appendMessage] ✅ Message will be rendered');
 
             const isOwn = message.user_id === currentUser.id;
             const userName = message.user_name || 'Unknown';
